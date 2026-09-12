@@ -1,0 +1,67 @@
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import { runInNewContext } from 'node:vm';
+import ts from 'typescript';
+import * as rules from '../src/game/rules.ts';
+
+test('first launch waits for scene creation before starting simulation; retry reuses game', () => {
+  const elements = new Map<string, any>();
+  function element(id: string): any {
+    if (!elements.has(id)) elements.set(id, { hidden: false, value: '', checked: false,
+      textContent: '', listeners: new Map(), focus() {},
+      addEventListener(type: string, listener: Function) { this.listeners.set(type, listener); },
+    });
+    return elements.get(id);
+  }
+  let gameCount = 0;
+  let readyScene: any;
+  const graphics: any = new Proxy({}, { get: () => () => graphics });
+  // Like Phaser, scene plugins are absent before Game initializes the scene.
+  class Scene {}
+  class Game {
+    scale = { refresh() {} };
+    constructor(config: any) {
+      gameCount++;
+      readyScene = config.scene[0];
+      assert.equal(readyScene.events, undefined);
+      readyScene.add = { graphics: () => graphics };
+      readyScene.events = {};
+      readyScene.create();
+    }
+  }
+  const phaser = { Scene, Game, CANVAS: 1, Scale: { FIT: 1, CENTER_BOTH: 1 } };
+  function load(path: string, modules: Record<string, any>, globals = {}) {
+    const exports = {};
+    const js = ts.transpileModule(readFileSync(new URL(path, import.meta.url), 'utf8'), {
+      compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, esModuleInterop: true },
+    }).outputText;
+    runInNewContext(js, { exports, require: (name: string) => {
+      assert.ok(name in modules, `Unexpected import: ${name}`); return modules[name];
+    }, console, ...globals });
+    return exports as any;
+  }
+  const scenes = load('../src/game/scene.ts', { phaser, './rules': rules });
+  let inputEnabled = false;
+  load('../src/main.ts', { phaser, './style.css': {}, './game/scene': scenes,
+    './game/rules': rules, './game/input': { createInput: () => ({ read: () => ({ x: 1, y: 0 }), enable: (v: boolean) => inputEnabled = v }) },
+  }, {
+    document: { querySelector: () => element('app'), getElementById: element, addEventListener() {} },
+    window: { addEventListener() {} }, navigator: {},
+  });
+  element('total').value = '17'; element('natural-one').checked = true;
+  const submit = () => element('flight-form').listeners.get('submit')({ preventDefault() {} });
+  submit();
+  assert.equal(gameCount, 1); assert.equal(readyScene.activeFlight, true); assert.equal(inputEnabled, true);
+  assert.match(element('flight-status').textContent, /Very Easy.*Natural 1/);
+  const oldX = readyScene.flight.x;
+  readyScene.update(0, 16);
+  assert.ok(readyScene.flight.x > oldX); assert.ok(readyScene.flight.elapsed > 0);
+  element('pause').listeners.get('click')();
+  const elapsed = readyScene.flight.elapsed; readyScene.update(0, 16);
+  assert.equal(readyScene.flight.elapsed, elapsed); assert.equal(inputEnabled, false);
+  element('resume').listeners.get('click')(); readyScene.update(0, 16);
+  assert.ok(readyScene.flight.elapsed > elapsed);
+  element('abandon').listeners.get('click')(); submit();
+  assert.equal(gameCount, 1); assert.equal(readyScene.flight.elapsed, 0); assert.equal(inputEnabled, true);
+});

@@ -7,7 +7,12 @@ export class FlightScene extends Phaser.Scene {
   private graphics!: Phaser.GameObjects.Graphics;
   readInput: (x: number, y: number) => { x: number; y: number } = () => ({ x: 0, y: 0 });
   onStep: (state: FlightState) => void = () => {};
-  create() { this.graphics = this.add.graphics(); this.paint(); }
+  onReady: () => void = () => {};
+  create() {
+    this.graphics = this.add.graphics();
+    this.paint();
+    this.onReady();
+  }
   begin(config: FlightConfig) { this.config = config; this.flight = createFlight(); this.activeFlight = true; }
   update(_time: number, delta: number) {
     if (!this.graphics) return;
