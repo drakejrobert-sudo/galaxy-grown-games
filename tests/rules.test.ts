@@ -27,3 +27,34 @@ test('survival completes at 60 seconds, scores consistently, and includes impair
   assert.equal(s.elapsed,60);assert.equal(s.finished,true);assert.equal(scoreFor(s),900);
   assert.match(resultText(config,s), /Natural 1: Yes/);assert.match(resultText(config,s),/Very Easy/);
 });
+
+test('side hazards enter from both edges, move across the field, and are cleaned up', () => {
+  for (const left of [true, false]) {
+    const s = createFlight(); s.spawnIn = 0;
+    const values = [0.5, 0.5, 0, left ? 0 : 0.9, 0.5, 0.5, 0.5];
+    stepFlight(s, {total: 5, naturalOne: false}, {x:0,y:0}, 0.05, () => values.shift() ?? 0.5);
+    assert.equal(s.asteroids.length, 1);
+    const a = s.asteroids[0];
+    assert.ok(left ? a.vx! > 0 && a.x < 0 : a.vx! < 0 && a.x > 480);
+    const oldX = a.x; s.spawnIn = 100;
+    stepFlight(s, {total:5,naturalOne:false}, {x:0,y:0}, 0.05);
+    assert.ok(left ? a.x > oldX : a.x < oldX);
+    a.x = left ? 550 : -70;
+    stepFlight(s, {total:5,naturalOne:false}, {x:0,y:0}, 0.05);
+    assert.equal(s.asteroids.length, 0);
+  }
+});
+
+test('difficulty increases hazard density and reduces steering speed without changing natural-one ratio', () => {
+  let previousCount = 0, previousSpeed = Infinity;
+  for (const total of [16, 11, 6, 5]) {
+    const s = createFlight(); s.invulnerable = 100;
+    for (let i = 0; i < 100; i++) stepFlight(s, {total,naturalOne:false}, {x:0,y:0}, 0.05, () => 0.5);
+    assert.ok(s.asteroids.length >= previousCount);
+    previousCount = s.asteroids.length;
+    const speed = flightSpeed({total,naturalOne:false});
+    assert.ok(speed < previousSpeed); previousSpeed = speed;
+    assert.equal(flightSpeed({total,naturalOne:true}), speed * 0.6);
+    assert.ok(s.asteroids.every(a => Number.isFinite(a.x) && Number.isFinite(a.y)));
+  }
+});

@@ -28,7 +28,7 @@ Open the local URL printed by Vite, including `/galaxy-grown-games/`. If network
 - Arrow keys/WASD steer; holding/dragging on the playfield steers toward a destination at the same speed cap. Touch never teleports the ship.
 - Pause or Escape stops the round. Switching away automatically pauses; resumption is explicit.
 - Final report includes check total, difficulty, natural-1 impairment, time, hits, hull, and score. Clipboard failure selects the report for manual copying. GM decides all outcomes.
-- All art is simple original code-drawn geometry. No commercial game assets or GM-only lore are included.
+- All art is original code-drawn geometry. No commercial game assets or GM-only lore are included.
 
 ### Architecture
 
@@ -40,10 +40,27 @@ The build targets `/galaxy-grown-games/`. The check workflow runs tests and buil
 
 ### Validation status
 
-- Four automated tests pass: difficulty/input boundaries, modifier-versus-natural-1 movement, collision grace/failure, and successful completion/reporting.
+- Seven automated tests pass: difficulty/input boundaries, modifier-versus-natural-1 movement, collision grace/failure, successful completion/reporting, first-launch lifecycle, side-entry movement/cleanup, and difficulty progression.
 - TypeScript check and Vite production build pass.
 - Phaser produces a large-bundle advisory (~337 KB gzip); bundle optimization remains future work.
 - Browser QA is blocked in the current environment: Cloud Browser refused the local preview with `net::ERR_BLOCKED_BY_CLIENT`. No rendered pass is claimed.
 - Before merging, verify launch → movement → pause/resume → results → retry, copy fallback, viewport rotation, and touch behavior on iPhone/iPad Safari plus a desktop browser. Check for blank/error screens and console errors.
 
 Progress toward issues #1, #2, #3, #4 and #12. These issues remain open pending browser/device validation, balance review, and (for #1) deployment.
+
+### Development context and review
+
+Read [AGENTS.md](AGENTS.md) for the required branch → pull request → Drake review workflow. Agents never merge or deploy autonomously. See [campaign context](docs/campaign-context.md) for the player-safe setting and role direction, and [ChatGPT project setup](docs/chatgpt-project-setup.md) for reusable project instructions.
+
+### Proposed pilot balance update
+
+All four difficulties now have faster, more frequent asteroids, inward diagonal drift, and occasional side-entry hazards. Harder settings add more cross-traffic and modestly reduce steering speed. Natural 1 still multiplies the selected speed by 0.6.
+
+| Difficulty | Asteroid base speed (px/s) | Spawn interval (s) | Ship speed (px/s) | Side-entry chance |
+| --- | ---: | ---: | ---: | ---: |
+| Very Easy | 115 | 0.74 | 260 | 10% |
+| Easy | 150 | 0.56 | 250 | 20% |
+| Medium | 190 | 0.40 | 235 | 32% |
+| Hard | 235 | 0.28 | 220 | 45% |
+
+Visual additions use original procedural geometry: layered nebulae, parallax stars, a distant planet, rotating cratered asteroids with trails, a paneled ship with twin animated engines, and a collision-grace shield ring. Current balance still needs human playtesting, especially Hard with Natural 1 on touch screens.
