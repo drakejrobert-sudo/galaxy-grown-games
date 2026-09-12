@@ -84,11 +84,20 @@ get('flight-form').addEventListener('submit', e => {
   if (parsed === null) { get('error').textContent = 'Enter a whole-number check total, including modifiers.'; total.focus(); return; }
   config = { total: parsed, naturalOne: natural.checked }; show('play');
   if (!game) {
-    scene.events.once(Phaser.Scenes.Events.CREATE, launch);
-    game = new Phaser.Game({ type: Phaser.CANVAS, parent: 'canvas', width: WIDTH, height: HEIGHT,
+    // Scene plugins (including events) do not exist until Phaser boots.
+    // A plain callback is safe to assign before constructing the game.
+    scene.onReady = launch;
+    try {
+      game = new Phaser.Game({ type: Phaser.CANVAS, parent: 'canvas', width: WIDTH, height: HEIGHT,
       backgroundColor: '#101528', scene: [scene], banner: false,
       scale: { mode: Phaser.Scale.FIT, autoCenter: Phaser.Scale.CENTER_BOTH },
       render: { antialias: true } });
+    } catch (error) {
+      console.error('Flight startup failed', error);
+      game = null;
+      resetSetup();
+      get('error').textContent = 'The flight could not start. Please reload the page and try again.';
+    }
   } else { game.scale.refresh(); launch(); }
 });
 scene.onStep = s => {
