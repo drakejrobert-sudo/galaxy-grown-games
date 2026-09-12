@@ -40,6 +40,19 @@ export class FlightScene extends Phaser.Scene {
     }
     g.lineStyle(1, 0x344563); g.strokeRect(8, 8, WIDTH - 16, HEIGHT - 16);
     for (const a of s.asteroids) {
+      const waitingAtLeft = a.side === 'left' && a.x + a.radius < 0;
+      const waitingAtRight = a.side === 'right' && a.x - a.radius > WIDTH;
+      if (waitingAtLeft || waitingAtRight) {
+        const warningX = waitingAtLeft ? 12 : WIDTH - 12;
+        const direction = waitingAtLeft ? 1 : -1;
+        const warningY = Math.max(18, Math.min(HEIGHT - 18, a.y));
+        const pulse = 0.55 + Math.sin(s.elapsed * 16) * 0.2;
+        g.fillStyle(0xffc66d, pulse);
+        g.fillTriangle(warningX, warningY, warningX + direction * 14, warningY - 9,
+          warningX + direction * 14, warningY + 9);
+        g.lineStyle(2, 0xffe1a3, pulse);
+        g.lineBetween(warningX, warningY - 14, warningX, warningY + 14);
+      }
       g.lineStyle(a.radius * 0.65, 0x95b6d0, 0.07);
       g.lineBetween(a.x, a.y, a.x - (a.vx ?? 0) * 0.18, a.y - a.speed * 0.18);
       g.fillStyle(0x897c88); g.lineStyle(2, 0xc5b4ad);

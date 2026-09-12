@@ -4,6 +4,7 @@ export const WIDTH = 480;
 export const HEIGHT = 560;
 export const DURATION = 60;
 export const PILOT_RADIUS = 12;
+export const SIDE_WARNING_SECONDS = 1.1;
 // Initial playtest values, not GM-approved balance.
 export const ENGINE_MULTIPLIER = 0.6;
 export const TUNING: Record<Difficulty, { speed: number; spawnEvery: number; pilotSpeed: number; sideChance: number; drift: number }> = {
@@ -24,7 +25,10 @@ export function difficultyFor(total: number): Difficulty {
 export function flightSpeed(config: FlightConfig): number {
   return TUNING[difficultyFor(config.total)].pilotSpeed * (config.naturalOne ? ENGINE_MULTIPLIER : 1);
 }
-export interface Asteroid { x: number; y: number; radius: number; speed: number; vx?: number; rotation?: number; spin?: number }
+export interface Asteroid {
+  x: number; y: number; radius: number; speed: number; vx?: number;
+  rotation?: number; spin?: number; side?: 'left' | 'right';
+}
 export interface FlightState {
   x: number; y: number; elapsed: number; hull: number; hits: number;
   invulnerable: number; spawnIn: number; asteroids: Asteroid[]; finished: boolean;
@@ -48,12 +52,16 @@ export function stepFlight(s: FlightState, config: FlightConfig, input: { x: num
     const speed = tuning.speed * (0.8 + random() * 0.4);
     const side = random() < tuning.sideChance;
     const left = random() < 0.5;
-    const x = side ? (left ? -40 : WIDTH + 40) : radius + random() * (WIDTH - radius * 2);
+    const topX = radius + random() * (WIDTH - radius * 2);
     const y = side ? 35 + random() * (HEIGHT - 150) : -40;
-    // Side rocks cross the field; top rocks fan inward. Never spawn on the pilot.
-    const vx = side ? (left ? 1 : -1) * speed * 0.85 : (WIDTH / 2 - x) / (WIDTH / 2) * speed * tuning.drift;
+    const vx = side ? (left ? 1 : -1) * speed * 0.85 : (WIDTH / 2 - topX) / (WIDTH / 2) * speed * tuning.drift;
+    // Side rocks wait off-screen for a fixed warning window; top rocks fan inward.
+    const x = side
+      ? (left ? -radius - Math.abs(vx) * SIDE_WARNING_SECONDS : WIDTH + radius + Math.abs(vx) * SIDE_WARNING_SECONDS)
+      : topX;
     s.asteroids.push({ x, y, radius, speed: side ? speed * 0.35 : speed, vx,
-      rotation: random() * Math.PI * 2, spin: (random() - 0.5) * 1.5 });
+      rotation: random() * Math.PI * 2, spin: (random() - 0.5) * 1.5,
+      side: side ? (left ? 'left' : 'right') : undefined });
     s.spawnIn += tuning.spawnEvery;
   }
   for (const a of s.asteroids) {
@@ -64,7 +72,11 @@ export function stepFlight(s: FlightState, config: FlightConfig, input: { x: num
       s.hits++; s.hull--; s.invulnerable = 1.25;
     }
   }
-  s.asteroids = s.asteroids.filter(a => a.y < HEIGHT + 50 && a.x > -60 && a.x < WIDTH + 60);
+  s.asteroids = s.asteroids.filter(a => a.y < HEIGHT + 50 && (
+    a.side === 'left' ? a.x < WIDTH + a.radius + 20
+      : a.side === 'right' ? a.x > -a.radius - 20
+        : a.x > -60 && a.x < WIDTH + 60
+  ));
   s.finished = s.hull <= 0 || s.elapsed >= DURATION;
 }
 export function scoreFor(s: FlightState): number {

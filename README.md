@@ -54,7 +54,7 @@ Read [AGENTS.md](AGENTS.md) for the required branch → pull request → Drake r
 
 ### Proposed pilot balance update
 
-All four difficulties now have faster, more frequent asteroids, inward diagonal drift, and occasional side-entry hazards. Harder settings add more cross-traffic and modestly reduce steering speed. Natural 1 still multiplies the selected speed by 0.6.
+All four difficulties now have faster, more frequent asteroids, inward diagonal drift, and occasional side-entry hazards with a 1.1-second edge warning. Harder settings add more cross-traffic and modestly reduce steering speed. Natural 1 still multiplies the selected speed by 0.6.
 
 | Difficulty | Asteroid base speed (px/s) | Spawn interval (s) | Ship speed (px/s) | Side-entry chance |
 | --- | ---: | ---: | ---: | ---: |
