@@ -30,10 +30,10 @@ app.innerHTML = `
   </form>
 </section>
 <section id="play" hidden>
-  <div class="play-heading"><div><p id="mode-label" class="eyebrow">ASTEROID FIELD / PILOT</p><h2 id="mode-heading">Keep your hull intact.</h2></div><div class="play-actions"><button id="action" class="action" type="button" hidden>Drop mine</button><button id="pause" type="button">Pause</button></div></div>
+  <div class="play-heading"><div><p id="mode-label" class="eyebrow">ASTEROID FIELD / PILOT</p><h2 id="mode-heading">Keep your hull intact.</h2></div><div class="play-actions"><button id="pause" type="button">Pause</button></div></div>
   <div class="hud"><div><span>TIME LEFT</span><strong id="time">60s</strong></div><div><span id="health-label">HULL</span><strong id="hull">3 / 3</strong></div><div id="fuel-wrap" hidden><span>FUEL</span><strong id="fuel">18.0s</strong></div><div><span>SCORE</span><strong id="score">300</strong></div></div>
   <p id="flight-status" class="flight-status"></p>
-  <div class="flight-wrap"><div id="canvas" aria-label="Asteroid field. Steer with arrow keys, WASD, or touch." role="application" tabindex="0"></div><div id="pause-overlay" hidden><h2>Challenge paused</h2><p>Your timer is stopped.</p><button id="resume" class="primary" type="button">Resume challenge</button><button id="abandon" type="button">Back to setup</button></div></div>
+  <div class="flight-stage"><div class="flight-wrap"><div id="canvas" aria-label="Asteroid field. Steer with arrow keys, WASD, or touch." role="application" tabindex="0"></div><div id="pause-overlay" hidden><h2>Challenge paused</h2><p>Your timer is stopped.</p><button id="resume" class="primary" type="button">Resume challenge</button><button id="abandon" type="button">Back to setup</button></div></div><div id="action-rail" class="action-rail" hidden><button id="action" class="action" type="button" hidden>Drop mine</button></div></div>
   <div id="route-controls" class="route-controls" aria-label="Life Support routing switch" hidden><button id="route-thrusters" type="button" aria-pressed="false"><span>▲</span>Thrusters<small>1</small></button><button id="route-shields" type="button" aria-pressed="true"><span>●</span>Shields<small>2</small></button><button id="route-guns" type="button" aria-pressed="false"><span>✛</span>Guns<small>3</small></button></div>
   <p id="play-help" class="help center">Avoid asteroids · Arrow keys / WASD · Hold and drag to steer</p>
 </section>
@@ -51,6 +51,7 @@ const situationSelect = get<HTMLSelectElement>('situation');
 const scene = new FlightScene('flight');
 const canvas = get('canvas');
 const action = get<HTMLButtonElement>('action');
+const actionRail = get('action-rail');
 const routeControls = get('route-controls');
 const routeButtons = [get<HTMLButtonElement>('route-thrusters'), get<HTMLButtonElement>('route-shields'), get<HTMLButtonElement>('route-guns')];
 const input = createInput(canvas);
@@ -132,6 +133,7 @@ function launch() {
   inFlight = true; paused = false;
   get('pause').textContent = 'Pause'; get('pause-overlay').hidden = true;
   action.hidden = role !== 'Bomber';
+  actionRail.hidden = role !== 'Bomber';
   routeControls.hidden = role !== 'Life Support';
   get('fuel-wrap').hidden = situation !== 'Space Battle';
   get('health-label').textContent = role === 'Life Support' ? 'INTEGRITY' : 'HULL';

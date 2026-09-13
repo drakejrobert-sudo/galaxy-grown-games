@@ -82,6 +82,7 @@ test('first launch waits for scene creation before starting simulation; retry re
   assert.equal(readyScene.bomber.minesPlaced, 1);
   assert.match(element('flight-status').textContent, /Very Easy.*half-area mine blast target/);
   assert.equal(element('action').hidden, false);
+  assert.equal(element('action-rail').hidden, false);
   element('abandon').listeners.get('click')();
   element('role').value = 'Life Support'; submit();
   assert.equal(gameCount, 1); assert.equal(lifeSupportInputEnabled, true);
