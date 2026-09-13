@@ -9,7 +9,8 @@ test('first launch waits for scene creation before starting simulation; retry re
   const elements = new Map<string, any>();
   function element(id: string): any {
     if (!elements.has(id)) elements.set(id, { hidden: false, value: '', checked: false,
-      textContent: '', listeners: new Map(), focus() {},
+      textContent: '', listeners: new Map(), attributes: new Map(), focus() {},
+      setAttribute(name: string, value: string) { this.attributes.set(name, value); },
       addEventListener(type: string, listener: Function) { this.listeners.set(type, listener); },
     });
     return elements.get(id);
@@ -42,14 +43,17 @@ test('first launch waits for scene creation before starting simulation; retry re
     return exports as any;
   }
   const scenes = load('../src/game/scene.ts', { phaser, './rules': rules });
-  let inputEnabled = false;
+  let inputEnabled = false, gunnerInputEnabled = false;
   load('../src/main.ts', { phaser, './style.css': {}, './game/scene': scenes,
-    './game/rules': rules, './game/input': { createInput: () => ({ read: () => ({ x: 1, y: 0 }), enable: (v: boolean) => inputEnabled = v }) },
+    './game/rules': rules, './game/input': {
+      createInput: () => ({ read: () => ({ x: 1, y: 0 }), enable: (v: boolean) => inputEnabled = v }),
+      createGunnerInput: () => ({ read: () => ({ firing: false }), enable: (v: boolean) => gunnerInputEnabled = v }),
+    },
   }, {
     document: { querySelector: () => element('app'), getElementById: element, addEventListener() {} },
     window: { addEventListener() {} }, navigator: {},
   });
-  element('total').value = '17'; element('natural-one').checked = true;
+  element('role').value = 'Pilot'; element('total').value = '17'; element('natural-one').checked = true;
   const submit = () => element('flight-form').listeners.get('submit')({ preventDefault() {} });
   submit();
   assert.equal(gameCount, 1); assert.equal(readyScene.activeFlight, true); assert.equal(inputEnabled, true);
@@ -62,6 +66,10 @@ test('first launch waits for scene creation before starting simulation; retry re
   assert.equal(readyScene.flight.elapsed, elapsed); assert.equal(inputEnabled, false);
   element('resume').listeners.get('click')(); readyScene.update(0, 16);
   assert.ok(readyScene.flight.elapsed > elapsed);
-  element('abandon').listeners.get('click')(); submit();
-  assert.equal(gameCount, 1); assert.equal(readyScene.flight.elapsed, 0); assert.equal(inputEnabled, true);
+  element('abandon').listeners.get('click')();
+  element('role').value = 'Gunner'; submit();
+  assert.equal(gameCount, 1); assert.equal(readyScene.gunner.elapsed, 0);
+  assert.equal(inputEnabled, false); assert.equal(gunnerInputEnabled, true);
+  readyScene.update(0, 16); assert.ok(readyScene.gunner.elapsed > 0);
+  assert.match(element('flight-status').textContent, /Very Easy.*overheated gun/);
 });

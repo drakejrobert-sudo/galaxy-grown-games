@@ -34,3 +34,47 @@ export function createInput(surface: HTMLElement) {
     },
   };
 }
+
+export function createGunnerInput(surface: HTMLElement) {
+  let pointer: number | null = null;
+  let aim: { x: number; y: number } | null = null;
+  let queuedShot = false;
+  let enabled = false;
+  const clear = () => { pointer = null; aim = null; queuedShot = false; };
+  const setAim = (e: PointerEvent) => {
+    const box = surface.querySelector('canvas')?.getBoundingClientRect();
+    if (box) aim = {
+      x: (e.clientX - box.left) / box.width * 480,
+      y: (e.clientY - box.top) / box.height * 560,
+    };
+  };
+  surface.addEventListener('pointerdown', e => {
+    if (!enabled || pointer !== null) return;
+    e.preventDefault(); pointer = e.pointerId; queuedShot = true;
+    surface.setPointerCapture(pointer); setAim(e);
+  });
+  surface.addEventListener('pointermove', e => {
+    if (enabled && (e.pointerType === 'mouse' || e.pointerId === pointer)) {
+      e.preventDefault(); setAim(e);
+    }
+  });
+  const release = (e: PointerEvent) => {
+    if (e.pointerId === pointer) pointer = null;
+  };
+  for (const event of ['pointerup', 'pointercancel', 'lostpointercapture']) {
+    surface.addEventListener(event, release as EventListener);
+  }
+  window.addEventListener('blur', clear);
+  return {
+    enable(value: boolean) { enabled = value; clear(); },
+    read() {
+      const firing = queuedShot || pointer !== null;
+      queuedShot = false;
+      return {
+        aimX: aim?.x,
+        aimY: aim?.y,
+        firing,
+      };
+    },
+  };
+}

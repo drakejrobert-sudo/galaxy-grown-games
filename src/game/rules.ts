@@ -1,4 +1,5 @@
 export type Difficulty = 'Hard' | 'Medium' | 'Easy' | 'Very Easy';
+export type Role = 'Pilot' | 'Gunner';
 export interface FlightConfig { total: number; naturalOne: boolean }
 export const WIDTH = 480;
 export const HEIGHT = 560;
@@ -89,4 +90,160 @@ export function resultText(config: FlightConfig, s: FlightState): string {
     `Score: ${scoreFor(s)} • Time: ${s.elapsed.toFixed(1)}s • Hits: ${s.hits} • Hull: ${s.hull}/3`,
     s.hull > 0 ? 'Course complete' : 'Hull depleted',
     'Prototype scoring v0.1 — GM determines campaign outcome.' ].join('\n');
+}
+
+export interface GunnerTuning {
+  speed: number;
+  spawnEvery: number;
+  fireEvery: number;
+  armoredChance: number;
+  drift: number;
+}
+
+// Initial playtest values, not GM-approved balance.
+export const GUNNER_TUNING: Record<Difficulty, GunnerTuning> = {
+  Hard: { speed: 190, spawnEvery: 0.55, fireEvery: 0.42, armoredChance: 0.30, drift: 0.42 },
+  Medium: { speed: 160, spawnEvery: 0.72, fireEvery: 0.36, armoredChance: 0.18, drift: 0.34 },
+  Easy: { speed: 135, spawnEvery: 0.90, fireEvery: 0.32, armoredChance: 0.10, drift: 0.26 },
+  'Very Easy': { speed: 110, spawnEvery: 1.10, fireEvery: 0.28, armoredChance: 0, drift: 0.18 },
+};
+export const GUNNER_DEFENSE_LINE = HEIGHT - 68;
+export const OVERHEAT_MULTIPLIER = 2;
+
+export interface GunnerAsteroid extends Asteroid {
+  hp: number;
+  maxHp: number;
+  id: number;
+}
+export interface GunnerInput {
+  aimX?: number;
+  aimY?: number;
+  firing: boolean;
+}
+export interface GunnerState {
+  crosshairX: number;
+  crosshairY: number;
+  elapsed: number;
+  hull: number;
+  impacts: number;
+  destroyed: number;
+  shots: number;
+  cooldown: number;
+  spawnIn: number;
+  asteroids: GunnerAsteroid[];
+  finished: boolean;
+  nextId: number;
+  beamTime: number;
+  beamX: number;
+  beamY: number;
+  impactFlash: number;
+}
+
+export function createGunner(): GunnerState {
+  return {
+    crosshairX: WIDTH / 2, crosshairY: HEIGHT / 2, elapsed: 0, hull: 3,
+    impacts: 0, destroyed: 0, shots: 0, cooldown: 0, spawnIn: 0.7,
+    asteroids: [], finished: false, nextId: 1, beamTime: 0,
+    beamX: WIDTH / 2, beamY: HEIGHT / 2, impactFlash: 0,
+  };
+}
+
+export function gunnerFireEvery(config: FlightConfig): number {
+  const normal = GUNNER_TUNING[difficultyFor(config.total)].fireEvery;
+  return normal * (config.naturalOne ? OVERHEAT_MULTIPLIER : 1);
+}
+
+export function stepGunner(
+  s: GunnerState,
+  config: FlightConfig,
+  input: GunnerInput,
+  dt: number,
+  random: () => number = Math.random,
+): void {
+  if (s.finished) return;
+  dt = Math.min(Math.max(dt, 0), 0.05, DURATION - s.elapsed);
+  const tuning = GUNNER_TUNING[difficultyFor(config.total)];
+  s.elapsed += dt;
+  s.cooldown = Math.max(0, s.cooldown - dt);
+  s.beamTime = Math.max(0, s.beamTime - dt);
+  s.impactFlash = Math.max(0, s.impactFlash - dt);
+
+  if (input.aimX !== undefined && input.aimY !== undefined) {
+    s.crosshairX = Math.max(12, Math.min(WIDTH - 12, input.aimX));
+    s.crosshairY = Math.max(18, Math.min(GUNNER_DEFENSE_LINE - 8, input.aimY));
+  }
+
+  if (input.firing && s.cooldown <= 0) {
+    s.shots++;
+    s.cooldown = gunnerFireEvery(config);
+    s.beamTime = 0.09;
+    s.beamX = s.crosshairX;
+    s.beamY = s.crosshairY;
+    let target: GunnerAsteroid | undefined;
+    let targetDistance = Infinity;
+    for (const asteroid of s.asteroids) {
+      const distance = Math.hypot(asteroid.x - s.crosshairX, asteroid.y - s.crosshairY);
+      if (distance <= asteroid.radius + 7 && distance < targetDistance) {
+        target = asteroid;
+        targetDistance = distance;
+      }
+    }
+    if (target) {
+      target.hp--;
+      if (target.hp <= 0) {
+        s.asteroids = s.asteroids.filter(asteroid => asteroid.id !== target!.id);
+        s.destroyed++;
+      }
+    }
+  }
+
+  s.spawnIn -= dt;
+  while (s.spawnIn <= 0) {
+    const radius = 15 + random() * 12;
+    const speed = tuning.speed * (0.85 + random() * 0.3);
+    const x = radius + random() * (WIDTH - radius * 2);
+    const armored = random() < tuning.armoredChance;
+    const vx = (random() - 0.5) * speed * tuning.drift;
+    s.asteroids.push({
+      id: s.nextId++, x, y: -radius - 4, radius, speed, vx,
+      hp: armored ? 2 : 1, maxHp: armored ? 2 : 1,
+      rotation: random() * Math.PI * 2, spin: (random() - 0.5) * 1.5,
+    });
+    s.spawnIn += tuning.spawnEvery;
+  }
+
+  for (const asteroid of s.asteroids) {
+    asteroid.y += asteroid.speed * dt;
+    asteroid.x += (asteroid.vx ?? 0) * dt;
+    asteroid.rotation = (asteroid.rotation ?? 0) + (asteroid.spin ?? 0) * dt;
+    if (asteroid.x < asteroid.radius || asteroid.x > WIDTH - asteroid.radius) {
+      asteroid.x = Math.max(asteroid.radius, Math.min(WIDTH - asteroid.radius, asteroid.x));
+      asteroid.vx = -(asteroid.vx ?? 0);
+    }
+  }
+  const impacts = s.asteroids.filter(asteroid => asteroid.y + asteroid.radius >= GUNNER_DEFENSE_LINE);
+  if (impacts.length) {
+    s.impacts += impacts.length;
+    s.hull = Math.max(0, s.hull - impacts.length);
+    s.impactFlash = 0.18;
+    const impacted = new Set(impacts.map(asteroid => asteroid.id));
+    s.asteroids = s.asteroids.filter(asteroid => !impacted.has(asteroid.id));
+  }
+  s.finished = s.hull <= 0 || s.elapsed >= DURATION;
+}
+
+export function gunnerScoreFor(s: GunnerState): number {
+  return s.destroyed * 100 + Math.round(s.elapsed * 5) + s.hull * 100;
+}
+
+export function gunnerResultText(config: FlightConfig, s: GunnerState): string {
+  return [
+    'Galaxy Grown — Asteroid Field / Gunner',
+    `Check total: ${config.total} • Difficulty: ${difficultyFor(config.total)}`,
+    `Natural 1: ${config.naturalOne ? 'Yes — overheated gun (half normal fire rate)' : 'No'}`,
+    `Score: ${gunnerScoreFor(s)} • Time: ${s.elapsed.toFixed(1)}s • Destroyed: ${s.destroyed} • Shots: ${s.shots}`,
+    `Hull: ${s.hull}/3 • Ship impacts: ${s.impacts}`,
+    s.hull > 0 ? 'Field cleared' : 'Hull depleted',
+    'Prototype scoring v0.1 — GM determines campaign outcome.',
+  ].join('\n');
 }
