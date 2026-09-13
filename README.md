@@ -43,7 +43,7 @@ Open the local URL printed by Vite, including `/galaxy-grown-games/`. If network
 
 ### GitHub Pages
 
-The build targets `/galaxy-grown-games/`. The check workflow runs tests and builds on pushes and PRs. Deployment is manual: after review and merge, choose GitHub Actions as the Pages source in repository Settings → Pages, then run the **Deploy game hub** workflow from `main`. No deployment has been performed by this PR.
+The build targets `/galaxy-grown-games/`. The check workflow runs tests and builds on pushes and pull requests. After a reviewed pull request is merged, the **Deploy game hub** workflow runs on `main`, repeats `npm test` and `npm run build`, and deploys to GitHub Pages only if both pass. It can also be run manually from `main` when Drake explicitly approves that deployment. GitHub Actions must be selected as the Pages source in repository Settings → Pages.
 
 ### Validation status
 
