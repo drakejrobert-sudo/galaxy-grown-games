@@ -1,5 +1,5 @@
 export type Difficulty = 'Hard' | 'Medium' | 'Easy' | 'Very Easy';
-export type Role = 'Pilot' | 'Gunner';
+export type Role = 'Pilot' | 'Gunner' | 'Bomber';
 export type Situation = 'Asteroid Field' | 'Space Battle';
 export interface FlightConfig { total: number; naturalOne: boolean }
 export const WIDTH = 480;
@@ -244,6 +244,180 @@ export function gunnerResultText(config: FlightConfig, s: GunnerState): string {
     `Natural 1: ${config.naturalOne ? 'Yes — overheated gun (half normal fire rate)' : 'No'}`,
     `Score: ${gunnerScoreFor(s)} • Time: ${s.elapsed.toFixed(1)}s • Destroyed: ${s.destroyed} • Shots: ${s.shots}`,
     `Hull: ${s.hull}/3 • Ship impacts: ${s.impacts}`,
+    s.hull > 0 ? 'Field cleared' : 'Hull depleted',
+    'Prototype scoring v0.1 — GM determines campaign outcome.',
+  ].join('\n');
+}
+
+export interface BomberTuning {
+  speed: number;
+  spawnEvery: number;
+  pilotSpeed: number;
+  drift: number;
+}
+
+// Initial playtest values, not GM-approved balance.
+export const BOMBER_TUNING: Record<Difficulty, BomberTuning> = {
+  Hard: { speed: 200, spawnEvery: 0.58, pilotSpeed: 225, drift: 0.58 },
+  Medium: { speed: 170, spawnEvery: 0.74, pilotSpeed: 225, drift: 0.48 },
+  Easy: { speed: 140, spawnEvery: 0.92, pilotSpeed: 225, drift: 0.38 },
+  'Very Easy': { speed: 115, spawnEvery: 1.12, pilotSpeed: 225, drift: 0.28 },
+};
+export const BOMBER_BLAST_RADIUS = 66;
+export const BOMBER_IMPAIRMENT_SCALE = Math.SQRT1_2;
+export const BOMBER_MINE_COOLDOWN = 0.65;
+export const BOMBER_MINE_ARM_TIME = 0.25;
+export const BOMBER_MINE_LIFETIME = 5;
+export const BOMBER_PLAYER_RADIUS = 13;
+
+export interface BomberAsteroid extends Asteroid { id: number }
+export interface Mine {
+  id: number;
+  x: number;
+  y: number;
+  blastRadius: number;
+  armIn: number;
+  expiresIn: number;
+}
+export interface Explosion {
+  x: number;
+  y: number;
+  radius: number;
+  remaining: number;
+}
+export interface BomberInput {
+  x: number;
+  y: number;
+  placing: boolean;
+}
+export interface BomberState {
+  x: number;
+  y: number;
+  elapsed: number;
+  hull: number;
+  impacts: number;
+  destroyed: number;
+  minesPlaced: number;
+  cooldown: number;
+  spawnIn: number;
+  asteroids: BomberAsteroid[];
+  mines: Mine[];
+  explosions: Explosion[];
+  finished: boolean;
+  nextId: number;
+  impactFlash: number;
+}
+
+export function bomberBlastRadius(config: FlightConfig): number {
+  return BOMBER_BLAST_RADIUS * (config.naturalOne ? BOMBER_IMPAIRMENT_SCALE : 1);
+}
+
+export function createBomber(): BomberState {
+  return {
+    x: WIDTH / 2, y: 105, elapsed: 0, hull: 3, impacts: 0, destroyed: 0,
+    minesPlaced: 0, cooldown: 0, spawnIn: 0.8, asteroids: [], mines: [],
+    explosions: [], finished: false, nextId: 1, impactFlash: 0,
+  };
+}
+
+export function stepBomber(
+  s: BomberState,
+  config: FlightConfig,
+  input: BomberInput,
+  dt: number,
+  random: () => number = Math.random,
+): void {
+  if (s.finished) return;
+  dt = Math.min(Math.max(dt, 0), 0.05, DURATION - s.elapsed);
+  const tuning = BOMBER_TUNING[difficultyFor(config.total)];
+  s.elapsed += dt;
+  s.cooldown = Math.max(0, s.cooldown - dt);
+  s.impactFlash = Math.max(0, s.impactFlash - dt);
+  for (const explosion of s.explosions) explosion.remaining -= dt;
+  s.explosions = s.explosions.filter(explosion => explosion.remaining > 0);
+
+  const magnitude = Math.max(1, Math.hypot(input.x, input.y));
+  s.x = Math.max(18, Math.min(WIDTH - 18, s.x + input.x / magnitude * tuning.pilotSpeed * dt));
+  s.y = Math.max(42, Math.min(HEIGHT * 0.42, s.y + input.y / magnitude * tuning.pilotSpeed * dt));
+
+  if (input.placing && s.cooldown <= 0) {
+    s.mines.push({
+      id: s.nextId++, x: s.x, y: s.y + 34, blastRadius: bomberBlastRadius(config),
+      armIn: BOMBER_MINE_ARM_TIME, expiresIn: BOMBER_MINE_LIFETIME,
+    });
+    s.minesPlaced++;
+    s.cooldown = BOMBER_MINE_COOLDOWN;
+  }
+
+  s.spawnIn -= dt;
+  while (s.spawnIn <= 0) {
+    const radius = 14 + random() * 12;
+    const x = radius + random() * (WIDTH - radius * 2);
+    const speed = tuning.speed * (0.85 + random() * 0.3);
+    const vx = (s.x - x) / WIDTH * speed * tuning.drift;
+    s.asteroids.push({
+      id: s.nextId++, x, y: HEIGHT + radius + 4, radius, speed, vx,
+      rotation: random() * Math.PI * 2, spin: (random() - 0.5) * 1.5,
+    });
+    s.spawnIn += tuning.spawnEvery;
+  }
+
+  for (const asteroid of s.asteroids) {
+    asteroid.x += (asteroid.vx ?? 0) * dt;
+    asteroid.y -= asteroid.speed * dt;
+    asteroid.rotation = (asteroid.rotation ?? 0) + (asteroid.spin ?? 0) * dt;
+    if (asteroid.x < asteroid.radius || asteroid.x > WIDTH - asteroid.radius) {
+      asteroid.x = Math.max(asteroid.radius, Math.min(WIDTH - asteroid.radius, asteroid.x));
+      asteroid.vx = -(asteroid.vx ?? 0);
+    }
+  }
+  for (const mine of s.mines) {
+    mine.armIn -= dt;
+    mine.expiresIn -= dt;
+  }
+
+  const detonatedMineIds = new Set<number>();
+  for (const mine of s.mines) {
+    if (mine.armIn > 0 || mine.expiresIn <= 0) continue;
+    if (s.asteroids.some(asteroid => Math.hypot(asteroid.x - mine.x, asteroid.y - mine.y) <= asteroid.radius + 8)) {
+      detonatedMineIds.add(mine.id);
+      s.explosions.push({ x: mine.x, y: mine.y, radius: mine.blastRadius, remaining: 0.28 });
+    }
+  }
+  if (detonatedMineIds.size) {
+    const explosions = s.mines.filter(mine => detonatedMineIds.has(mine.id));
+    const destroyedIds = new Set(s.asteroids
+      .filter(asteroid => explosions.some(mine => Math.hypot(asteroid.x - mine.x, asteroid.y - mine.y) <= mine.blastRadius))
+      .map(asteroid => asteroid.id));
+    s.destroyed += destroyedIds.size;
+    s.asteroids = s.asteroids.filter(asteroid => !destroyedIds.has(asteroid.id));
+  }
+  s.mines = s.mines.filter(mine => mine.expiresIn > 0 && !detonatedMineIds.has(mine.id));
+
+  const impacts = s.asteroids.filter(asteroid =>
+    Math.hypot(asteroid.x - s.x, asteroid.y - s.y) < asteroid.radius + BOMBER_PLAYER_RADIUS
+    || asteroid.y + asteroid.radius < -10);
+  if (impacts.length) {
+    s.impacts += impacts.length;
+    s.hull = Math.max(0, s.hull - impacts.length);
+    s.impactFlash = 0.18;
+    const impactedIds = new Set(impacts.map(asteroid => asteroid.id));
+    s.asteroids = s.asteroids.filter(asteroid => !impactedIds.has(asteroid.id));
+  }
+  s.finished = s.hull <= 0 || s.elapsed >= DURATION;
+}
+
+export function bomberScoreFor(s: BomberState): number {
+  return s.destroyed * 100 + Math.round(s.elapsed * 5) + s.hull * 100;
+}
+
+export function bomberResultText(config: FlightConfig, s: BomberState): string {
+  return [
+    'Galaxy Grown — Asteroid Field / Bomber',
+    `Check total: ${config.total} • Difficulty: ${difficultyFor(config.total)}`,
+    `Natural 1: ${config.naturalOne ? 'Yes — mine blast target has half normal area' : 'No'}`,
+    `Score: ${bomberScoreFor(s)} • Time: ${s.elapsed.toFixed(1)}s • Destroyed: ${s.destroyed} • Mines: ${s.minesPlaced}`,
+    `Hull: ${s.hull}/3 • Asteroid impacts: ${s.impacts}`,
     s.hull > 0 ? 'Field cleared' : 'Hull depleted',
     'Prototype scoring v0.1 — GM determines campaign outcome.',
   ].join('\n');

@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { createGunnerInput, createInput } from '../src/game/input.ts';
+import { createBomberInput, createGunnerInput, createInput } from '../src/game/input.ts';
 
 test('shared pilot input supports keyboard steering and speed-capped touch destinations', () => {
   const windowListeners = new Map<string, Function>();
@@ -67,5 +67,57 @@ test('gunner mouse input follows hover and preserves a quick click until simulat
     surfaceListeners.get('pointerup')!({pointerId:1,pointerType:'mouse'});
     assert.deepEqual(input.read(), {aimX:100,aimY:120,firing:true});
     assert.deepEqual(input.read(), {aimX:100,aimY:120,firing:false});
+  } finally { globalThis.window = oldWindow; }
+});
+
+test('bomber supports simultaneous keyboard steering and mine placement', () => {
+  const windowListeners = new Map<string, Function>();
+  const surfaceListeners = new Map<string, Function>();
+  const actionListeners = new Map<string, Function>();
+  const oldWindow = globalThis.window;
+  globalThis.window = { addEventListener: (type: string, listener: Function) => windowListeners.set(type, listener) } as any;
+  try {
+    let prevented = 0;
+    const surface = {
+      addEventListener: (type: string, listener: Function) => surfaceListeners.set(type, listener),
+      querySelector: () => ({ getBoundingClientRect: () => ({left:0,top:0,width:480,height:560}) }),
+      setPointerCapture() {},
+    } as any;
+    const action = {
+      addEventListener: (type: string, listener: Function) => actionListeners.set(type, listener),
+      setPointerCapture() {},
+    } as any;
+    const input = createBomberInput(surface, action); input.enable(true);
+    windowListeners.get('keydown')!({code:'KeyD',preventDefault:() => prevented++});
+    windowListeners.get('keydown')!({code:'Space',preventDefault:() => prevented++});
+    assert.deepEqual(input.read(240, 100), {x:1,y:0,placing:true});
+    assert.equal(prevented, 2);
+    windowListeners.get('keyup')!({code:'Space'});
+    assert.deepEqual(input.read(240, 100), {x:1,y:0,placing:false});
+  } finally { globalThis.window = oldWindow; }
+});
+
+test('bomber touch can steer while the separate mine control is held', () => {
+  const windowListeners = new Map<string, Function>();
+  const surfaceListeners = new Map<string, Function>();
+  const actionListeners = new Map<string, Function>();
+  const oldWindow = globalThis.window;
+  globalThis.window = { addEventListener: (type: string, listener: Function) => windowListeners.set(type, listener) } as any;
+  try {
+    const surface = {
+      addEventListener: (type: string, listener: Function) => surfaceListeners.set(type, listener),
+      querySelector: () => ({ getBoundingClientRect: () => ({left:0,top:0,width:480,height:560}) }),
+      setPointerCapture() {},
+    } as any;
+    const action = {
+      addEventListener: (type: string, listener: Function) => actionListeners.set(type, listener),
+      setPointerCapture() {},
+    } as any;
+    const input = createBomberInput(surface, action); input.enable(true);
+    surfaceListeners.get('pointerdown')!({pointerId:4,clientX:480,clientY:100,preventDefault() {}});
+    actionListeners.get('pointerdown')!({pointerId:9,preventDefault() {}});
+    assert.deepEqual(input.read(240, 100), {x:1,y:0,placing:true});
+    actionListeners.get('pointerup')!({pointerId:9});
+    assert.deepEqual(input.read(240, 100), {x:1,y:0,placing:false});
   } finally { globalThis.window = oldWindow; }
 });

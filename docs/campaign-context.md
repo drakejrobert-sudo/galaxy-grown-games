@@ -23,11 +23,11 @@ Players enter their final skill-check total, including modifiers. Negative total
 | Pilot | Overloaded engine makes the ship move extra slowly | Asteroid Field prototype; 60% of difficulty-specific speed is provisional tuning |
 | Gunner | Overheated gun fires at half its normal rate | Asteroid Field prototype; direct touch/mouse pointer controls |
 | Life Support | Extra overload icons and half as many heart icons | Planned, not playable |
-| Bomber | Target has half its normal total area | Planned, not playable |
+| Bomber | Mine blast target has half its normal total area | Asteroid Field prototype; radius scales by `sqrt(0.5)` so rendered and collision area are both halved |
 
 For a circular bomber target, halving area means multiplying radius by sqrt(0.5), not by 0.5. Do not implement the other roles merely because they are documented here.
 
-Current Pilot and Gunner rounds last 60 seconds, use three hull points, support pause/resume, and produce manual score reports. Gunner uses one direct pointer path for touch and mouse rather than keyboard reticle movement; difficulty scales through hazards, armor, and weapon cooldown. Numerical balance is provisional. Improving visual detail must preserve hazard visibility, responsive controls, and mobile performance.
+Current Pilot, Gunner, and Bomber rounds last 60 seconds, use three hull points, support pause/resume, and produce manual score reports. Gunner uses one direct pointer path for touch and mouse rather than keyboard reticle movement; difficulty scales through hazards, armor, and weapon cooldown. Bomber supports simultaneous steering and mine placement through keyboard actions or separate touch controls; difficulty scales through pursuing asteroid pressure. Numerical balance is provisional. Improving visual detail must preserve hazard visibility, responsive controls, and mobile performance.
 
 ## Publication boundary
 
