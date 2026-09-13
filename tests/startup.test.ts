@@ -43,12 +43,13 @@ test('first launch waits for scene creation before starting simulation; retry re
     return exports as any;
   }
   const scenes = load('../src/game/scene.ts', { phaser, './rules': rules });
-  let inputEnabled = false, gunnerInputEnabled = false, bomberInputEnabled = false;
+  let inputEnabled = false, gunnerInputEnabled = false, bomberInputEnabled = false, lifeSupportInputEnabled = false;
   load('../src/main.ts', { phaser, './style.css': {}, './bomber.css': {}, './game/scene': scenes,
     './game/rules': rules, './game/input': {
       createInput: () => ({ read: () => ({ x: 1, y: 0 }), enable: (v: boolean) => inputEnabled = v }),
       createGunnerInput: () => ({ read: () => ({ firing: false }), enable: (v: boolean) => gunnerInputEnabled = v }),
       createBomberInput: () => ({ read: () => ({ x: 1, y: 0, placing: true }), enable: (v: boolean) => bomberInputEnabled = v }),
+      createLifeSupportInput: () => ({ read: () => ({ route: 'Shields' }), enable: (v: boolean) => lifeSupportInputEnabled = v }),
     },
   }, {
     document: { querySelector: () => element('app'), getElementById: element, addEventListener() {} },
@@ -82,10 +83,20 @@ test('first launch waits for scene creation before starting simulation; retry re
   assert.match(element('flight-status').textContent, /Very Easy.*half-area mine blast target/);
   assert.equal(element('action').hidden, false);
   element('abandon').listeners.get('click')();
+  element('role').value = 'Life Support'; submit();
+  assert.equal(gameCount, 1); assert.equal(lifeSupportInputEnabled, true);
+  readyScene.lifeSupport.spawnIn = 100;
+  readyScene.lifeSupport.packets = [{id:1,x:240,y:404,speed:100,target:'Shields',kind:'power'}];
+  readyScene.update(0, 16); assert.equal(readyScene.lifeSupport.routed, 1);
+  assert.match(element('flight-status').textContent, /Very Easy.*half hearts and extra overloads/);
+  assert.equal(element('route-controls').hidden, false);
+  assert.equal(element('health-label').textContent, 'INTEGRITY');
+  element('abandon').listeners.get('click')();
   element('situation').value = 'Space Battle'; element('role').value = 'Gunner';
   element('situation').listeners.get('change')();
   assert.equal(element('role-gunner').disabled, true);
   assert.equal(element('role-bomber').disabled, true);
+  assert.equal(element('role-life-support').disabled, true);
   assert.equal(element('role').value, 'Pilot');
   submit();
   assert.equal(gameCount, 1); assert.equal(readyScene.situation, 'Space Battle');

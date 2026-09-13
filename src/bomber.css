@@ -21,3 +21,40 @@
     flex-direction: column;
   }
 }
+
+.route-controls {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  max-width: 480px;
+  margin: 10px auto 0;
+}
+
+.route-controls button {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 12px;
+  touch-action: none;
+  font-size: 12px;
+}
+
+.route-controls button span { font-size: 18px; }
+.route-controls button small { color: var(--muted); }
+
+.route-controls button[aria-pressed="true"] {
+  border-color: var(--mint);
+  background: #32415e;
+  box-shadow: 0 0 0 2px #79e1ce33;
+}
+
+@media (max-width: 390px) {
+  .route-controls button {
+    grid-template-columns: 1fr;
+    padding: 8px 4px;
+  }
+
+  .route-controls button span,
+  .route-controls button small { display: none; }
+}

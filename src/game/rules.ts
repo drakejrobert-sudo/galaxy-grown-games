@@ -1,5 +1,5 @@
 export type Difficulty = 'Hard' | 'Medium' | 'Easy' | 'Very Easy';
-export type Role = 'Pilot' | 'Gunner' | 'Bomber';
+export type Role = 'Pilot' | 'Gunner' | 'Bomber' | 'Life Support';
 export type Situation = 'Asteroid Field' | 'Space Battle';
 export interface FlightConfig { total: number; naturalOne: boolean }
 export const WIDTH = 480;
@@ -419,6 +419,143 @@ export function bomberResultText(config: FlightConfig, s: BomberState): string {
     `Score: ${bomberScoreFor(s)} • Time: ${s.elapsed.toFixed(1)}s • Destroyed: ${s.destroyed} • Mines: ${s.minesPlaced}`,
     `Hull: ${s.hull}/3 • Asteroid impacts: ${s.impacts}`,
     s.hull > 0 ? 'Field cleared' : 'Hull depleted',
+    'Prototype scoring v0.1 — GM determines campaign outcome.',
+  ].join('\n');
+}
+
+export type LifeSupportRoute = 'Thrusters' | 'Shields' | 'Guns';
+export type LifeSupportPacketKind = 'power' | 'heart' | 'overload';
+export interface LifeSupportTuning { speed: number; spawnEvery: number }
+
+// Initial playtest values, not GM-approved balance.
+export const LIFE_SUPPORT_TUNING: Record<Difficulty, LifeSupportTuning> = {
+  Hard: { speed: 142, spawnEvery: 0.72 },
+  Medium: { speed: 126, spawnEvery: 0.88 },
+  Easy: { speed: 110, spawnEvery: 1.06 },
+  'Very Easy': { speed: 96, spawnEvery: 1.28 },
+};
+export const LIFE_SUPPORT_ROUTES: readonly LifeSupportRoute[] = ['Thrusters', 'Shields', 'Guns'];
+export const LIFE_SUPPORT_SWITCH_Y = 405;
+export const LIFE_SUPPORT_MAX_INTEGRITY = 5;
+export const LIFE_SUPPORT_PACKET_CYCLE = 12;
+
+export interface LifeSupportPacket {
+  id: number;
+  x: number;
+  y: number;
+  speed: number;
+  target: LifeSupportRoute;
+  kind: LifeSupportPacketKind;
+}
+export interface LifeSupportInput { route: LifeSupportRoute }
+export interface LifeSupportState {
+  elapsed: number;
+  integrity: number;
+  routed: number;
+  mistakes: number;
+  heartsRouted: number;
+  overloadsRouted: number;
+  spawnIn: number;
+  spawnIndex: number;
+  nextId: number;
+  selectedRoute: LifeSupportRoute;
+  packets: LifeSupportPacket[];
+  finished: boolean;
+  lastResult: 'correct' | 'incorrect' | null;
+  feedbackTime: number;
+}
+
+/**
+ * Every complete 12-packet cycle has an exact, deterministic special-packet mix.
+ * Standard: two hearts and one overload. Natural 1: one heart and two overloads.
+ */
+export function lifeSupportPacketKind(spawnIndex: number, naturalOne: boolean): LifeSupportPacketKind {
+  const slot = ((spawnIndex % LIFE_SUPPORT_PACKET_CYCLE) + LIFE_SUPPORT_PACKET_CYCLE) % LIFE_SUPPORT_PACKET_CYCLE + 1;
+  if (naturalOne) {
+    if (slot === 11) return 'heart';
+    if (slot === 4 || slot === 8) return 'overload';
+  } else {
+    if (slot === 5 || slot === 11) return 'heart';
+    if (slot === 8) return 'overload';
+  }
+  return 'power';
+}
+
+export function createLifeSupport(): LifeSupportState {
+  return {
+    elapsed: 0, integrity: LIFE_SUPPORT_MAX_INTEGRITY, routed: 0, mistakes: 0,
+    heartsRouted: 0, overloadsRouted: 0, spawnIn: 0.7, spawnIndex: 0,
+    nextId: 1, selectedRoute: 'Shields', packets: [], finished: false,
+    lastResult: null, feedbackTime: 0,
+  };
+}
+
+export function stepLifeSupport(
+  s: LifeSupportState,
+  config: FlightConfig,
+  input: LifeSupportInput,
+  dt: number,
+  random: () => number = Math.random,
+): void {
+  if (s.finished) return;
+  dt = Math.min(Math.max(dt, 0), 0.05, DURATION - s.elapsed);
+  const tuning = LIFE_SUPPORT_TUNING[difficultyFor(config.total)];
+  s.elapsed += dt;
+  s.feedbackTime = Math.max(0, s.feedbackTime - dt);
+  s.selectedRoute = input.route;
+  s.spawnIn -= dt;
+
+  while (s.spawnIn <= 0) {
+    const kind = lifeSupportPacketKind(s.spawnIndex, config.naturalOne);
+    const target = kind === 'heart' ? 'Shields'
+      : kind === 'overload' ? 'Guns'
+        : LIFE_SUPPORT_ROUTES[Math.min(2, Math.floor(random() * LIFE_SUPPORT_ROUTES.length))];
+    s.packets.push({
+      id: s.nextId++, x: WIDTH / 2, y: 42, speed: tuning.speed * (0.94 + random() * 0.12),
+      target, kind,
+    });
+    s.spawnIndex++;
+    s.spawnIn += tuning.spawnEvery;
+  }
+
+  for (const packet of s.packets) packet.y += packet.speed * dt;
+  const arriving = s.packets.filter(packet => packet.y >= LIFE_SUPPORT_SWITCH_Y);
+  for (const packet of arriving) {
+    if (packet.target === s.selectedRoute) {
+      s.routed++;
+      if (packet.kind === 'heart') {
+        s.heartsRouted++;
+        s.integrity = Math.min(LIFE_SUPPORT_MAX_INTEGRITY, s.integrity + 1);
+      } else if (packet.kind === 'overload') {
+        s.overloadsRouted++;
+      }
+      s.lastResult = 'correct';
+    } else {
+      s.mistakes++;
+      s.integrity = Math.max(0, s.integrity - (packet.kind === 'overload' ? 2 : 1));
+      s.lastResult = 'incorrect';
+    }
+    s.feedbackTime = 0.22;
+  }
+  if (arriving.length) {
+    const ids = new Set(arriving.map(packet => packet.id));
+    s.packets = s.packets.filter(packet => !ids.has(packet.id));
+  }
+  s.finished = s.integrity <= 0 || s.elapsed >= DURATION;
+}
+
+export function lifeSupportScoreFor(s: LifeSupportState): number {
+  return s.routed * 100 + (s.heartsRouted + s.overloadsRouted) * 50 + s.integrity * 100;
+}
+
+export function lifeSupportResultText(config: FlightConfig, s: LifeSupportState): string {
+  return [
+    'Galaxy Grown — Asteroid Field / Life Support',
+    `Check total: ${config.total} • Difficulty: ${difficultyFor(config.total)}`,
+    `Natural 1: ${config.naturalOne ? 'Yes — one heart and two overloads per 12 packets' : 'No — two hearts and one overload per 12 packets'}`,
+    `Score: ${lifeSupportScoreFor(s)} • Time: ${s.elapsed.toFixed(1)}s • Correct routes: ${s.routed} • Mistakes: ${s.mistakes}`,
+    `Integrity: ${s.integrity}/${LIFE_SUPPORT_MAX_INTEGRITY} • Hearts: ${s.heartsRouted} • Overloads cleared: ${s.overloadsRouted}`,
+    s.integrity > 0 ? 'Systems stabilized' : 'Systems failed',
     'Prototype scoring v0.1 — GM determines campaign outcome.',
   ].join('\n');
 }
