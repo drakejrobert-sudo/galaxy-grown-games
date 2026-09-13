@@ -123,6 +123,11 @@ function resetSetup() {
   get('pause-overlay').hidden = true; show('setup'); total.focus();
 }
 get('abandon').addEventListener('click', resetSetup); get('again').addEventListener('click', resetSetup);
+function preparePlayLayout() {
+  action.hidden = role !== 'Bomber';
+  actionRail.hidden = role !== 'Bomber';
+  routeControls.hidden = role !== 'Life Support';
+}
 function launch() {
   scene.begin(config, situation, role);
   lifeSupportInput.reset();
@@ -132,9 +137,6 @@ function launch() {
   lifeSupportInput.enable(situation === 'Asteroid Field' && role === 'Life Support');
   inFlight = true; paused = false;
   get('pause').textContent = 'Pause'; get('pause-overlay').hidden = true;
-  action.hidden = role !== 'Bomber';
-  actionRail.hidden = role !== 'Bomber';
-  routeControls.hidden = role !== 'Life Support';
   get('fuel-wrap').hidden = situation !== 'Space Battle';
   get('health-label').textContent = role === 'Life Support' ? 'INTEGRITY' : 'HULL';
   get('hull').textContent = role === 'Life Support' ? `${LIFE_SUPPORT_MAX_INTEGRITY} / ${LIFE_SUPPORT_MAX_INTEGRITY}` : '3 / 3';
@@ -174,6 +176,7 @@ get('flight-form').addEventListener('submit', e => {
   config = { total: parsed, naturalOne: natural.checked };
   situation = situationSelect.value === 'Space Battle' ? 'Space Battle' : 'Asteroid Field';
   role = situation === 'Space Battle' ? 'Pilot' : roleSelect.value as Role;
+  preparePlayLayout();
   show('play');
   if (!game) {
     // Scene plugins (including events) do not exist until Phaser boots.
