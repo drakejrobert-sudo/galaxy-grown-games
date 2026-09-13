@@ -35,7 +35,7 @@
 }
 
 @media (max-width: 480px), (any-pointer: coarse) {
-  .flight-stage:has(.action-rail:not([hidden])) {
+  #play[data-role="Bomber"] .flight-stage {
     grid-template-columns: minmax(0, 480px) 76px;
   }
 

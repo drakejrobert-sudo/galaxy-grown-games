@@ -22,7 +22,12 @@ test('first launch waits for scene creation before starting simulation; retry re
   // Like Phaser, scene plugins are absent before Game initializes the scene.
   class Scene {}
   class Game {
-    scale = { refresh: () => scaleRefreshRailStates.push(element('action-rail').hidden) };
+    scale = { refresh: () => {
+      const selectedRole = element('role').value;
+      assert.equal(element('play').attributes.get('data-role'), selectedRole);
+      assert.equal(element('action-rail').hidden, selectedRole !== 'Bomber');
+      scaleRefreshRailStates.push(element('action-rail').hidden);
+    } };
     constructor(config: any) {
       gameCount++;
       readyScene = config.scene[0];

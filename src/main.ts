@@ -124,6 +124,7 @@ function resetSetup() {
 }
 get('abandon').addEventListener('click', resetSetup); get('again').addEventListener('click', resetSetup);
 function preparePlayLayout() {
+  get('play').setAttribute('data-role', role);
   action.hidden = role !== 'Bomber';
   actionRail.hidden = role !== 'Bomber';
   routeControls.hidden = role !== 'Life Support';
