@@ -3,7 +3,7 @@ A repository for hosting mini games for the galaxy grown campaign.
 
 ## First playable slice
 
-Asteroid Field / Pilot is implemented, and Asteroid Field / Gunner is a **prototype awaiting balance and device QA**. Other situations and roles are visibly disabled. Players enter their GM-requested final skill-check total and a separate Natural 1 flag, play independently, and manually share their score. No campaign data or live multiplayer service is included.
+Asteroid Field / Pilot, Asteroid Field / Gunner, and Space Battle / Pilot are implemented as **prototypes awaiting balance and device QA**. Other situation/role combinations are visibly disabled. Players enter their GM-requested final skill-check total and a separate Natural 1 flag, play independently, and manually share their score. No campaign data or live multiplayer service is included.
 
 ### Run locally
 
@@ -29,6 +29,10 @@ Open the local URL printed by Vite, including `/galaxy-grown-games/`. If network
 - Gunner round: destroy incoming asteroids before they cross the defense line. Each impact costs one of 3 hull points. Armored asteroids take two hits and are introduced more often on harder difficulties.
 - Gunner controls: tap, hold, or drag on touch screens; move the mouse to aim and click or hold to fire on computers. Both use the same Pointer Events path, direct reticle placement, and weapon cooldown; Gunner intentionally does not use keyboard reticle movement.
 - Gunner score: 100 per destroyed asteroid, rounded survival seconds × 5, and 100 per remaining hull point. This is provisional and is not a cross-role scoring standard.
+- Space Battle / Pilot starts with 18 seconds of fuel. Fuel drains at one second per second; each collected cell restores 8 seconds, up to a 30-second tank.
+- Space Battle enemies cross the field and fire shots aimed at the ship's position when fired. Contact with a ship or shot removes one of 3 hull points, with 1.25 seconds of collision grace.
+- Space Battle / Pilot ends after 60 seconds, at zero hull, or when fuel is depleted. Its score is rounded survival seconds × 10, plus 100 per remaining hull point and 50 per fuel cell collected.
+- Space Battle / Pilot uses the shared keyboard/touch steering path. A Natural 1 applies the same overloaded-engine impairment: 60% of the selected difficulty's normal movement speed.
 - Pause or Escape stops the round. Switching away automatically pauses; resumption is explicit.
 - Final reports include the selected role, check total, difficulty, natural-1 impairment, role-specific statistics, hull, and score. Clipboard failure selects the report for manual copying. GM decides all outcomes.
 - All art is original code-drawn geometry. No commercial game assets or GM-only lore are included.
@@ -43,13 +47,13 @@ The build targets `/galaxy-grown-games/`. The check workflow runs tests and buil
 
 ### Validation status
 
-- Thirteen automated tests pass, covering the shared difficulty bands and lifecycle plus Pilot movement/collisions and Gunner touch/mouse pointer input, cooldown, targeting, armor, impacts, scoring, and reporting.
+- Twenty automated tests pass, covering the shared difficulty bands and lifecycle; Pilot touch/keyboard input and Asteroid movement/collisions; Gunner touch/mouse pointer input, cooldown, targeting, armor, impacts, scoring, and reporting; and Space Battle Pilot fuel, enemies, shots, collisions, all end conditions, impairment, tuning, scoring, and reporting.
 - TypeScript check and Vite production build pass.
 - Phaser produces a large-bundle advisory (~337 KB gzip); bundle optimization remains future work.
-- Browser QA is blocked in the current environment: Cloud Browser refused the local preview with `net::ERR_BLOCKED_BY_CLIENT`. No rendered Gunner pass is claimed.
+- Browser QA is blocked in the current environment: Cloud Browser refused the local preview with `net::ERR_BLOCKED_BY_CLIENT`. No rendered Space Battle / Pilot pass is claimed.
 - Before merging, verify launch → movement → pause/resume → results → retry, copy fallback, viewport rotation, and touch behavior on iPhone/iPad Safari plus a desktop browser. Check for blank/error screens and console errors.
 
-Issues #1 and #4 are complete. This branch implements #6 and continues progress toward the shared setup, controls, and reporting issues #2, #3, and #12.
+Issues #1, #4, and #6 are complete. This branch implements #5 and continues progress toward the shared setup, controls, and reporting issues #2, #3, and #12.
 
 ### Development context and review
 
@@ -80,3 +84,16 @@ Harder checks send faster, more frequent hazards and introduce more two-hit armo
 | Hard | 190 | 0.55 | 0.42 | 30% |
 
 Gunner balance, scoring, target tolerance, and armor frequency are provisional playtest values. Visual feedback includes an aim reticle, weapon-ready color, laser pulse, armored-health pips, a defense line, and impact flash.
+
+### Proposed Space Battle pilot balance
+
+Harder checks send faster, more frequent enemy ships; shorten their firing interval; speed up their shots; and provide fuel less often. Harder settings also modestly reduce steering speed. Natural 1 still multiplies the selected speed by 0.6.
+
+| Difficulty | Enemy speed (px/s) | Enemy spawn (s) | Fire interval (s) | Shot speed (px/s) | Fuel spawn (s) | Ship speed (px/s) |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| Very Easy | 85 | 2.20 | 1.80 | 155 | 2.6 | 255 |
+| Easy | 105 | 1.80 | 1.50 | 180 | 3.0 | 240 |
+| Medium | 125 | 1.45 | 1.25 | 205 | 3.4 | 225 |
+| Hard | 145 | 1.15 | 1.00 | 230 | 3.8 | 210 |
+
+Space Battle fuel timing, enemy pressure, collision tolerance, and scoring are provisional playtest values. The mode still needs human playtesting on touch and desktop controls, especially Hard with Natural 1.

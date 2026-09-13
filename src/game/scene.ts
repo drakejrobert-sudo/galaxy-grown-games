@@ -1,21 +1,26 @@
 import Phaser from 'phaser';
 import {
-  createFlight, createGunner, stepFlight, stepGunner, WIDTH, HEIGHT,
+  createFlight, createGunner, createSpaceBattlePilot, stepFlight, stepGunner,
+  stepSpaceBattlePilot, WIDTH, HEIGHT,
   GUNNER_DEFENSE_LINE, type Asteroid, type FlightConfig, type FlightState,
-  type GunnerInput, type GunnerState, type Role,
+  type GunnerInput, type GunnerState, type Role, type Situation,
+  type SpaceBattlePilotState,
 } from './rules';
 
 export class FlightScene extends Phaser.Scene {
   flight = createFlight();
   gunner = createGunner();
+  spacePilot = createSpaceBattlePilot();
   activeFlight = false;
   role: Role = 'Pilot';
+  situation: Situation = 'Asteroid Field';
   config: FlightConfig = { total: 10, naturalOne: false };
   private graphics!: Phaser.GameObjects.Graphics;
   readInput: (x: number, y: number) => { x: number; y: number } = () => ({ x: 0, y: 0 });
   readGunnerInput: () => GunnerInput = () => ({ firing: false });
   onFlightStep: (state: FlightState) => void = () => {};
   onGunnerStep: (state: GunnerState) => void = () => {};
+  onSpacePilotStep: (state: SpaceBattlePilotState) => void = () => {};
   onReady: () => void = () => {};
 
   create() {
@@ -24,18 +29,24 @@ export class FlightScene extends Phaser.Scene {
     this.onReady();
   }
 
-  begin(config: FlightConfig, role: Role = 'Pilot') {
+  begin(config: FlightConfig, situation: Situation = 'Asteroid Field', role: Role = 'Pilot') {
     this.config = config;
+    this.situation = situation;
     this.role = role;
     this.flight = createFlight();
     this.gunner = createGunner();
+    this.spacePilot = createSpaceBattlePilot();
     this.activeFlight = true;
   }
 
   update(_time: number, delta: number) {
     if (!this.graphics) return;
     if (this.activeFlight) {
-      if (this.role === 'Pilot') {
+      if (this.situation === 'Space Battle') {
+        stepSpaceBattlePilot(this.spacePilot, this.config, this.readInput(this.spacePilot.x, this.spacePilot.y), delta / 1000);
+        if (this.spacePilot.finished) this.activeFlight = false;
+        this.onSpacePilotStep(this.spacePilot);
+      } else if (this.role === 'Pilot') {
         stepFlight(this.flight, this.config, this.readInput(this.flight.x, this.flight.y), delta / 1000);
         if (this.flight.finished) this.activeFlight = false;
         this.onFlightStep(this.flight);
@@ -51,8 +62,12 @@ export class FlightScene extends Phaser.Scene {
   private paint() {
     const g = this.graphics;
     g.clear();
-    this.paintBackground(g, this.role === 'Pilot' ? this.flight.elapsed : this.gunner.elapsed);
-    if (this.role === 'Pilot') this.paintPilotMode(g);
+    const elapsed = this.situation === 'Space Battle'
+      ? this.spacePilot.elapsed
+      : this.role === 'Pilot' ? this.flight.elapsed : this.gunner.elapsed;
+    this.paintBackground(g, elapsed);
+    if (this.situation === 'Space Battle') this.paintSpaceBattlePilotMode(g);
+    else if (this.role === 'Pilot') this.paintPilotMode(g);
     else this.paintGunnerMode(g);
   }
 
@@ -119,22 +134,53 @@ export class FlightScene extends Phaser.Scene {
     }
     if (s.invulnerable) { g.lineStyle(2, 0x8feaff, 0.5); g.strokeCircle(s.x, s.y, 26); }
     if (s.invulnerable && Math.floor(s.elapsed * 10) % 2 === 0) return;
+    this.paintPlayerShip(g, s.x, s.y, s.elapsed);
+  }
+
+  private paintPlayerShip(g: Phaser.GameObjects.Graphics, x: number, y: number, elapsed: number) {
     const flame = this.config.naturalOne ? 0xffac64 : 0x71e4f5;
-    const pulse = 5 + Math.sin(s.elapsed * 40) * 3;
+    const pulse = 5 + Math.sin(elapsed * 40) * 3;
     for (const dx of [-8, 8]) {
-      g.fillStyle(flame, 0.12); g.fillEllipse(s.x + dx, s.y + 22, 15, 30 + pulse);
-      g.fillStyle(flame); g.fillTriangle(s.x + dx - 3, s.y + 10, s.x + dx + 3, s.y + 10, s.x + dx, s.y + 25 + pulse);
-      g.fillStyle(0xf4fbff); g.fillTriangle(s.x + dx - 1.5, s.y + 11, s.x + dx + 1.5, s.y + 11, s.x + dx, s.y + 21);
+      g.fillStyle(flame, 0.12); g.fillEllipse(x + dx, y + 22, 15, 30 + pulse);
+      g.fillStyle(flame); g.fillTriangle(x + dx - 3, y + 10, x + dx + 3, y + 10, x + dx, y + 25 + pulse);
+      g.fillStyle(0xf4fbff); g.fillTriangle(x + dx - 1.5, y + 11, x + dx + 1.5, y + 11, x + dx, y + 21);
     }
     g.fillStyle(0x687c9c); g.lineStyle(1, 0xa8c5df);
-    g.fillTriangle(s.x, s.y - 9, s.x - 17, s.y + 14, s.x + 17, s.y + 14);
-    g.strokeTriangle(s.x, s.y - 9, s.x - 17, s.y + 14, s.x + 17, s.y + 14);
-    g.fillStyle(0xdde7ee); g.fillTriangle(s.x, s.y - 19, s.x - 8, s.y + 12, s.x + 8, s.y + 12);
-    g.fillStyle(0x7e94b5); g.fillTriangle(s.x, s.y - 19, s.x, s.y + 12, s.x + 8, s.y + 12);
-    g.fillStyle(0x62dcec); g.fillEllipse(s.x, s.y - 3, 7, 13);
-    g.lineStyle(1, 0xe8ffff); g.lineBetween(s.x - 1, s.y - 8, s.x - 2, s.y - 2);
-    g.fillStyle(0xff9a9f); g.fillCircle(s.x - 13, s.y + 11, 1.5);
-    g.fillStyle(0x8cffe0); g.fillCircle(s.x + 13, s.y + 11, 1.5);
+    g.fillTriangle(x, y - 9, x - 17, y + 14, x + 17, y + 14);
+    g.strokeTriangle(x, y - 9, x - 17, y + 14, x + 17, y + 14);
+    g.fillStyle(0xdde7ee); g.fillTriangle(x, y - 19, x - 8, y + 12, x + 8, y + 12);
+    g.fillStyle(0x7e94b5); g.fillTriangle(x, y - 19, x, y + 12, x + 8, y + 12);
+    g.fillStyle(0x62dcec); g.fillEllipse(x, y - 3, 7, 13);
+    g.lineStyle(1, 0xe8ffff); g.lineBetween(x - 1, y - 8, x - 2, y - 2);
+    g.fillStyle(0xff9a9f); g.fillCircle(x - 13, y + 11, 1.5);
+    g.fillStyle(0x8cffe0); g.fillCircle(x + 13, y + 11, 1.5);
+  }
+
+  private paintSpaceBattlePilotMode(g: Phaser.GameObjects.Graphics) {
+    const s = this.spacePilot;
+    if (s.impactFlash) { g.fillStyle(0xff715b, 0.14); g.fillRect(9, 9, WIDTH - 18, HEIGHT - 18); }
+    for (const cell of s.fuelCells) {
+      const pulse = 0.7 + Math.sin(s.elapsed * 7 + cell.id) * 0.2;
+      g.fillStyle(0x79e1ce, 0.12); g.fillCircle(cell.x, cell.y, cell.radius + 7);
+      g.fillStyle(0x79e1ce, pulse); g.lineStyle(2, 0xd9fff6, 0.9);
+      g.fillRoundedRect(cell.x - 7, cell.y - 11, 14, 22, 4); g.strokeRoundedRect(cell.x - 7, cell.y - 11, 14, 22, 4);
+      g.fillStyle(0x173f45); g.fillRect(cell.x - 2, cell.y - 7, 4, 14);
+      g.fillRect(cell.x - 5, cell.y - 2, 10, 4);
+    }
+    for (const enemy of s.enemies) {
+      g.fillStyle(0xff7b83, 0.10); g.fillEllipse(enemy.x, enemy.y - 10, 44, 20);
+      g.fillStyle(0x713b59); g.lineStyle(2, 0xff9a9f, 0.9);
+      g.fillTriangle(enemy.x, enemy.y + 14, enemy.x - 18, enemy.y - 11, enemy.x + 18, enemy.y - 11);
+      g.strokeTriangle(enemy.x, enemy.y + 14, enemy.x - 18, enemy.y - 11, enemy.x + 18, enemy.y - 11);
+      g.fillStyle(0xffbd87); g.fillEllipse(enemy.x, enemy.y - 3, 7, 11);
+    }
+    for (const shot of s.shots) {
+      g.lineStyle(5, 0xff6575, 0.18); g.lineBetween(shot.x - shot.vx * 0.04, shot.y - shot.vy * 0.04, shot.x, shot.y);
+      g.fillStyle(0xffb4aa); g.fillCircle(shot.x, shot.y, shot.radius);
+      g.fillStyle(0xffffff); g.fillCircle(shot.x, shot.y, 2);
+    }
+    if (s.invulnerable) { g.lineStyle(2, 0x8feaff, 0.55); g.strokeCircle(s.x, s.y, 26); }
+    if (!s.invulnerable || Math.floor(s.elapsed * 10) % 2 !== 0) this.paintPlayerShip(g, s.x, s.y, s.elapsed);
   }
 
   private paintGunnerMode(g: Phaser.GameObjects.Graphics) {

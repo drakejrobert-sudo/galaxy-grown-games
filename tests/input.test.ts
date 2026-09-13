@@ -1,6 +1,30 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { createGunnerInput } from '../src/game/input.ts';
+import { createGunnerInput, createInput } from '../src/game/input.ts';
+
+test('shared pilot input supports keyboard steering and speed-capped touch destinations', () => {
+  const windowListeners = new Map<string, Function>();
+  const surfaceListeners = new Map<string, Function>();
+  const oldWindow = globalThis.window;
+  globalThis.window = { addEventListener: (type: string, listener: Function) => windowListeners.set(type, listener) } as any;
+  try {
+    const surface = {
+      addEventListener: (type: string, listener: Function) => surfaceListeners.set(type, listener),
+      querySelector: () => ({ getBoundingClientRect: () => ({left:0,top:0,width:480,height:560}) }),
+      setPointerCapture() {},
+    } as any;
+    const input = createInput(surface); input.enable(true);
+    let prevented = 0;
+    windowListeners.get('keydown')!({code:'KeyA',preventDefault:() => prevented++});
+    assert.deepEqual(input.read(240, 280), {x:-1,y:0});
+    assert.equal(prevented, 1);
+    windowListeners.get('keyup')!({code:'KeyA'});
+    surfaceListeners.get('pointerdown')!({pointerId:4,clientX:480,clientY:280,preventDefault:() => prevented++});
+    assert.deepEqual(input.read(240, 280), {x:1,y:0});
+    surfaceListeners.get('pointerup')!({});
+    assert.deepEqual(input.read(240, 280), {x:0,y:0});
+  } finally { globalThis.window = oldWindow; }
+});
 
 test('gunner touch input maps the canvas, supports drag firing, and retains its last aim', () => {
   const windowListeners = new Map<string, Function>();
