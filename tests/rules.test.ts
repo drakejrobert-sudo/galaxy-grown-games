@@ -1,6 +1,10 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { difficultyFor, parseTotal, flightSpeed, createFlight, stepFlight, scoreFor, resultText, PILOT_RADIUS, SIDE_WARNING_SECONDS, WIDTH } from '../src/game/rules.ts';
+import {
+  difficultyFor, parseTotal, flightSpeed, createFlight, stepFlight, scoreFor, resultText,
+  createGunner, stepGunner, gunnerFireEvery, gunnerScoreFor, gunnerResultText,
+  GUNNER_DEFENSE_LINE, GUNNER_TUNING, PILOT_RADIUS, SIDE_WARNING_SECONDS, WIDTH,
+} from '../src/game/rules.ts';
 test('modified total bands include negatives and values over 20', () => {
   for (const [value, expected] of [[-4,'Hard'],[0,'Hard'],[1,'Hard'],[5,'Hard'],[6,'Medium'],[10,'Medium'],[11,'Easy'],[15,'Easy'],[16,'Very Easy'],[27,'Very Easy']] as const) assert.equal(difficultyFor(value), expected);
   for (const invalid of ['', ' ', '2.5', 'word', '1e2', 'Infinity']) assert.equal(parseTotal(invalid), null);
@@ -68,4 +72,56 @@ test('difficulty increases hazard density and reduces steering speed without cha
     assert.equal(flightSpeed({total,naturalOne:true}), speed * 0.6);
     assert.ok(s.asteroids.every(a => Number.isFinite(a.x) && Number.isFinite(a.y)));
   }
+});
+
+test('gunner natural one halves the selected difficulty fire rate', () => {
+  for (const total of [5, 6, 11, 16]) {
+    const normal = gunnerFireEvery({total, naturalOne:false});
+    const impaired = gunnerFireEvery({total, naturalOne:true});
+    assert.equal(impaired, normal * 2);
+  }
+  const normal = createGunner(), impaired = createGunner();
+  normal.spawnIn = impaired.spawnIn = 100;
+  const input = {x:0, y:0, firing:true};
+  stepGunner(normal, {total:10,naturalOne:false}, input, 0.01);
+  stepGunner(impaired, {total:10,naturalOne:true}, input, 0.01);
+  assert.equal(impaired.cooldown, normal.cooldown * 2);
+});
+
+test('gunner targets asteroids, destroys standard rocks, and requires two hits for armor', () => {
+  const s = createGunner(); s.spawnIn = 100;
+  s.asteroids = [
+    {id:1,x:100,y:100,radius:20,speed:0,hp:1,maxHp:1},
+    {id:2,x:300,y:100,radius:20,speed:0,hp:2,maxHp:2},
+  ];
+  const config = {total:12,naturalOne:false};
+  stepGunner(s, config, {x:0,y:0,aimX:100,aimY:100,firing:true}, 0.01);
+  assert.equal(s.destroyed, 1); assert.deepEqual(s.asteroids.map(a => a.id), [2]);
+  s.cooldown = 0;
+  stepGunner(s, config, {x:0,y:0,aimX:300,aimY:100,firing:true}, 0.01);
+  assert.equal(s.asteroids[0].hp, 1); assert.equal(s.destroyed, 1);
+  s.cooldown = 0;
+  stepGunner(s, config, {x:0,y:0,aimX:300,aimY:100,firing:true}, 0.01);
+  assert.equal(s.asteroids.length, 0); assert.equal(s.destroyed, 2); assert.equal(s.shots, 3);
+});
+
+test('uncleared gunner hazards damage hull and end the run', () => {
+  const s = createGunner(); s.spawnIn = 100; s.hull = 1;
+  s.asteroids = [{id:1,x:200,y:GUNNER_DEFENSE_LINE-20,radius:20,speed:10,hp:1,maxHp:1}];
+  stepGunner(s, {total:10,naturalOne:false}, {x:0,y:0,firing:false}, 0.01);
+  assert.equal(s.impacts, 1); assert.equal(s.hull, 0); assert.equal(s.asteroids.length, 0);
+  assert.equal(s.finished, true); assert.ok(s.impactFlash > 0);
+});
+
+test('gunner difficulty scales hazards and final report stays manual and role-specific', () => {
+  assert.ok(GUNNER_TUNING.Hard.spawnEvery < GUNNER_TUNING.Medium.spawnEvery);
+  assert.ok(GUNNER_TUNING.Medium.spawnEvery < GUNNER_TUNING.Easy.spawnEvery);
+  assert.ok(GUNNER_TUNING.Easy.spawnEvery < GUNNER_TUNING['Very Easy'].spawnEvery);
+  assert.ok(GUNNER_TUNING.Hard.speed > GUNNER_TUNING['Very Easy'].speed);
+  const s = createGunner(); s.elapsed = 60; s.destroyed = 4; s.hull = 2; s.shots = 7; s.finished = true;
+  assert.equal(gunnerScoreFor(s), 900);
+  const report = gunnerResultText({total:4,naturalOne:true}, s);
+  assert.match(report, /Asteroid Field \/ Gunner/); assert.match(report, /Difficulty: Hard/);
+  assert.match(report, /half normal fire rate/); assert.match(report, /Destroyed: 4/);
+  assert.match(report, /GM determines campaign outcome/);
 });
