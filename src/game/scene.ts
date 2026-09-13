@@ -13,7 +13,7 @@ export class FlightScene extends Phaser.Scene {
   config: FlightConfig = { total: 10, naturalOne: false };
   private graphics!: Phaser.GameObjects.Graphics;
   readInput: (x: number, y: number) => { x: number; y: number } = () => ({ x: 0, y: 0 });
-  readGunnerInput: () => GunnerInput = () => ({ x: 0, y: 0, firing: false });
+  readGunnerInput: () => GunnerInput = () => ({ firing: false });
   onFlightStep: (state: FlightState) => void = () => {};
   onGunnerStep: (state: GunnerState) => void = () => {};
   onReady: () => void = () => {};

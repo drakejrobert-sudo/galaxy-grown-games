@@ -82,7 +82,7 @@ test('gunner natural one halves the selected difficulty fire rate', () => {
   }
   const normal = createGunner(), impaired = createGunner();
   normal.spawnIn = impaired.spawnIn = 100;
-  const input = {x:0, y:0, firing:true};
+  const input = {firing:true};
   stepGunner(normal, {total:10,naturalOne:false}, input, 0.01);
   stepGunner(impaired, {total:10,naturalOne:true}, input, 0.01);
   assert.equal(impaired.cooldown, normal.cooldown * 2);
@@ -95,20 +95,20 @@ test('gunner targets asteroids, destroys standard rocks, and requires two hits f
     {id:2,x:300,y:100,radius:20,speed:0,hp:2,maxHp:2},
   ];
   const config = {total:12,naturalOne:false};
-  stepGunner(s, config, {x:0,y:0,aimX:100,aimY:100,firing:true}, 0.01);
+  stepGunner(s, config, {aimX:100,aimY:100,firing:true}, 0.01);
   assert.equal(s.destroyed, 1); assert.deepEqual(s.asteroids.map(a => a.id), [2]);
   s.cooldown = 0;
-  stepGunner(s, config, {x:0,y:0,aimX:300,aimY:100,firing:true}, 0.01);
+  stepGunner(s, config, {aimX:300,aimY:100,firing:true}, 0.01);
   assert.equal(s.asteroids[0].hp, 1); assert.equal(s.destroyed, 1);
   s.cooldown = 0;
-  stepGunner(s, config, {x:0,y:0,aimX:300,aimY:100,firing:true}, 0.01);
+  stepGunner(s, config, {aimX:300,aimY:100,firing:true}, 0.01);
   assert.equal(s.asteroids.length, 0); assert.equal(s.destroyed, 2); assert.equal(s.shots, 3);
 });
 
 test('uncleared gunner hazards damage hull and end the run', () => {
   const s = createGunner(); s.spawnIn = 100; s.hull = 1;
   s.asteroids = [{id:1,x:200,y:GUNNER_DEFENSE_LINE-20,radius:20,speed:10,hp:1,maxHp:1}];
-  stepGunner(s, {total:10,naturalOne:false}, {x:0,y:0,firing:false}, 0.01);
+  stepGunner(s, {total:10,naturalOne:false}, {firing:false}, 0.01);
   assert.equal(s.impacts, 1); assert.equal(s.hull, 0); assert.equal(s.asteroids.length, 0);
   assert.equal(s.finished, true); assert.ok(s.impactFlash > 0);
 });

@@ -107,7 +107,6 @@ export const GUNNER_TUNING: Record<Difficulty, GunnerTuning> = {
   Easy: { speed: 135, spawnEvery: 0.90, fireEvery: 0.32, armoredChance: 0.10, drift: 0.26 },
   'Very Easy': { speed: 110, spawnEvery: 1.10, fireEvery: 0.28, armoredChance: 0, drift: 0.18 },
 };
-export const GUNNER_CROSSHAIR_SPEED = 310;
 export const GUNNER_DEFENSE_LINE = HEIGHT - 68;
 export const OVERHEAT_MULTIPLIER = 2;
 
@@ -117,8 +116,6 @@ export interface GunnerAsteroid extends Asteroid {
   id: number;
 }
 export interface GunnerInput {
-  x: number;
-  y: number;
   aimX?: number;
   aimY?: number;
   firing: boolean;
@@ -174,12 +171,6 @@ export function stepGunner(
   if (input.aimX !== undefined && input.aimY !== undefined) {
     s.crosshairX = Math.max(12, Math.min(WIDTH - 12, input.aimX));
     s.crosshairY = Math.max(18, Math.min(GUNNER_DEFENSE_LINE - 8, input.aimY));
-  } else {
-    const magnitude = Math.max(1, Math.hypot(input.x, input.y));
-    s.crosshairX = Math.max(12, Math.min(WIDTH - 12,
-      s.crosshairX + input.x / magnitude * GUNNER_CROSSHAIR_SPEED * dt));
-    s.crosshairY = Math.max(18, Math.min(GUNNER_DEFENSE_LINE - 8,
-      s.crosshairY + input.y / magnitude * GUNNER_CROSSHAIR_SPEED * dt));
   }
 
   if (input.firing && s.cooldown <= 0) {

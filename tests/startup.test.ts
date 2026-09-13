@@ -47,7 +47,7 @@ test('first launch waits for scene creation before starting simulation; retry re
   load('../src/main.ts', { phaser, './style.css': {}, './game/scene': scenes,
     './game/rules': rules, './game/input': {
       createInput: () => ({ read: () => ({ x: 1, y: 0 }), enable: (v: boolean) => inputEnabled = v }),
-      createGunnerInput: () => ({ read: () => ({ x: 0, y: 0, firing: false }), enable: (v: boolean) => gunnerInputEnabled = v }),
+      createGunnerInput: () => ({ read: () => ({ firing: false }), enable: (v: boolean) => gunnerInputEnabled = v }),
     },
   }, {
     document: { querySelector: () => element('app'), getElementById: element, addEventListener() {} },

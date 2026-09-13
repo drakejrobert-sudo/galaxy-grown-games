@@ -18,7 +18,7 @@ These are agent workflow instructions, not GitHub branch protection. Do not clai
 
 ## Product and implementation
 
-This repo contains player-facing browser mini-games supporting the Galaxy Grown campaign. Keep controls usable on phones, tablets, and desktop. Preserve speed limits for touch and keyboard alike, explicit pause/resume, readable hazards, and manual GM score reporting.
+This repo contains player-facing browser mini-games supporting the Galaxy Grown campaign. Keep controls usable on phones, tablets, and desktop. Preserve speed limits for touch and keyboard alike when both are supported, explicit pause/resume, readable hazards, and manual GM score reporting. Asteroid Field / Gunner is an approved pointer-only exception: touch and mouse use the same direct aiming path, while difficulty comes from hazards, armor, and weapon cooldown rather than reticle speed.
 
 Keep simulation and balance in src/game/rules.ts, rendering in src/game/scene.ts, input in src/game/input.ts, and the UI shell in src/main.ts. Use the existing stack unless a change is requested. Keep unsupported roles visibly disabled rather than implying they work.
 

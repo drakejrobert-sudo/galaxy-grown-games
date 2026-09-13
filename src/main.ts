@@ -66,7 +66,7 @@ function refreshSetup() {
     : natural.checked ? 'Overheated gun · half normal fire rate (playtest)' : 'Standard weapon cooling';
   get('controls-help').textContent = selectedRole === 'Pilot'
     ? 'Arrow keys / WASD to steer. On touch screens, hold and drag in the flight area. The ship follows at its movement speed.'
-    : 'Arrow keys / WASD move the crosshair and Space fires. On touch screens, hold or drag over a target to aim and fire.';
+    : 'Touch: tap, hold, or drag to aim and fire. Mouse: move to aim, then click or hold to fire.';
   get('error').textContent = '';
 }
 total.addEventListener('input', refreshSetup); natural.addEventListener('change', refreshSetup);
@@ -97,10 +97,10 @@ function launch() {
   get('mode-heading').textContent = role === 'Pilot' ? 'Keep your hull intact.' : 'Clear the path ahead.';
   get('play-help').textContent = role === 'Pilot'
     ? 'Avoid asteroids · Arrow keys / WASD · Hold and drag to steer'
-    : 'Destroy asteroids · Arrow keys / WASD + Space · Hold or drag to fire';
+    : 'Destroy asteroids · Touch to aim/fire · Mouse to aim, click to fire';
   canvas.setAttribute('aria-label', role === 'Pilot'
     ? 'Asteroid field. Steer with arrow keys, WASD, or touch.'
-    : 'Asteroid gunner station. Move the crosshair with arrow keys or WASD and fire with Space, or hold and drag on a target.');
+    : 'Asteroid gunner station. Tap, hold, or drag with touch; move a mouse to aim and click or hold to fire.');
   const impairment = role === 'Pilot' ? 'overloaded engine' : 'overheated gun';
   get('flight-status').textContent = `${difficultyFor(config.total)} · Check ${config.total} · ${config.naturalOne ? `Natural 1: ${impairment}` : role === 'Pilot' ? 'Standard engine' : 'Standard weapon cooling'}`;
   get('canvas').focus();

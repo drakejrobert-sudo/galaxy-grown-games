@@ -27,7 +27,7 @@ Open the local URL printed by Vite, including `/galaxy-grown-games/`. If network
 - Pilot controls: Arrow keys/WASD steer; holding/dragging on the playfield steers toward a destination at the same speed cap. Touch never teleports the ship.
 - Gunner impairment: an overheated gun has **double the selected difficulty's cooldown**, producing half its normal sustained rate of fire.
 - Gunner round: destroy incoming asteroids before they cross the defense line. Each impact costs one of 3 hull points. Armored asteroids take two hits and are introduced more often on harder difficulties.
-- Gunner controls: Arrow keys/WASD move the crosshair and Space fires. Holding or dragging on the playfield aims and fires with the same cooldown limit.
+- Gunner controls: tap, hold, or drag on touch screens; move the mouse to aim and click or hold to fire on computers. Both use the same Pointer Events path, direct reticle placement, and weapon cooldown; Gunner intentionally does not use keyboard reticle movement.
 - Gunner score: 100 per destroyed asteroid, rounded survival seconds × 5, and 100 per remaining hull point. This is provisional and is not a cross-role scoring standard.
 - Pause or Escape stops the round. Switching away automatically pauses; resumption is explicit.
 - Final reports include the selected role, check total, difficulty, natural-1 impairment, role-specific statistics, hull, and score. Clipboard failure selects the report for manual copying. GM decides all outcomes.
@@ -43,7 +43,7 @@ The build targets `/galaxy-grown-games/`. The check workflow runs tests and buil
 
 ### Validation status
 
-- Thirteen automated tests pass, covering the shared difficulty bands and lifecycle plus Pilot movement/collisions and Gunner keyboard/pointer input, cooldown, targeting, armor, impacts, scoring, and reporting.
+- Thirteen automated tests pass, covering the shared difficulty bands and lifecycle plus Pilot movement/collisions and Gunner touch/mouse pointer input, cooldown, targeting, armor, impacts, scoring, and reporting.
 - TypeScript check and Vite production build pass.
 - Phaser produces a large-bundle advisory (~337 KB gzip); bundle optimization remains future work.
 - Browser QA is blocked in the current environment: Cloud Browser refused the local preview with `net::ERR_BLOCKED_BY_CLIENT`. No rendered Gunner pass is claimed.
