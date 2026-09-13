@@ -1,3 +1,5 @@
+import type { LifeSupportRoute } from './rules';
+
 export function createInput(surface: HTMLElement) {
   const keys = new Set<string>();
   let touch: { x: number; y: number } | null = null;
@@ -150,5 +152,38 @@ export function createBomberInput(surface: HTMLElement, action: HTMLElement) {
       queuedMine = false;
       return { ...movementInput, placing };
     },
+  };
+}
+
+export function createLifeSupportInput(routeButtons: readonly HTMLElement[]) {
+  const routes: readonly LifeSupportRoute[] = ['Thrusters', 'Shields', 'Guns'];
+  let selected = 1;
+  let enabled = false;
+  const choose = (index: number) => {
+    if (!enabled) return;
+    selected = Math.max(0, Math.min(routes.length - 1, index));
+  };
+  const down = (e: KeyboardEvent) => {
+    if (!enabled) return;
+    const direct = e.code === 'Digit1' ? 0 : e.code === 'Digit2' ? 1 : e.code === 'Digit3' ? 2 : null;
+    if (direct !== null) {
+      e.preventDefault(); choose(direct); return;
+    }
+    if (e.repeat) return;
+    if (e.code === 'ArrowLeft' || e.code === 'KeyA') {
+      e.preventDefault(); choose((selected + routes.length - 1) % routes.length);
+    } else if (e.code === 'ArrowRight' || e.code === 'KeyD') {
+      e.preventDefault(); choose((selected + 1) % routes.length);
+    }
+  };
+  routeButtons.forEach((button, index) => button.addEventListener('pointerdown', e => {
+    if (!enabled) return;
+    e.preventDefault(); choose(index);
+  }));
+  window.addEventListener('keydown', down);
+  return {
+    enable(value: boolean) { enabled = value; },
+    reset() { selected = 1; },
+    read() { return { route: routes[selected] }; },
   };
 }

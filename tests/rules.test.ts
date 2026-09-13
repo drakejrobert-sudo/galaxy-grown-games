@@ -4,10 +4,12 @@ import {
   difficultyFor, parseTotal, flightSpeed, createFlight, stepFlight, scoreFor, resultText,
   createGunner, stepGunner, gunnerFireEvery, gunnerScoreFor, gunnerResultText,
   bomberBlastRadius, bomberResultText, bomberScoreFor, createBomber, stepBomber,
+  createLifeSupport, lifeSupportPacketKind, lifeSupportResultText, lifeSupportScoreFor, stepLifeSupport,
   createSpaceBattlePilot, stepSpaceBattlePilot, spaceBattlePilotSpeed,
   spaceBattlePilotScoreFor, spaceBattlePilotResultText, SPACE_BATTLE_TUNING,
   SPACE_BATTLE_MAX_FUEL,
   BOMBER_BLAST_RADIUS, BOMBER_TUNING, GUNNER_DEFENSE_LINE, GUNNER_TUNING,
+  LIFE_SUPPORT_MAX_INTEGRITY, LIFE_SUPPORT_SWITCH_Y, LIFE_SUPPORT_TUNING,
   PILOT_RADIUS, SIDE_WARNING_SECONDS, WIDTH,
 } from '../src/game/rules.ts';
 test('modified total bands include negatives and values over 20', () => {
@@ -191,6 +193,61 @@ test('bomber difficulty scales hazard pressure and report remains manual', () =>
   assert.match(report, /Asteroid Field \/ Bomber/); assert.match(report, /Difficulty: Hard/);
   assert.match(report, /half normal area/); assert.match(report, /Destroyed: 5/);
   assert.match(report, /GM determines campaign outcome/);
+});
+
+test('life support natural one exactly halves hearts and adds overloads per packet cycle', () => {
+  const standard = Array.from({length: 12}, (_, index) => lifeSupportPacketKind(index, false));
+  const impaired = Array.from({length: 12}, (_, index) => lifeSupportPacketKind(index, true));
+  assert.equal(standard.filter(kind => kind === 'heart').length, 2);
+  assert.equal(impaired.filter(kind => kind === 'heart').length, 1);
+  assert.equal(standard.filter(kind => kind === 'overload').length, 1);
+  assert.equal(impaired.filter(kind => kind === 'overload').length, 2);
+});
+
+test('life support routes matching packets and repair hearts restore integrity', () => {
+  const s = createLifeSupport(); s.spawnIn = 100; s.integrity = 3;
+  s.packets = [
+    {id:1, x:240, y:LIFE_SUPPORT_SWITCH_Y - 1, speed:100, target:'Shields', kind:'heart'},
+  ];
+  stepLifeSupport(s, {total:12,naturalOne:false}, {route:'Shields'}, 0.02);
+  assert.equal(s.routed, 1); assert.equal(s.heartsRouted, 1);
+  assert.equal(s.integrity, 4); assert.equal(s.packets.length, 0);
+  assert.equal(s.lastResult, 'correct');
+});
+
+test('life support mistakes damage integrity and a missed overload costs two', () => {
+  const s = createLifeSupport(); s.spawnIn = 100;
+  s.packets = [
+    {id:1, x:240, y:LIFE_SUPPORT_SWITCH_Y - 1, speed:100, target:'Guns', kind:'overload'},
+  ];
+  stepLifeSupport(s, {total:10,naturalOne:true}, {route:'Thrusters'}, 0.02);
+  assert.equal(s.integrity, LIFE_SUPPORT_MAX_INTEGRITY - 2);
+  assert.equal(s.mistakes, 1); assert.equal(s.lastResult, 'incorrect');
+  s.integrity = 1;
+  s.packets = [{id:2, x:240, y:LIFE_SUPPORT_SWITCH_Y - 1, speed:100, target:'Shields', kind:'power'}];
+  stepLifeSupport(s, {total:10,naturalOne:true}, {route:'Guns'}, 0.02);
+  assert.equal(s.integrity, 0); assert.equal(s.finished, true);
+});
+
+test('life support difficulty scales pressure and result reporting remains manual', () => {
+  assert.ok(LIFE_SUPPORT_TUNING.Hard.spawnEvery < LIFE_SUPPORT_TUNING.Medium.spawnEvery);
+  assert.ok(LIFE_SUPPORT_TUNING.Medium.spawnEvery < LIFE_SUPPORT_TUNING.Easy.spawnEvery);
+  assert.ok(LIFE_SUPPORT_TUNING.Easy.spawnEvery < LIFE_SUPPORT_TUNING['Very Easy'].spawnEvery);
+  assert.ok(LIFE_SUPPORT_TUNING.Hard.speed > LIFE_SUPPORT_TUNING['Very Easy'].speed);
+  const s = createLifeSupport();
+  s.elapsed = 60; s.routed = 7; s.heartsRouted = 1; s.overloadsRouted = 2; s.integrity = 4; s.finished = true;
+  assert.equal(lifeSupportScoreFor(s), 1250);
+  const report = lifeSupportResultText({total:4,naturalOne:true}, s);
+  assert.match(report, /Asteroid Field \/ Life Support/); assert.match(report, /Difficulty: Hard/);
+  assert.match(report, /one heart and two overloads per 12 packets/);
+  assert.match(report, /Correct routes: 7/); assert.match(report, /GM determines campaign outcome/);
+});
+
+test('life support completes at 60 seconds when system integrity remains', () => {
+  const s = createLifeSupport(); s.spawnIn = 100; s.elapsed = 59.99;
+  stepLifeSupport(s, {total:16,naturalOne:false}, {route:'Shields'}, 0.05);
+  assert.equal(s.elapsed, 60); assert.equal(s.finished, true);
+  assert.equal(s.integrity, LIFE_SUPPORT_MAX_INTEGRITY);
 });
 
 test('space battle pilot uses the established natural-one engine impairment', () => {

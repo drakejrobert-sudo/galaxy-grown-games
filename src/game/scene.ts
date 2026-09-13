@@ -1,16 +1,18 @@
 import Phaser from 'phaser';
 import {
-  createBomber, createFlight, createGunner, createSpaceBattlePilot, stepBomber,
-  stepFlight, stepGunner, stepSpaceBattlePilot, WIDTH, HEIGHT,
+  createBomber, createFlight, createGunner, createLifeSupport, createSpaceBattlePilot, stepBomber,
+  stepFlight, stepGunner, stepLifeSupport, stepSpaceBattlePilot, WIDTH, HEIGHT,
   GUNNER_DEFENSE_LINE, type Asteroid, type FlightConfig, type FlightState,
   type BomberInput, type BomberState, type GunnerInput, type GunnerState, type Role, type Situation,
-  type SpaceBattlePilotState, type EnemyShip, type EnemyShot, type FuelCell,
+  LIFE_SUPPORT_SWITCH_Y, type LifeSupportInput, type LifeSupportPacket, type LifeSupportRoute,
+  type LifeSupportState, type SpaceBattlePilotState, type EnemyShip, type EnemyShot, type FuelCell,
 } from './rules';
 
 export class FlightScene extends Phaser.Scene {
   flight = createFlight();
   gunner = createGunner();
   bomber = createBomber();
+  lifeSupport = createLifeSupport();
   spacePilot = createSpaceBattlePilot();
   activeFlight = false;
   role: Role = 'Pilot';
@@ -20,9 +22,11 @@ export class FlightScene extends Phaser.Scene {
   readInput: (x: number, y: number) => { x: number; y: number } = () => ({ x: 0, y: 0 });
   readGunnerInput: () => GunnerInput = () => ({ firing: false });
   readBomberInput: (x: number, y: number) => BomberInput = () => ({ x: 0, y: 0, placing: false });
+  readLifeSupportInput: () => LifeSupportInput = () => ({ route: 'Shields' });
   onFlightStep: (state: FlightState) => void = () => {};
   onGunnerStep: (state: GunnerState) => void = () => {};
   onBomberStep: (state: BomberState) => void = () => {};
+  onLifeSupportStep: (state: LifeSupportState) => void = () => {};
   onSpacePilotStep: (state: SpaceBattlePilotState) => void = () => {};
   onReady: () => void = () => {};
 
@@ -39,6 +43,7 @@ export class FlightScene extends Phaser.Scene {
     this.flight = createFlight();
     this.gunner = createGunner();
     this.bomber = createBomber();
+    this.lifeSupport = createLifeSupport();
     this.spacePilot = createSpaceBattlePilot();
     this.activeFlight = true;
   }
@@ -58,10 +63,14 @@ export class FlightScene extends Phaser.Scene {
         stepGunner(this.gunner, this.config, this.readGunnerInput(), delta / 1000);
         if (this.gunner.finished) this.activeFlight = false;
         this.onGunnerStep(this.gunner);
-      } else {
+      } else if (this.role === 'Bomber') {
         stepBomber(this.bomber, this.config, this.readBomberInput(this.bomber.x, this.bomber.y), delta / 1000);
         if (this.bomber.finished) this.activeFlight = false;
         this.onBomberStep(this.bomber);
+      } else {
+        stepLifeSupport(this.lifeSupport, this.config, this.readLifeSupportInput(), delta / 1000);
+        if (this.lifeSupport.finished) this.activeFlight = false;
+        this.onLifeSupportStep(this.lifeSupport);
       }
     }
     this.paint();
@@ -72,12 +81,15 @@ export class FlightScene extends Phaser.Scene {
     g.clear();
     const elapsed = this.situation === 'Space Battle'
       ? this.spacePilot.elapsed
-      : this.role === 'Pilot' ? this.flight.elapsed : this.role === 'Gunner' ? this.gunner.elapsed : this.bomber.elapsed;
+      : this.role === 'Pilot' ? this.flight.elapsed
+        : this.role === 'Gunner' ? this.gunner.elapsed
+          : this.role === 'Bomber' ? this.bomber.elapsed : this.lifeSupport.elapsed;
     this.paintBackground(g, elapsed);
     if (this.situation === 'Space Battle') this.paintSpaceBattlePilotMode(g);
     else if (this.role === 'Pilot') this.paintPilotMode(g);
     else if (this.role === 'Gunner') this.paintGunnerMode(g);
-    else this.paintBomberMode(g);
+    else if (this.role === 'Bomber') this.paintBomberMode(g);
+    else this.paintLifeSupportMode(g);
   }
 
   private paintBackground(g: Phaser.GameObjects.Graphics, elapsed: number) {
@@ -335,6 +347,86 @@ export class FlightScene extends Phaser.Scene {
       const readyFraction = 1 - s.cooldown / 0.65;
       g.lineStyle(3, 0xbba6ff, 0.8);
       g.beginPath(); g.arc(s.x, s.y, 27, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * readyFraction); g.strokePath();
+    }
+  }
+
+  private lifeSupportRouteX(route: LifeSupportRoute): number {
+    return route === 'Thrusters' ? 92 : route === 'Shields' ? WIDTH / 2 : WIDTH - 92;
+  }
+
+  private lifeSupportRouteColor(route: LifeSupportRoute): number {
+    return route === 'Thrusters' ? 0xffb866 : route === 'Shields' ? 0x79e1ce : 0xbba6ff;
+  }
+
+  private paintLifeSupportSymbol(
+    g: Phaser.GameObjects.Graphics,
+    packet: Pick<LifeSupportPacket, 'kind' | 'target'>,
+    x: number,
+    y: number,
+    scale = 1,
+  ) {
+    const color = packet.kind === 'heart' ? 0x79e1ce
+      : packet.kind === 'overload' ? 0xff8f6b : this.lifeSupportRouteColor(packet.target);
+    g.fillStyle(color, 0.95); g.lineStyle(2, 0xf4f7ff, 0.82);
+    if (packet.kind === 'heart') {
+      g.fillCircle(x - 5 * scale, y - 3 * scale, 7 * scale);
+      g.fillCircle(x + 5 * scale, y - 3 * scale, 7 * scale);
+      g.fillTriangle(x - 11 * scale, y, x + 11 * scale, y, x, y + 13 * scale);
+      return;
+    }
+    if (packet.kind === 'overload') {
+      g.fillTriangle(x - 4 * scale, y - 14 * scale, x + 7 * scale, y - 3 * scale, x - 1 * scale, y - 3 * scale);
+      g.fillTriangle(x + 4 * scale, y + 14 * scale, x - 7 * scale, y + 3 * scale, x + 1 * scale, y + 3 * scale);
+      return;
+    }
+    if (packet.target === 'Thrusters') {
+      g.fillTriangle(x, y - 13 * scale, x - 10 * scale, y + 11 * scale, x + 10 * scale, y + 11 * scale);
+      g.fillStyle(0xfff0bc); g.fillTriangle(x, y - 5 * scale, x - 4 * scale, y + 8 * scale, x + 4 * scale, y + 8 * scale);
+    } else if (packet.target === 'Shields') {
+      g.fillCircle(x, y, 12 * scale); g.fillStyle(0x14253b); g.fillCircle(x, y, 6 * scale);
+    } else {
+      g.fillCircle(x, y, 11 * scale); g.fillStyle(0x14253b); g.fillCircle(x, y, 5 * scale);
+      g.lineStyle(3 * scale, color); g.lineBetween(x - 15 * scale, y, x + 15 * scale, y);
+      g.lineBetween(x, y - 15 * scale, x, y + 15 * scale);
+    }
+  }
+
+  private paintLifeSupportMode(g: Phaser.GameObjects.Graphics) {
+    const s = this.lifeSupport;
+    const feedbackColor = s.lastResult === 'correct' ? 0x79e1ce : 0xff715b;
+    if (s.feedbackTime > 0) {
+      g.fillStyle(feedbackColor, 0.08 + s.feedbackTime * 0.35); g.fillRect(9, 9, WIDTH - 18, HEIGHT - 18);
+    }
+    g.fillStyle(0x151f35, 0.96); g.fillRoundedRect(WIDTH / 2 - 48, 20, 96, LIFE_SUPPORT_SWITCH_Y - 42, 18);
+    g.lineStyle(2, 0x516686, 0.72); g.strokeRoundedRect(WIDTH / 2 - 48, 20, 96, LIFE_SUPPORT_SWITCH_Y - 42, 18);
+    g.lineStyle(5, 0x293a58, 0.9); g.lineBetween(WIDTH / 2, 36, WIDTH / 2, LIFE_SUPPORT_SWITCH_Y);
+    g.lineStyle(1, 0x7693b4, 0.5); g.lineBetween(WIDTH / 2 - 8, 36, WIDTH / 2 - 8, LIFE_SUPPORT_SWITCH_Y);
+    g.lineBetween(WIDTH / 2 + 8, 36, WIDTH / 2 + 8, LIFE_SUPPORT_SWITCH_Y);
+
+    const routes: LifeSupportRoute[] = ['Thrusters', 'Shields', 'Guns'];
+    for (const route of routes) {
+      const x = this.lifeSupportRouteX(route);
+      const selected = route === s.selectedRoute;
+      const color = this.lifeSupportRouteColor(route);
+      g.lineStyle(selected ? 7 : 3, color, selected ? 0.88 : 0.28);
+      g.lineBetween(WIDTH / 2, LIFE_SUPPORT_SWITCH_Y, x, 472);
+      g.fillStyle(color, selected ? 0.16 : 0.06); g.fillRoundedRect(x - 48, 466, 96, 72, 14);
+      g.lineStyle(selected ? 3 : 1, color, selected ? 0.95 : 0.55); g.strokeRoundedRect(x - 48, 466, 96, 72, 14);
+      this.paintLifeSupportSymbol(g, { kind: 'power', target: route }, x, 501, 0.85);
+    }
+    g.fillStyle(0x22314d); g.lineStyle(3, 0xc8d9ef, 0.9);
+    g.fillCircle(WIDTH / 2, LIFE_SUPPORT_SWITCH_Y, 18); g.strokeCircle(WIDTH / 2, LIFE_SUPPORT_SWITCH_Y, 18);
+    const selectedX = this.lifeSupportRouteX(s.selectedRoute);
+    const angle = Math.atan2(472 - LIFE_SUPPORT_SWITCH_Y, selectedX - WIDTH / 2);
+    g.lineStyle(7, this.lifeSupportRouteColor(s.selectedRoute), 0.95);
+    g.lineBetween(WIDTH / 2, LIFE_SUPPORT_SWITCH_Y, WIDTH / 2 + Math.cos(angle) * 35, LIFE_SUPPORT_SWITCH_Y + Math.sin(angle) * 35);
+
+    for (const packet of s.packets) {
+      const pulse = 0.75 + Math.sin(s.elapsed * 10 + packet.id) * 0.12;
+      g.fillStyle(this.lifeSupportRouteColor(packet.target), 0.07); g.fillCircle(packet.x, packet.y, 28);
+      g.fillStyle(0x1d2942, 0.98); g.lineStyle(2, this.lifeSupportRouteColor(packet.target), pulse);
+      g.fillCircle(packet.x, packet.y, 22); g.strokeCircle(packet.x, packet.y, 22);
+      this.paintLifeSupportSymbol(g, packet, packet.x, packet.y, 0.75);
     }
   }
 }

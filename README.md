@@ -3,7 +3,7 @@ A repository for hosting mini games for the galaxy grown campaign.
 
 ## First playable slice
 
-Asteroid Field / Pilot, Asteroid Field / Gunner, Asteroid Field / Bomber, and Space Battle / Pilot are implemented as **prototypes awaiting balance and device QA**. Other situation/role combinations are visibly disabled. Players enter their GM-requested final skill-check total and a separate Natural 1 flag, play independently, and manually share their score. No campaign data or live multiplayer service is included.
+Asteroid Field / Pilot, Gunner, Bomber, and Life Support, plus Space Battle / Pilot, are implemented as **prototypes awaiting balance and device QA**. Other situation/role combinations are visibly disabled. Players enter their GM-requested final skill-check total and a separate Natural 1 flag, play independently, and manually share their score. No campaign data or live multiplayer service is included.
 
 ### Run locally
 
@@ -33,6 +33,10 @@ Open the local URL printed by Vite, including `/galaxy-grown-games/`. If network
 - Bomber mines arm after 0.25 seconds, last 5 seconds, and can be placed every 0.65 seconds. Contact detonates a mine and destroys asteroid centers inside its visible blast circle.
 - Bomber Natural 1 reduces the mine blast radius by `sqrt(0.5)`, so both the drawn target and collision target have exactly half their normal area. The trigger remains a close-contact fuse.
 - Bomber score: 100 per destroyed asteroid, rounded survival seconds × 5, and 100 per remaining hull point. The round ends after 60 seconds or when asteroid impacts deplete three hull points.
+- Life Support routes falling packets through a three-way switch to matching Thrusters, Shields, or Guns bays. Arrow Left/Right or A/D cycles the switch; 1/2/3 selects a bay directly; touch players tap the three labeled bay controls.
+- Ordinary power packets match their bay's color and symbol. Heart packets route to Shields and restore one system-integrity point up to a maximum of 5. Overload packets route to Guns and cost two integrity when misrouted; every other mistake costs one.
+- Each complete 12-packet cycle normally contains two hearts and one overload. A Natural 1 changes the cycle to one heart and two overloads, exactly halving hearts and adding one overload; an incomplete final cycle is truncated rather than rounded up.
+- Life Support score: 100 per correct route, a 50-point bonus for each correctly routed heart or overload, and 100 per remaining integrity point. The run ends after 60 seconds or when integrity reaches zero.
 - Space Battle / Pilot starts with 18 seconds of fuel. Fuel drains at one second per second; each collected cell restores 8 seconds, up to a 30-second tank.
 - Space Battle enemies cross the field and fire shots aimed at the ship's position when fired. Contact with a ship or shot removes one of 3 hull points, with 1.25 seconds of collision grace.
 - Space Battle / Pilot ends after 60 seconds, at zero hull, or when fuel is depleted. Its score is rounded survival seconds × 10, plus 100 per remaining hull point and 50 per fuel cell collected.
@@ -43,7 +47,7 @@ Open the local URL printed by Vite, including `/galaxy-grown-games/`. If network
 
 ### Architecture
 
-`src/game/rules.ts` owns simulation and scoring. `scene.ts` renders it with Phaser. `input.ts` maps touch/keyboard to common movement. `main.ts` owns HTML setup, HUD, pause and reporting. This keeps additional situations and roles separate from the shell.
+`src/game/rules.ts` owns simulation and scoring. `scene.ts` renders it with Phaser. `input.ts` maps touch/keyboard to shared actions. `main.ts` owns HTML setup, HUD, pause and reporting. This keeps additional situations and roles separate from the shell.
 
 ### GitHub Pages
 
@@ -51,13 +55,13 @@ The build targets `/galaxy-grown-games/`. The check workflow runs tests and buil
 
 ### Validation status
 
-- Twenty-seven automated tests pass, covering the shared difficulty bands and lifecycle; Pilot touch/keyboard input and Asteroid movement/collisions; Gunner touch/mouse pointer input, cooldown, targeting, armor, impacts, scoring, and reporting; Bomber simultaneous movement/action input, mine placement and detonation, exact half-area impairment, impacts, scoring, and reporting; Space Battle Pilot fuel, enemies, shots, collisions, all end conditions, impairment, tuning, scoring, and reporting; and the retry-safe Pages job structure.
+- Thirty-three automated tests pass, covering the shared difficulty bands and lifecycle; Pilot touch/keyboard input and Asteroid movement/collisions; Gunner touch/mouse pointer input, cooldown, targeting, armor, impacts, scoring, and reporting; Bomber simultaneous movement/action input, mine placement and detonation, exact half-area impairment, impacts, scoring, and reporting; Life Support keyboard/touch routing, deterministic heart/overload cycles, integrity, difficulty, scoring, and reporting; Space Battle Pilot fuel, enemies, shots, collisions, all end conditions, impairment, tuning, scoring, and reporting; and the retry-safe Pages job structure.
 - TypeScript check and Vite production build pass.
 - Phaser produces a large-bundle advisory (~337 KB gzip); bundle optimization remains future work.
-- Rendered browser QA is unavailable in the current environment because no compatible browser runtime is installed. No rendered Bomber pass is claimed.
-- Before merging, verify Bomber launch → steering + mine placement → pause/resume → results → retry, copy fallback, viewport rotation, and touch behavior on iPhone/iPad Safari plus a desktop browser. Confirm that the Drop mine control does not obstruct the playfield and the blast circles match their collision behavior.
+- Rendered browser QA is unavailable in the current environment because the connected browser blocks the local Vite address. No rendered Life Support pass is claimed.
+- Before merging, verify Life Support launch → switch routing → repair/overload feedback → pause/resume → results → retry, copy fallback, viewport rotation, and touch behavior on iPhone/iPad Safari plus a desktop browser. Confirm the three route buttons stay visible without obstructing the playfield and that packet symbols remain readable at phone size.
 
-Issues #1, #4, #5, and #6 are complete. This branch implements #7 and continues progress toward the shared setup, controls, and reporting issues #2, #3, and #12.
+Issues #1 and #4–#8 are implemented on `main`. This branch implements #9 and continues progress toward the shared setup, controls, and reporting issues #2, #3, and #12.
 
 ### Development context and review
 
@@ -114,3 +118,16 @@ Harder checks send faster, more frequent pursuing asteroids with stronger inward
 | Hard | 200 | 0.58 | 225 | 0.58 |
 
 Bomber hazard pressure, blast radius, mine cadence, scoring, and collision tolerance are provisional playtest values. The mode still needs human playtesting on touch and desktop controls, especially simultaneous touch steering and mine placement.
+
+### Proposed Asteroid Field Life Support balance
+
+Harder checks shorten the time between packets and move each packet down the conduit faster. Packet type cycles, integrity effects, and scoring stay consistent across difficulties; Natural 1 changes the special-packet mix independently of the selected difficulty.
+
+| Difficulty | Packet speed (px/s) | Spawn interval (s) |
+| --- | ---: | ---: |
+| Very Easy | 96 | 1.28 |
+| Easy | 110 | 1.06 |
+| Medium | 126 | 0.88 |
+| Hard | 142 | 0.72 |
+
+Life Support packet timing, five-point integrity pool, two-damage overload mistakes, special-packet bonuses, and scoring are provisional playtest values. The mode still needs human playtesting on touch and desktop controls, especially symbol readability and switch timing at Hard with Natural 1.

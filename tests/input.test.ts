@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { createBomberInput, createGunnerInput, createInput } from '../src/game/input.ts';
+import { createBomberInput, createGunnerInput, createInput, createLifeSupportInput } from '../src/game/input.ts';
 
 test('shared pilot input supports keyboard steering and speed-capped touch destinations', () => {
   const windowListeners = new Map<string, Function>();
@@ -119,5 +119,38 @@ test('bomber touch can steer while the separate mine control is held', () => {
     assert.deepEqual(input.read(240, 100), {x:1,y:0,placing:true});
     actionListeners.get('pointerup')!({pointerId:9});
     assert.deepEqual(input.read(240, 100), {x:1,y:0,placing:false});
+  } finally { globalThis.window = oldWindow; }
+});
+
+test('life support switch supports cycling, direct keyboard selection, and touch buttons', () => {
+  const windowListeners = new Map<string, Function>();
+  const buttonListeners = Array.from({length: 3}, () => new Map<string, Function>());
+  const oldWindow = globalThis.window;
+  globalThis.window = { addEventListener: (type: string, listener: Function) => windowListeners.set(type, listener) } as any;
+  try {
+    const buttons = buttonListeners.map(listeners => ({
+      addEventListener: (type: string, listener: Function) => listeners.set(type, listener),
+    })) as any;
+    const input = createLifeSupportInput(buttons); input.enable(true);
+    let prevented = 0;
+    assert.deepEqual(input.read(), {route:'Shields'});
+    windowListeners.get('keydown')!({code:'ArrowRight',preventDefault:() => prevented++});
+    assert.deepEqual(input.read(), {route:'Guns'});
+    windowListeners.get('keydown')!({code:'ArrowRight',repeat:true,preventDefault:() => prevented++});
+    assert.deepEqual(input.read(), {route:'Guns'});
+    windowListeners.get('keydown')!({code:'ArrowRight',preventDefault:() => prevented++});
+    assert.deepEqual(input.read(), {route:'Thrusters'});
+    windowListeners.get('keydown')!({code:'Digit2',preventDefault:() => prevented++});
+    assert.deepEqual(input.read(), {route:'Shields'});
+    buttonListeners[0].get('pointerdown')!({preventDefault:() => prevented++});
+    assert.deepEqual(input.read(), {route:'Thrusters'});
+    assert.equal(prevented, 4);
+    input.enable(false);
+    buttonListeners[2].get('pointerdown')!({preventDefault:() => prevented++});
+    assert.deepEqual(input.read(), {route:'Thrusters'});
+    input.enable(true);
+    assert.deepEqual(input.read(), {route:'Thrusters'});
+    input.reset();
+    assert.deepEqual(input.read(), {route:'Shields'});
   } finally { globalThis.window = oldWindow; }
 });
