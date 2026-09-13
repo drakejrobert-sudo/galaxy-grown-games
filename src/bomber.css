@@ -10,15 +10,32 @@
   color: #fff;
   font-weight: 700;
   touch-action: none;
+  user-select: none;
 }
 
-@media (max-width: 460px) {
+@media (max-width: 700px) {
   .play-heading {
     align-items: flex-start;
   }
 
-  .play-actions {
-    flex-direction: column;
+  /* Keep the mine trigger in the phone thumb zone while the other hand steers. */
+  .action:not([hidden]) {
+    position: fixed;
+    right: max(18px, env(safe-area-inset-right));
+    bottom: max(22px, calc(env(safe-area-inset-bottom) + 16px));
+    z-index: 20;
+    width: 92px;
+    min-height: 92px;
+    padding: 12px;
+    border-width: 2px;
+    border-radius: 50%;
+    box-shadow: 0 8px 28px #05081699, 0 0 0 5px #101528cc;
+    line-height: 1.15;
+  }
+
+  .action:not([hidden]):active {
+    background: #927bd0;
+    transform: scale(0.96);
   }
 }
 

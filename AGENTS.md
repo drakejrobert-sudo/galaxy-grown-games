@@ -26,6 +26,8 @@ Difficulty comes from the modified check total. Natural 1 is a separate addition
 
 Add meaningful regression coverage for changed mechanics. Run npm test and npm run build. For visual or interaction work, attempt browser QA and document any blocked or untested flows, particularly iPhone touch controls. Avoid committing generated builds, dependencies, temporary QA artifacts, credentials, or private campaign material.
 
+When ChatGPT Work is being used from a mobile device, do not repeatedly attempt connected-browser QA against the local Vite server; that path has consistently been unable to reach the local app. Run automated tests and the production build, and leave real-device iPhone/iPad Safari checks as an explicit manual playtest item. Desktop or emulated-mobile browser QA may still be used when available, but label it accurately and never present emulation as real iPhone Safari verification.
+
 ## Campaign boundary
 
 Use docs/campaign-context.md for the limited player-safe context relevant to these games. This repo is not the campaign canon repository. Do not import transcripts, GM secrets, unpublished plot revelations, or party-specific discoveries into public source or shipped assets. New ideas are proposals until approved or established in play. Flag contradictions instead of silently rewriting lore.
