@@ -9,7 +9,7 @@ Read this file, README.md, docs/campaign-context.md, and relevant code and tests
 - Always work on a descriptive feature, fix, or docs branch based on current main. Never commit or push directly to main.
 - Make requested changes, run relevant tests and the production build, and open a pull request for Drake to review. A request to implement a change authorizes branch work and a reviewable PR, not a merge.
 - Never merge a pull request, enable auto-merge, approve your own work, or bypass required checks. Drake reviews and performs the merge.
-- Never deploy or trigger the deployment workflow without Drake's explicit approval of that deployment after review. Do not turn on automatic deployments as a convenience.
+- GitHub Pages deploys automatically after a change reaches `main`, but only after the deployment workflow's tests and production build pass. Drake's decision to merge a reviewed pull request is approval for that automatic deployment. Do not manually trigger a deployment, deploy from another branch, or bypass its checks without Drake's explicit approval.
 - Do not force-push shared branches or change repository permissions, branch protections, or review requirements without explicit instructions.
 - Include the problem, user-visible changes, tests performed, known limitations, and a short playtest checklist in each PR. Report blockers honestly; a successful build is not browser QA.
 - Stop at a concrete reviewable result. Do not repeatedly ask permission for ordinary implementation, fixes, tests, commits, or opening the requested PR.
