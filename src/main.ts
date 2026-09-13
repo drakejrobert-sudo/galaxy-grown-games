@@ -1,10 +1,11 @@
 import Phaser from 'phaser';
 import './style.css';
+import './bomber.css';
 import { FlightScene } from './game/scene';
-import { createGunnerInput, createInput } from './game/input';
+import { createBomberInput, createGunnerInput, createInput } from './game/input';
 import {
-  difficultyFor, parseTotal, resultText, scoreFor, gunnerResultText,
-  gunnerScoreFor, spaceBattlePilotResultText, spaceBattlePilotScoreFor,
+  bomberResultText, bomberScoreFor, difficultyFor, parseTotal, resultText, scoreFor,
+  gunnerResultText, gunnerScoreFor, spaceBattlePilotResultText, spaceBattlePilotScoreFor,
   DURATION, WIDTH, HEIGHT, type FlightConfig, type Role, type Situation,
 } from './game/rules';
 
@@ -16,7 +17,7 @@ app.innerHTML = `
   <div class="intro"><p class="eyebrow">CREW CHALLENGE 01</p><h1>A steady hand.<br>A galaxy of trouble.</h1><p class="lede">Choose your station, face the danger ahead, and bring your individual score back to the GM.</p><div class="details"><span>60-second challenge</span><span>3 hull points</span><span>Solo run</span></div></div>
   <form id="flight-form" class="panel">
     <h2>Prepare for flight</h2>
-    <div class="fields"><label>Situation<select id="situation"><option>Asteroid Field</option><option>Space Battle</option><option disabled>Boarding Party — in design</option></select></label><label>Crew position<select id="role"><option>Pilot</option><option id="role-gunner">Gunner</option><option disabled>Bomber — in development</option><option disabled>Life Support — in development</option></select></label></div>
+    <div class="fields"><label>Situation<select id="situation"><option>Asteroid Field</option><option>Space Battle</option><option disabled>Boarding Party — in design</option></select></label><label>Crew position<select id="role"><option>Pilot</option><option id="role-gunner">Gunner</option><option id="role-bomber">Bomber</option><option disabled>Life Support — in development</option></select></label></div>
     <label for="total">Check total <span class="muted">including modifiers</span></label>
     <input id="total" name="total" type="text" autocomplete="off" placeholder="Enter your final total" aria-describedby="total-help error" required />
     <p id="total-help" class="help">Roll the check your GM requests, add your modifiers, and enter the total here. Negative totals are allowed.</p>
@@ -28,7 +29,7 @@ app.innerHTML = `
   </form>
 </section>
 <section id="play" hidden>
-  <div class="play-heading"><div><p id="mode-label" class="eyebrow">ASTEROID FIELD / PILOT</p><h2 id="mode-heading">Keep your hull intact.</h2></div><button id="pause" type="button">Pause</button></div>
+  <div class="play-heading"><div><p id="mode-label" class="eyebrow">ASTEROID FIELD / PILOT</p><h2 id="mode-heading">Keep your hull intact.</h2></div><div class="play-actions"><button id="action" class="action" type="button" hidden>Drop mine</button><button id="pause" type="button">Pause</button></div></div>
   <div class="hud"><div><span>TIME LEFT</span><strong id="time">60s</strong></div><div><span>HULL</span><strong id="hull">3 / 3</strong></div><div id="fuel-wrap" hidden><span>FUEL</span><strong id="fuel">18.0s</strong></div><div><span>SCORE</span><strong id="score">300</strong></div></div>
   <p id="flight-status" class="flight-status"></p>
   <div class="flight-wrap"><div id="canvas" aria-label="Asteroid field. Steer with arrow keys, WASD, or touch." role="application" tabindex="0"></div><div id="pause-overlay" hidden><h2>Challenge paused</h2><p>Your timer is stopped.</p><button id="resume" class="primary" type="button">Resume challenge</button><button id="abandon" type="button">Back to setup</button></div></div>
@@ -47,10 +48,13 @@ const roleSelect = get<HTMLSelectElement>('role');
 const situationSelect = get<HTMLSelectElement>('situation');
 const scene = new FlightScene('flight');
 const canvas = get('canvas');
+const action = get<HTMLButtonElement>('action');
 const input = createInput(canvas);
 const gunnerInput = createGunnerInput(canvas);
+const bomberInput = createBomberInput(canvas, action);
 scene.readInput = input.read;
 scene.readGunnerInput = gunnerInput.read;
+scene.readBomberInput = bomberInput.read;
 let game: Phaser.Game | null = null;
 let config: FlightConfig = { total: 10, naturalOne: false };
 let role: Role = 'Pilot';
@@ -65,15 +69,21 @@ function refreshSetup() {
   get('difficulty').textContent = parsed === null ? 'Awaiting valid check' : difficultyFor(parsed);
   const selectedSituation: Situation = situationSelect.value === 'Space Battle' ? 'Space Battle' : 'Asteroid Field';
   const gunnerOption = get<HTMLOptionElement>('role-gunner');
+  const bomberOption = get<HTMLOptionElement>('role-bomber');
   gunnerOption.disabled = selectedSituation === 'Space Battle';
-  if (gunnerOption.disabled && roleSelect.value === 'Gunner') roleSelect.value = 'Pilot';
+  bomberOption.disabled = selectedSituation === 'Space Battle';
+  if (selectedSituation === 'Space Battle' && roleSelect.value !== 'Pilot') roleSelect.value = 'Pilot';
   const selectedRole = roleSelect.value as Role;
   get('impairment').textContent = selectedRole === 'Pilot'
     ? natural.checked ? 'Overloaded engine · 60% movement speed (playtest)' : 'Standard engine'
-    : natural.checked ? 'Overheated gun · half normal fire rate (playtest)' : 'Standard weapon cooling';
+    : selectedRole === 'Gunner'
+      ? natural.checked ? 'Overheated gun · half normal fire rate (playtest)' : 'Standard weapon cooling'
+      : natural.checked ? 'Mine blast target · half normal area (playtest)' : 'Standard mine blast target';
   get('controls-help').textContent = selectedRole === 'Pilot'
     ? 'Arrow keys / WASD to steer. On touch screens, hold and drag in the flight area. The ship follows at its movement speed.'
-    : 'Touch: tap, hold, or drag to aim and fire. Mouse: move to aim, then click or hold to fire.';
+    : selectedRole === 'Gunner'
+      ? 'Touch: tap, hold, or drag to aim and fire. Mouse: move to aim, then click or hold to fire.'
+      : 'Arrow keys / WASD to steer and Space or Enter to drop mines. On touch, steer in the flight area and use Drop mine.';
   get('error').textContent = '';
 }
 total.addEventListener('input', refreshSetup); natural.addEventListener('change', refreshSetup);
@@ -84,6 +94,7 @@ function setPaused(value: boolean) {
   paused = value; scene.activeFlight = !value;
   input.enable(!value && role === 'Pilot');
   gunnerInput.enable(!value && situation === 'Asteroid Field' && role === 'Gunner');
+  bomberInput.enable(!value && situation === 'Asteroid Field' && role === 'Bomber');
   get('pause-overlay').hidden = !value;
   get('pause').textContent = value ? 'Resume' : 'Pause';
   if (value) get('resume').focus(); else get('canvas').focus();
@@ -94,7 +105,7 @@ window.addEventListener('keydown', e => { if (inFlight && e.code === 'Escape') {
 window.addEventListener('blur', () => { if (inFlight) setPaused(true); });
 document.addEventListener('visibilitychange', () => { if (document.hidden && inFlight) setPaused(true); });
 function resetSetup() {
-  inFlight = false; scene.activeFlight = false; input.enable(false); gunnerInput.enable(false); paused = false;
+  inFlight = false; scene.activeFlight = false; input.enable(false); gunnerInput.enable(false); bomberInput.enable(false); paused = false;
   get('pause-overlay').hidden = true; show('setup'); total.focus();
 }
 get('abandon').addEventListener('click', resetSetup); get('again').addEventListener('click', resetSetup);
@@ -102,24 +113,30 @@ function launch() {
   scene.begin(config, situation, role);
   input.enable(role === 'Pilot');
   gunnerInput.enable(situation === 'Asteroid Field' && role === 'Gunner');
+  bomberInput.enable(situation === 'Asteroid Field' && role === 'Bomber');
   inFlight = true; paused = false;
   get('pause').textContent = 'Pause'; get('pause-overlay').hidden = true;
+  action.hidden = role !== 'Bomber';
   get('fuel-wrap').hidden = situation !== 'Space Battle';
   get('mode-label').textContent = `${situation.toUpperCase()} / ${role.toUpperCase()}`;
   get('mode-heading').textContent = situation === 'Space Battle'
     ? 'Collect fuel. Evade enemy fire.'
-    : role === 'Pilot' ? 'Keep your hull intact.' : 'Clear the path ahead.';
+    : role === 'Pilot' ? 'Keep your hull intact.' : role === 'Gunner' ? 'Clear the path ahead.' : 'Lay mines in their path.';
   get('play-help').textContent = role === 'Pilot'
     ? situation === 'Space Battle'
       ? 'Collect fuel cells · Evade ships and fire · Arrow keys / WASD or hold and drag'
       : 'Avoid asteroids · Arrow keys / WASD · Hold and drag to steer'
-    : 'Destroy asteroids · Touch to aim/fire · Mouse to aim, click to fire';
+    : role === 'Gunner'
+      ? 'Destroy asteroids · Touch to aim/fire · Mouse to aim, click to fire'
+      : 'Steer and lay mines · Arrow keys / WASD + Space · Touch steering + Drop mine';
   canvas.setAttribute('aria-label', situation === 'Space Battle'
     ? 'Space battle pilot station. Collect fuel and evade enemy ships and fire with arrow keys, WASD, or touch.'
     : role === 'Pilot' ? 'Asteroid field. Steer with arrow keys, WASD, or touch.'
-    : 'Asteroid gunner station. Tap, hold, or drag with touch; move a mouse to aim and click or hold to fire.');
-  const impairment = role === 'Pilot' ? 'overloaded engine' : 'overheated gun';
-  get('flight-status').textContent = `${difficultyFor(config.total)} · Check ${config.total} · ${config.naturalOne ? `Natural 1: ${impairment}` : role === 'Pilot' ? 'Standard engine' : 'Standard weapon cooling'}`;
+    : role === 'Gunner' ? 'Asteroid gunner station. Tap, hold, or drag with touch; move a mouse to aim and click or hold to fire.'
+    : 'Asteroid bomber station. Steer with arrow keys or WASD and drop mines with Space or Enter; on touch, steer in the field and use the Drop mine button.');
+  const impairment = role === 'Pilot' ? 'overloaded engine' : role === 'Gunner' ? 'overheated gun' : 'half-area mine blast target';
+  const standard = role === 'Pilot' ? 'Standard engine' : role === 'Gunner' ? 'Standard weapon cooling' : 'Standard mine blast target';
+  get('flight-status').textContent = `${difficultyFor(config.total)} · Check ${config.total} · ${config.naturalOne ? `Natural 1: ${impairment}` : standard}`;
   get('canvas').focus();
 }
 get('flight-form').addEventListener('submit', e => {
@@ -151,7 +168,7 @@ scene.onFlightStep = s => {
   get('hull').textContent = `${s.hull} / 3`;
   get('score').textContent = String(scoreFor(s));
   if (s.finished) {
-    inFlight = false; input.enable(false); gunnerInput.enable(false); show('results');
+    inFlight = false; input.enable(false); gunnerInput.enable(false); bomberInput.enable(false); show('results');
     get('outcome').textContent = s.hull > 0 ? 'Course complete.' : 'Hull depleted.';
     get('final-score').textContent = String(scoreFor(s));
     get<HTMLTextAreaElement>('summary').value = resultText(config, s);
@@ -163,10 +180,22 @@ scene.onGunnerStep = s => {
   get('hull').textContent = `${s.hull} / 3`;
   get('score').textContent = String(gunnerScoreFor(s));
   if (s.finished) {
-    inFlight = false; input.enable(false); gunnerInput.enable(false); show('results');
+    inFlight = false; input.enable(false); gunnerInput.enable(false); bomberInput.enable(false); show('results');
     get('outcome').textContent = s.hull > 0 ? 'Field cleared.' : 'Hull depleted.';
     get('final-score').textContent = String(gunnerScoreFor(s));
     get<HTMLTextAreaElement>('summary').value = gunnerResultText(config, s);
+    get('copy-status').textContent = ''; get('copy').focus();
+  }
+};
+scene.onBomberStep = s => {
+  get('time').textContent = `${Math.ceil(DURATION - s.elapsed)}s`;
+  get('hull').textContent = `${s.hull} / 3`;
+  get('score').textContent = String(bomberScoreFor(s));
+  if (s.finished) {
+    inFlight = false; input.enable(false); gunnerInput.enable(false); bomberInput.enable(false); show('results');
+    get('outcome').textContent = s.hull > 0 ? 'Field cleared.' : 'Hull depleted.';
+    get('final-score').textContent = String(bomberScoreFor(s));
+    get<HTMLTextAreaElement>('summary').value = bomberResultText(config, s);
     get('copy-status').textContent = ''; get('copy').focus();
   }
 };
@@ -176,7 +205,7 @@ scene.onSpacePilotStep = s => {
   get('fuel').textContent = `${s.fuel.toFixed(1)}s`;
   get('score').textContent = String(spaceBattlePilotScoreFor(s));
   if (s.finished) {
-    inFlight = false; input.enable(false); gunnerInput.enable(false); show('results');
+    inFlight = false; input.enable(false); gunnerInput.enable(false); bomberInput.enable(false); show('results');
     get('outcome').textContent = s.endReason === 'time' ? 'Battle run complete.' : s.endReason === 'fuel' ? 'Fuel depleted.' : 'Hull depleted.';
     get('final-score').textContent = String(spaceBattlePilotScoreFor(s));
     get<HTMLTextAreaElement>('summary').value = spaceBattlePilotResultText(config, s);

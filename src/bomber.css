@@ -1,0 +1,23 @@
+.play-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.action {
+  background: #6f5aa7;
+  border-color: #bba6ff;
+  color: #fff;
+  font-weight: 700;
+  touch-action: none;
+}
+
+@media (max-width: 460px) {
+  .play-heading {
+    align-items: flex-start;
+  }
+
+  .play-actions {
+    flex-direction: column;
+  }
+}

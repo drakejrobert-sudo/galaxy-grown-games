@@ -3,10 +3,12 @@ import assert from 'node:assert/strict';
 import {
   difficultyFor, parseTotal, flightSpeed, createFlight, stepFlight, scoreFor, resultText,
   createGunner, stepGunner, gunnerFireEvery, gunnerScoreFor, gunnerResultText,
+  bomberBlastRadius, bomberResultText, bomberScoreFor, createBomber, stepBomber,
   createSpaceBattlePilot, stepSpaceBattlePilot, spaceBattlePilotSpeed,
   spaceBattlePilotScoreFor, spaceBattlePilotResultText, SPACE_BATTLE_TUNING,
   SPACE_BATTLE_MAX_FUEL,
-  GUNNER_DEFENSE_LINE, GUNNER_TUNING, PILOT_RADIUS, SIDE_WARNING_SECONDS, WIDTH,
+  BOMBER_BLAST_RADIUS, BOMBER_TUNING, GUNNER_DEFENSE_LINE, GUNNER_TUNING,
+  PILOT_RADIUS, SIDE_WARNING_SECONDS, WIDTH,
 } from '../src/game/rules.ts';
 test('modified total bands include negatives and values over 20', () => {
   for (const [value, expected] of [[-4,'Hard'],[0,'Hard'],[1,'Hard'],[5,'Hard'],[6,'Medium'],[10,'Medium'],[11,'Easy'],[15,'Easy'],[16,'Very Easy'],[27,'Very Easy']] as const) assert.equal(difficultyFor(value), expected);
@@ -126,6 +128,68 @@ test('gunner difficulty scales hazards and final report stays manual and role-sp
   const report = gunnerResultText({total:4,naturalOne:true}, s);
   assert.match(report, /Asteroid Field \/ Gunner/); assert.match(report, /Difficulty: Hard/);
   assert.match(report, /half normal fire rate/); assert.match(report, /Destroyed: 4/);
+  assert.match(report, /GM determines campaign outcome/);
+});
+
+test('bomber natural one gives the rendered and collision target exactly half normal area', () => {
+  const normal = bomberBlastRadius({total:10, naturalOne:false});
+  const impaired = bomberBlastRadius({total:10, naturalOne:true});
+  assert.equal(normal, BOMBER_BLAST_RADIUS);
+  assert.ok(Math.abs((Math.PI * impaired ** 2) / (Math.PI * normal ** 2) - 0.5) < Number.EPSILON * 4);
+
+  const createBlastTest = (naturalOne: boolean) => {
+    const s = createBomber(); s.spawnIn = 100;
+    s.mines = [{id:1,x:100,y:300,blastRadius:bomberBlastRadius({total:10,naturalOne}),armIn:0,expiresIn:5}];
+    s.asteroids = [
+      {id:2,x:100,y:300,radius:15,speed:0},
+      {id:3,x:160,y:300,radius:15,speed:0},
+    ];
+    stepBomber(s, {total:10,naturalOne}, {x:0,y:0,placing:false}, 0.01);
+    return s;
+  };
+  assert.equal(createBlastTest(false).destroyed, 2);
+  assert.equal(createBlastTest(true).destroyed, 1);
+});
+
+test('bomber steering and mine placement share one simulation action', () => {
+  const s = createBomber(); s.spawnIn = 100;
+  const oldX = s.x;
+  stepBomber(s, {total:12,naturalOne:false}, {x:1,y:0,placing:true}, 0.05);
+  assert.ok(s.x > oldX);
+  assert.equal(s.minesPlaced, 1);
+  assert.equal(s.mines.length, 1);
+  assert.equal(s.mines[0].x, s.x);
+  assert.equal(s.mines[0].blastRadius, BOMBER_BLAST_RADIUS);
+  assert.ok(s.cooldown > 0);
+});
+
+test('bomber hazards approach the mine trail and collisions can end the run', () => {
+  const s = createBomber(); s.spawnIn = 0;
+  stepBomber(s, {total:5,naturalOne:false}, {x:0,y:0,placing:false}, 0.01, () => 0.5);
+  assert.equal(s.asteroids.length, 1);
+  const asteroid = s.asteroids[0];
+  const oldY = asteroid.y; s.spawnIn = 100;
+  stepBomber(s, {total:5,naturalOne:false}, {x:0,y:0,placing:false}, 0.05);
+  assert.ok(asteroid.y < oldY);
+  s.hull = 1; s.asteroids = [{id:99,x:s.x,y:s.y,radius:15,speed:0}];
+  stepBomber(s, {total:5,naturalOne:false}, {x:0,y:0,placing:false}, 0.01);
+  assert.equal(s.hull, 0); assert.equal(s.impacts, 1); assert.equal(s.finished, true);
+
+  const complete = createBomber(); complete.spawnIn = 100; complete.elapsed = 59.99;
+  stepBomber(complete, {total:5,naturalOne:false}, {x:0,y:0,placing:false}, 0.05);
+  assert.equal(complete.elapsed, 60); assert.equal(complete.finished, true); assert.equal(complete.hull, 3);
+});
+
+test('bomber difficulty scales hazard pressure and report remains manual', () => {
+  assert.ok(BOMBER_TUNING.Hard.spawnEvery < BOMBER_TUNING.Medium.spawnEvery);
+  assert.ok(BOMBER_TUNING.Medium.spawnEvery < BOMBER_TUNING.Easy.spawnEvery);
+  assert.ok(BOMBER_TUNING.Easy.spawnEvery < BOMBER_TUNING['Very Easy'].spawnEvery);
+  assert.ok(BOMBER_TUNING.Hard.speed > BOMBER_TUNING['Very Easy'].speed);
+  const s = createBomber(); s.elapsed = 60; s.destroyed = 5; s.minesPlaced = 7; s.hull = 2; s.finished = true;
+  assert.equal(bomberScoreFor(s), 1000);
+  const report = bomberResultText({total:4,naturalOne:true}, s);
+  assert.match(report, /Asteroid Field \/ Bomber/); assert.match(report, /Difficulty: Hard/);
+  assert.match(report, /half normal area/); assert.match(report, /Destroyed: 5/);
   assert.match(report, /GM determines campaign outcome/);
 });
 

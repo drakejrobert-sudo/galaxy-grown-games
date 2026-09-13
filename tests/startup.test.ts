@@ -43,11 +43,12 @@ test('first launch waits for scene creation before starting simulation; retry re
     return exports as any;
   }
   const scenes = load('../src/game/scene.ts', { phaser, './rules': rules });
-  let inputEnabled = false, gunnerInputEnabled = false;
-  load('../src/main.ts', { phaser, './style.css': {}, './game/scene': scenes,
+  let inputEnabled = false, gunnerInputEnabled = false, bomberInputEnabled = false;
+  load('../src/main.ts', { phaser, './style.css': {}, './bomber.css': {}, './game/scene': scenes,
     './game/rules': rules, './game/input': {
       createInput: () => ({ read: () => ({ x: 1, y: 0 }), enable: (v: boolean) => inputEnabled = v }),
       createGunnerInput: () => ({ read: () => ({ firing: false }), enable: (v: boolean) => gunnerInputEnabled = v }),
+      createBomberInput: () => ({ read: () => ({ x: 1, y: 0, placing: true }), enable: (v: boolean) => bomberInputEnabled = v }),
     },
   }, {
     document: { querySelector: () => element('app'), getElementById: element, addEventListener() {} },
@@ -74,9 +75,17 @@ test('first launch waits for scene creation before starting simulation; retry re
   readyScene.update(0, 16); assert.ok(readyScene.gunner.elapsed > 0);
   assert.match(element('flight-status').textContent, /Very Easy.*overheated gun/);
   element('abandon').listeners.get('click')();
+  element('role').value = 'Bomber'; submit();
+  assert.equal(gameCount, 1); assert.equal(bomberInputEnabled, true);
+  readyScene.update(0, 16); assert.ok(readyScene.bomber.elapsed > 0);
+  assert.equal(readyScene.bomber.minesPlaced, 1);
+  assert.match(element('flight-status').textContent, /Very Easy.*half-area mine blast target/);
+  assert.equal(element('action').hidden, false);
+  element('abandon').listeners.get('click')();
   element('situation').value = 'Space Battle'; element('role').value = 'Gunner';
   element('situation').listeners.get('change')();
   assert.equal(element('role-gunner').disabled, true);
+  assert.equal(element('role-bomber').disabled, true);
   assert.equal(element('role').value, 'Pilot');
   submit();
   assert.equal(gameCount, 1); assert.equal(readyScene.situation, 'Space Battle');
