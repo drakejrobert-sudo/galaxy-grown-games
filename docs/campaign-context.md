@@ -8,7 +8,7 @@ The Grinning Gang is an established antagonistic faction. The Placeless Pub is a
 
 ## Campaign ownership
 
-The separate campaign repository is the authority for setting canon. Its user-provided local path is `/Users/drakerobert/projects/tggatgg/dnd_campaign_kdp_scaffold`; availability must be checked, never assumed. This summary comes from Drake's supplied project context, not a fresh inspection of that repository.
+The separate campaign repository is the authority for setting canon. Its availability must be checked, never assumed. This summary comes from Drake's supplied project context, not a fresh inspection of that repository.
 
 Authority: current explicit instructions, campaign CANON.md, dedicated lore/mechanics files, sourced session records, established material, then proposals. Keep global canon, shared world state, party-specific knowledge, and GM-only information separate. Never add secrets to this player-facing codebase.
 
@@ -22,12 +22,12 @@ Players enter their final skill-check total, including modifiers. Negative total
 | --- | --- | --- |
 | Pilot | Overloaded engine makes the ship move extra slowly | Asteroid Field prototype; 60% of difficulty-specific speed is provisional tuning |
 | Gunner | Overheated gun fires at half its normal rate | Asteroid Field prototype; direct touch/mouse pointer controls |
-| Life Support | Extra overload icons and half as many heart icons | Planned, not playable |
+| Life Support | Extra overload icons and half as many heart icons | Asteroid Field prototype; one heart and two overloads per 12-packet Natural-1 cycle |
 | Bomber | Mine blast target has half its normal total area | Asteroid Field prototype; radius scales by `sqrt(0.5)` so rendered and collision area are both halved |
 
 For a circular bomber target, halving area means multiplying radius by sqrt(0.5), not by 0.5. Do not implement the other roles merely because they are documented here.
 
-Current Pilot, Gunner, and Bomber rounds last 60 seconds, use three hull points, support pause/resume, and produce manual score reports. Gunner uses one direct pointer path for touch and mouse rather than keyboard reticle movement; difficulty scales through hazards, armor, and weapon cooldown. Bomber supports simultaneous steering and mine placement through keyboard actions or separate touch controls; difficulty scales through pursuing asteroid pressure. Numerical balance is provisional. Improving visual detail must preserve hazard visibility, responsive controls, and mobile performance.
+Current Pilot, Gunner, Bomber, and Life Support rounds last 60 seconds, support pause/resume, and produce manual score reports. Pilot, Gunner, and Bomber use three hull points; Life Support uses five system-integrity points. Gunner uses one direct pointer path for touch and mouse rather than keyboard reticle movement; difficulty scales through hazards, armor, and weapon cooldown. Bomber supports simultaneous steering and mine placement through keyboard actions or separate touch controls; difficulty scales through pursuing asteroid pressure. Life Support routes power packets through a three-way switch; difficulty scales through packet speed and frequency. Numerical balance is provisional. Improving visual detail must preserve hazard visibility, responsive controls, and mobile performance.
 
 ## Publication boundary
 
