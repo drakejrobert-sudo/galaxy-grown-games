@@ -83,4 +83,11 @@ test('first launch waits for scene creation before starting simulation; retry re
   assert.equal(inputEnabled, true); assert.equal(gunnerInputEnabled, false);
   readyScene.update(0, 16); assert.ok(readyScene.spacePilot.elapsed > 0);
   assert.match(element('mode-label').textContent, /SPACE BATTLE \/ PILOT/);
+  readyScene.spacePilot.enemies = [{id:1,x:120,y:120,radius:16,speed:100,vx:10,shotIn:1}];
+  readyScene.spacePilot.shots = [{x:130,y:150,vx:30,vy:100,radius:5}];
+  readyScene.spacePilot.fuelCells = [{id:2,x:220,y:180,radius:11,speed:90,value:8}];
+  readyScene.activeFlight = false;
+  const beforePaint = JSON.stringify(readyScene.spacePilot);
+  readyScene.update(0, 16);
+  assert.equal(JSON.stringify(readyScene.spacePilot), beforePaint);
 });

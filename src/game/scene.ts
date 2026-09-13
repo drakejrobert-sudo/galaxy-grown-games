@@ -4,7 +4,7 @@ import {
   stepSpaceBattlePilot, WIDTH, HEIGHT,
   GUNNER_DEFENSE_LINE, type Asteroid, type FlightConfig, type FlightState,
   type GunnerInput, type GunnerState, type Role, type Situation,
-  type SpaceBattlePilotState,
+  type SpaceBattlePilotState, type EnemyShip, type EnemyShot, type FuelCell,
 } from './rules';
 
 export class FlightScene extends Phaser.Scene {
@@ -159,28 +159,103 @@ export class FlightScene extends Phaser.Scene {
   private paintSpaceBattlePilotMode(g: Phaser.GameObjects.Graphics) {
     const s = this.spacePilot;
     if (s.impactFlash) { g.fillStyle(0xff715b, 0.14); g.fillRect(9, 9, WIDTH - 18, HEIGHT - 18); }
-    for (const cell of s.fuelCells) {
-      const pulse = 0.7 + Math.sin(s.elapsed * 7 + cell.id) * 0.2;
-      g.fillStyle(0x79e1ce, 0.12); g.fillCircle(cell.x, cell.y, cell.radius + 7);
-      g.fillStyle(0x79e1ce, pulse); g.lineStyle(2, 0xd9fff6, 0.9);
-      g.fillRoundedRect(cell.x - 7, cell.y - 11, 14, 22, 4); g.strokeRoundedRect(cell.x - 7, cell.y - 11, 14, 22, 4);
-      g.fillStyle(0x173f45); g.fillRect(cell.x - 2, cell.y - 7, 4, 14);
-      g.fillRect(cell.x - 5, cell.y - 2, 10, 4);
-    }
-    for (const enemy of s.enemies) {
-      g.fillStyle(0xff7b83, 0.10); g.fillEllipse(enemy.x, enemy.y - 10, 44, 20);
-      g.fillStyle(0x713b59); g.lineStyle(2, 0xff9a9f, 0.9);
-      g.fillTriangle(enemy.x, enemy.y + 14, enemy.x - 18, enemy.y - 11, enemy.x + 18, enemy.y - 11);
-      g.strokeTriangle(enemy.x, enemy.y + 14, enemy.x - 18, enemy.y - 11, enemy.x + 18, enemy.y - 11);
-      g.fillStyle(0xffbd87); g.fillEllipse(enemy.x, enemy.y - 3, 7, 11);
-    }
-    for (const shot of s.shots) {
-      g.lineStyle(5, 0xff6575, 0.18); g.lineBetween(shot.x - shot.vx * 0.04, shot.y - shot.vy * 0.04, shot.x, shot.y);
-      g.fillStyle(0xffb4aa); g.fillCircle(shot.x, shot.y, shot.radius);
-      g.fillStyle(0xffffff); g.fillCircle(shot.x, shot.y, 2);
-    }
+    for (const cell of s.fuelCells) this.paintFuelCell(g, cell, s.elapsed);
+    for (const enemy of s.enemies) this.paintEnemyShip(g, enemy, s.elapsed);
+    for (const shot of s.shots) this.paintEnemyShot(g, shot, s.elapsed);
     if (s.invulnerable) { g.lineStyle(2, 0x8feaff, 0.55); g.strokeCircle(s.x, s.y, 26); }
     if (!s.invulnerable || Math.floor(s.elapsed * 10) % 2 !== 0) this.paintPlayerShip(g, s.x, s.y, s.elapsed);
+  }
+
+  private paintFuelCell(g: Phaser.GameObjects.Graphics, cell: FuelCell, elapsed: number) {
+    const x = cell.x;
+    const y = cell.y + Math.sin(elapsed * 5 + cell.id) * 1.5;
+    const pulse = 0.72 + Math.sin(elapsed * 8 + cell.id) * 0.18;
+    g.fillStyle(0x79e1ce, 0.06); g.fillCircle(x, y, cell.radius + 12);
+    g.fillStyle(0x79e1ce, 0.12); g.fillCircle(x, y, cell.radius + 7);
+    g.lineStyle(1, 0x9cffe9, pulse * 0.55); g.strokeCircle(x, y, cell.radius + 5);
+
+    // Side fins and metal end caps give the pickup a readable canister silhouette.
+    g.fillStyle(0x43627a); g.lineStyle(1, 0xa7c7d7, 0.8);
+    g.fillTriangle(x - 7, y - 7, x - 12, y - 3, x - 7, y + 1);
+    g.strokeTriangle(x - 7, y - 7, x - 12, y - 3, x - 7, y + 1);
+    g.fillTriangle(x + 7, y - 7, x + 12, y - 3, x + 7, y + 1);
+    g.strokeTriangle(x + 7, y - 7, x + 12, y - 3, x + 7, y + 1);
+    g.fillStyle(0x293b52);
+    g.fillRoundedRect(x - 8, y - 12, 16, 24, 4);
+    g.lineStyle(2, 0xb9d9e3, 0.95); g.strokeRoundedRect(x - 8, y - 12, 16, 24, 4);
+    g.fillStyle(0x6f8797); g.fillRoundedRect(x - 9, y - 12, 18, 5, 2);
+    g.fillRoundedRect(x - 9, y + 7, 18, 5, 2);
+    g.lineStyle(1, 0xe5f8ff, 0.8);
+    g.lineBetween(x - 6, y - 8, x + 6, y - 8);
+    g.lineBetween(x - 6, y + 8, x + 6, y + 8);
+
+    // The bright central gauge stays distinct from coral enemy hazards.
+    g.fillStyle(0x102f3c); g.fillRoundedRect(x - 5, y - 6, 10, 12, 2);
+    g.fillStyle(0x79e1ce, pulse); g.fillRoundedRect(x - 3, y - 4, 6, 8, 1);
+    g.fillStyle(0xdffff6, 0.9); g.fillRect(x - 2, y - 3, 2, 5);
+    g.fillTriangle(x, y - 1, x + 3, y - 1, x, y + 4);
+    g.fillStyle(0xffffff, pulse); g.fillCircle(x - 2, y - 3, 1);
+  }
+
+  private paintEnemyShip(g: Phaser.GameObjects.Graphics, enemy: EnemyShip, elapsed: number) {
+    const x = enemy.x;
+    const y = enemy.y;
+    const enginePulse = 3 + Math.sin(elapsed * 28 + enemy.id) * 2;
+
+    // Enemy craft fly downward, so their twin exhaust plumes stream upward.
+    for (const dx of [-8, 8]) {
+      g.fillStyle(0xff596f, 0.10); g.fillEllipse(x + dx, y - 19, 11, 24 + enginePulse);
+      g.fillStyle(0xff6575, 0.8); g.fillTriangle(x + dx - 3, y - 10, x + dx + 3, y - 10, x + dx, y - 20 - enginePulse);
+      g.fillStyle(0xffd0a8, 0.95); g.fillTriangle(x + dx - 1.5, y - 10, x + dx + 1.5, y - 10, x + dx, y - 16 - enginePulse);
+    }
+    g.fillStyle(0xff6575, 0.07); g.fillEllipse(x, y, 54, 42);
+
+    // Swept wings, armored centerline, and panel seams create a compact fighter.
+    g.fillStyle(0x4b3049); g.lineStyle(2, 0xe36f7f, 0.9);
+    g.beginPath();
+    g.moveTo(x, y + 18);
+    g.lineTo(x - 8, y + 5);
+    g.lineTo(x - 22, y + 9);
+    g.lineTo(x - 16, y - 10);
+    g.lineTo(x - 6, y - 7);
+    g.lineTo(x, y - 15);
+    g.lineTo(x + 6, y - 7);
+    g.lineTo(x + 16, y - 10);
+    g.lineTo(x + 22, y + 9);
+    g.lineTo(x + 8, y + 5);
+    g.closePath(); g.fillPath(); g.strokePath();
+    g.fillStyle(0x7a4658); g.fillTriangle(x, y + 15, x - 7, y - 7, x + 7, y - 7);
+    g.lineStyle(1, 0xffa2a9, 0.65);
+    g.lineBetween(x - 17, y + 6, x - 7, y + 1);
+    g.lineBetween(x + 17, y + 6, x + 7, y + 1);
+    g.lineBetween(x, y + 13, x, y + 3);
+    g.fillStyle(0x201d34); g.lineStyle(1, 0xffd2b2, 0.9);
+    g.fillEllipse(x, y - 1, 8, 13); g.strokeEllipse(x, y - 1, 8, 13);
+    g.fillStyle(0xffa85f, 0.9); g.fillEllipse(x, y + 1, 4, 7);
+    g.fillStyle(0xff6575); g.fillCircle(x - 17, y + 7, 1.8); g.fillCircle(x + 17, y + 7, 1.8);
+    g.fillStyle(0xffd66f, 0.9); g.fillCircle(x, y + 13, 1.5);
+  }
+
+  private paintEnemyShot(g: Phaser.GameObjects.Graphics, shot: EnemyShot, elapsed: number) {
+    const speed = Math.max(1, Math.hypot(shot.vx, shot.vy));
+    const ux = shot.vx / speed;
+    const uy = shot.vy / speed;
+    const px = -uy;
+    const py = ux;
+    const pulse = 0.82 + Math.sin(elapsed * 32 + shot.x * 0.03) * 0.12;
+    const tailX = shot.x - ux * 20;
+    const tailY = shot.y - uy * 20;
+    g.lineStyle(10, 0xff294d, 0.08); g.lineBetween(tailX, tailY, shot.x, shot.y);
+    g.lineStyle(5, 0xff4968, 0.22); g.lineBetween(tailX + ux * 5, tailY + uy * 5, shot.x, shot.y);
+    g.lineStyle(2, 0xffc7b8, pulse); g.lineBetween(tailX + ux * 8, tailY + uy * 8, shot.x + ux * 4, shot.y + uy * 4);
+    g.fillStyle(0xff6f83, pulse); g.lineStyle(1, 0xffe5d1, 0.95);
+    g.beginPath();
+    g.moveTo(shot.x + ux * 7, shot.y + uy * 7);
+    g.lineTo(shot.x + px * 4, shot.y + py * 4);
+    g.lineTo(shot.x - ux * 6, shot.y - uy * 6);
+    g.lineTo(shot.x - px * 4, shot.y - py * 4);
+    g.closePath(); g.fillPath(); g.strokePath();
+    g.fillStyle(0xffffff, 0.95); g.fillCircle(shot.x + ux * 2, shot.y + uy * 2, 1.8);
   }
 
   private paintGunnerMode(g: Phaser.GameObjects.Graphics) {
