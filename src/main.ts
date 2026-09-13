@@ -124,6 +124,7 @@ function resetSetup() {
 get('abandon').addEventListener('click', resetSetup); get('again').addEventListener('click', resetSetup);
 function launch() {
   scene.begin(config, situation, role);
+  lifeSupportInput.reset();
   input.enable(role === 'Pilot');
   gunnerInput.enable(situation === 'Asteroid Field' && role === 'Gunner');
   bomberInput.enable(situation === 'Asteroid Field' && role === 'Bomber');

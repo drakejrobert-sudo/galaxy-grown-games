@@ -136,6 +136,8 @@ test('life support switch supports cycling, direct keyboard selection, and touch
     assert.deepEqual(input.read(), {route:'Shields'});
     windowListeners.get('keydown')!({code:'ArrowRight',preventDefault:() => prevented++});
     assert.deepEqual(input.read(), {route:'Guns'});
+    windowListeners.get('keydown')!({code:'ArrowRight',repeat:true,preventDefault:() => prevented++});
+    assert.deepEqual(input.read(), {route:'Guns'});
     windowListeners.get('keydown')!({code:'ArrowRight',preventDefault:() => prevented++});
     assert.deepEqual(input.read(), {route:'Thrusters'});
     windowListeners.get('keydown')!({code:'Digit2',preventDefault:() => prevented++});
@@ -145,6 +147,10 @@ test('life support switch supports cycling, direct keyboard selection, and touch
     assert.equal(prevented, 4);
     input.enable(false);
     buttonListeners[2].get('pointerdown')!({preventDefault:() => prevented++});
+    assert.deepEqual(input.read(), {route:'Thrusters'});
+    input.enable(true);
+    assert.deepEqual(input.read(), {route:'Thrusters'});
+    input.reset();
     assert.deepEqual(input.read(), {route:'Shields'});
   } finally { globalThis.window = oldWindow; }
 });

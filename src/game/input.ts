@@ -169,6 +169,7 @@ export function createLifeSupportInput(routeButtons: readonly HTMLElement[]) {
     if (direct !== null) {
       e.preventDefault(); choose(direct); return;
     }
+    if (e.repeat) return;
     if (e.code === 'ArrowLeft' || e.code === 'KeyA') {
       e.preventDefault(); choose((selected + routes.length - 1) % routes.length);
     } else if (e.code === 'ArrowRight' || e.code === 'KeyD') {
@@ -181,7 +182,8 @@ export function createLifeSupportInput(routeButtons: readonly HTMLElement[]) {
   }));
   window.addEventListener('keydown', down);
   return {
-    enable(value: boolean) { enabled = value; selected = 1; },
+    enable(value: boolean) { enabled = value; },
+    reset() { selected = 1; },
     read() { return { route: routes[selected] }; },
   };
 }
