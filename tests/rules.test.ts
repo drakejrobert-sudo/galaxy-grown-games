@@ -3,6 +3,9 @@ import assert from 'node:assert/strict';
 import {
   difficultyFor, parseTotal, flightSpeed, createFlight, stepFlight, scoreFor, resultText,
   createGunner, stepGunner, gunnerFireEvery, gunnerScoreFor, gunnerResultText,
+  createSpaceBattlePilot, stepSpaceBattlePilot, spaceBattlePilotSpeed,
+  spaceBattlePilotScoreFor, spaceBattlePilotResultText, SPACE_BATTLE_TUNING,
+  SPACE_BATTLE_MAX_FUEL,
   GUNNER_DEFENSE_LINE, GUNNER_TUNING, PILOT_RADIUS, SIDE_WARNING_SECONDS, WIDTH,
 } from '../src/game/rules.ts';
 test('modified total bands include negatives and values over 20', () => {
@@ -124,4 +127,80 @@ test('gunner difficulty scales hazards and final report stays manual and role-sp
   assert.match(report, /Asteroid Field \/ Gunner/); assert.match(report, /Difficulty: Hard/);
   assert.match(report, /half normal fire rate/); assert.match(report, /Destroyed: 4/);
   assert.match(report, /GM determines campaign outcome/);
+});
+
+test('space battle pilot uses the established natural-one engine impairment', () => {
+  for (const total of [5, 6, 11, 16]) {
+    const normal = spaceBattlePilotSpeed({total, naturalOne:false});
+    assert.equal(spaceBattlePilotSpeed({total, naturalOne:true}), normal * 0.6);
+  }
+});
+
+test('space battle fuel pickups extend the run without exceeding the tank cap', () => {
+  const s = createSpaceBattlePilot();
+  s.enemySpawnIn = s.fuelSpawnIn = 100;
+  s.fuel = SPACE_BATTLE_MAX_FUEL - 1;
+  s.fuelCells = [{id:1, x:s.x, y:s.y, radius:11, speed:0, value:8}];
+  stepSpaceBattlePilot(s, {total:12, naturalOne:false}, {x:0,y:0}, 0.01);
+  assert.equal(s.fuel, SPACE_BATTLE_MAX_FUEL);
+  assert.equal(s.fuelCollected, 1);
+  assert.equal(s.fuelCells.length, 0);
+});
+
+test('space battle enemies fire aimed shots and impacts consume one hull during collision grace', () => {
+  const s = createSpaceBattlePilot();
+  s.enemySpawnIn = s.fuelSpawnIn = 100;
+  s.enemies = [{id:1, x:100, y:100, radius:16, speed:0, vx:0, shotIn:0}];
+  stepSpaceBattlePilot(s, {total:10, naturalOne:false}, {x:0,y:0}, 0.01);
+  assert.equal(s.shots.length, 1);
+  assert.ok(s.shots[0].vy > 0);
+  s.enemies = [{id:2, x:s.x, y:s.y, radius:16, speed:0, vx:0, shotIn:100}];
+  s.shots = [{x:s.x, y:s.y, vx:0, vy:0, radius:5}];
+  stepSpaceBattlePilot(s, {total:10, naturalOne:false}, {x:0,y:0}, 0.01);
+  assert.equal(s.hull, 2);
+  assert.equal(s.hits, 1);
+  assert.ok(s.invulnerable > 0);
+});
+
+test('space battle fuel depletion ends the run and report remains manual and role-specific', () => {
+  const s = createSpaceBattlePilot();
+  s.enemySpawnIn = s.fuelSpawnIn = 100;
+  s.fuel = 0.01;
+  stepSpaceBattlePilot(s, {total:4, naturalOne:true}, {x:0,y:0}, 0.02);
+  assert.equal(s.finished, true);
+  assert.equal(s.endReason, 'fuel');
+  assert.equal(spaceBattlePilotScoreFor(s), 300);
+  const report = spaceBattlePilotResultText({total:4, naturalOne:true}, s);
+  assert.match(report, /Space Battle \/ Pilot/);
+  assert.match(report, /Difficulty: Hard/);
+  assert.match(report, /overloaded engine/);
+  assert.match(report, /Fuel depleted/);
+  assert.match(report, /GM determines campaign outcome/);
+});
+
+test('space battle difficulty increases enemy pressure and reduces pilot speed', () => {
+  assert.ok(SPACE_BATTLE_TUNING.Hard.enemySpawnEvery < SPACE_BATTLE_TUNING.Medium.enemySpawnEvery);
+  assert.ok(SPACE_BATTLE_TUNING.Medium.enemySpawnEvery < SPACE_BATTLE_TUNING.Easy.enemySpawnEvery);
+  assert.ok(SPACE_BATTLE_TUNING.Easy.enemySpawnEvery < SPACE_BATTLE_TUNING['Very Easy'].enemySpawnEvery);
+  assert.ok(SPACE_BATTLE_TUNING.Hard.enemyFireEvery < SPACE_BATTLE_TUNING['Very Easy'].enemyFireEvery);
+  assert.ok(spaceBattlePilotSpeed({total:5,naturalOne:false}) < spaceBattlePilotSpeed({total:16,naturalOne:false}));
+});
+
+test('space battle can also end by hull loss or completing the timer', () => {
+  const destroyed = createSpaceBattlePilot();
+  destroyed.enemySpawnIn = destroyed.fuelSpawnIn = 100;
+  destroyed.hull = 1;
+  destroyed.enemies = [{id:1, x:destroyed.x, y:destroyed.y, radius:16, speed:0, vx:0, shotIn:100}];
+  stepSpaceBattlePilot(destroyed, {total:10,naturalOne:false}, {x:0,y:0}, 0.01);
+  assert.equal(destroyed.finished, true);
+  assert.equal(destroyed.endReason, 'hull');
+
+  const complete = createSpaceBattlePilot();
+  complete.enemySpawnIn = complete.fuelSpawnIn = 100;
+  complete.elapsed = 59.99;
+  complete.fuel = 30;
+  stepSpaceBattlePilot(complete, {total:10,naturalOne:false}, {x:0,y:0}, 0.05);
+  assert.equal(complete.elapsed, 60);
+  assert.equal(complete.finished, true);
+  assert.equal(complete.endReason, 'time');
 });

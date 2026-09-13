@@ -53,7 +53,8 @@ test('first launch waits for scene creation before starting simulation; retry re
     document: { querySelector: () => element('app'), getElementById: element, addEventListener() {} },
     window: { addEventListener() {} }, navigator: {},
   });
-  element('role').value = 'Pilot'; element('total').value = '17'; element('natural-one').checked = true;
+  element('situation').value = 'Asteroid Field'; element('role').value = 'Pilot';
+  element('total').value = '17'; element('natural-one').checked = true;
   const submit = () => element('flight-form').listeners.get('submit')({ preventDefault() {} });
   submit();
   assert.equal(gameCount, 1); assert.equal(readyScene.activeFlight, true); assert.equal(inputEnabled, true);
@@ -72,4 +73,14 @@ test('first launch waits for scene creation before starting simulation; retry re
   assert.equal(inputEnabled, false); assert.equal(gunnerInputEnabled, true);
   readyScene.update(0, 16); assert.ok(readyScene.gunner.elapsed > 0);
   assert.match(element('flight-status').textContent, /Very Easy.*overheated gun/);
+  element('abandon').listeners.get('click')();
+  element('situation').value = 'Space Battle'; element('role').value = 'Gunner';
+  element('situation').listeners.get('change')();
+  assert.equal(element('role-gunner').disabled, true);
+  assert.equal(element('role').value, 'Pilot');
+  submit();
+  assert.equal(gameCount, 1); assert.equal(readyScene.situation, 'Space Battle');
+  assert.equal(inputEnabled, true); assert.equal(gunnerInputEnabled, false);
+  readyScene.update(0, 16); assert.ok(readyScene.spacePilot.elapsed > 0);
+  assert.match(element('mode-label').textContent, /SPACE BATTLE \/ PILOT/);
 });
