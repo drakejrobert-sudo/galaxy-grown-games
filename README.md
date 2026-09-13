@@ -47,11 +47,11 @@ Open the local URL printed by Vite, including `/galaxy-grown-games/`. If network
 
 ### GitHub Pages
 
-The build targets `/galaxy-grown-games/`. The check workflow runs tests and builds on pushes and pull requests. After a reviewed pull request is merged, the **Deploy game hub** workflow runs on `main`, repeats `npm test` and `npm run build`, and deploys to GitHub Pages only if both pass. It can also be run manually from `main` when Drake explicitly approves that deployment. GitHub Actions must be selected as the Pages source in repository Settings → Pages.
+The build targets `/galaxy-grown-games/`. The check workflow runs tests and builds on pushes and pull requests. After a reviewed pull request is merged, the **Deploy game hub** workflow runs on `main`. Its build job repeats `npm test` and `npm run build`, uploads one Pages artifact, and then a separate dependent job deploys that artifact. Keeping deployment separate means retrying a transient deploy failure does not upload a duplicate artifact. The workflow can also be run manually from `main` when Drake explicitly approves that deployment. GitHub Actions must be selected as the Pages source in repository Settings → Pages.
 
 ### Validation status
 
-- Twenty-six automated tests pass, covering the shared difficulty bands and lifecycle; Pilot touch/keyboard input and Asteroid movement/collisions; Gunner touch/mouse pointer input, cooldown, targeting, armor, impacts, scoring, and reporting; Bomber simultaneous movement/action input, mine placement and detonation, exact half-area impairment, impacts, scoring, and reporting; and Space Battle Pilot fuel, enemies, shots, collisions, all end conditions, impairment, tuning, scoring, and reporting.
+- Twenty-seven automated tests pass, covering the shared difficulty bands and lifecycle; Pilot touch/keyboard input and Asteroid movement/collisions; Gunner touch/mouse pointer input, cooldown, targeting, armor, impacts, scoring, and reporting; Bomber simultaneous movement/action input, mine placement and detonation, exact half-area impairment, impacts, scoring, and reporting; Space Battle Pilot fuel, enemies, shots, collisions, all end conditions, impairment, tuning, scoring, and reporting; and the retry-safe Pages job structure.
 - TypeScript check and Vite production build pass.
 - Phaser produces a large-bundle advisory (~337 KB gzip); bundle optimization remains future work.
 - Rendered browser QA is unavailable in the current environment because no compatible browser runtime is installed. No rendered Bomber pass is claimed.
