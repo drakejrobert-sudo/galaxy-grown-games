@@ -49,12 +49,14 @@ test('first launch waits for scene creation before starting simulation; retry re
     return exports as any;
   }
   const scenes = load('../src/game/scene.ts', { phaser, './rules': rules });
-  let inputEnabled = false, gunnerInputEnabled = false, bomberInputEnabled = false, lifeSupportInputEnabled = false;
+  let inputEnabled = false, gunnerInputEnabled = false, bomberInputEnabled = false;
+  let spaceBomberInputEnabled = false, lifeSupportInputEnabled = false;
   load('../src/main.ts', { phaser, './style.css': {}, './bomber.css': {}, './game/scene': scenes,
     './game/rules': rules, './game/input': {
       createInput: () => ({ read: () => ({ x: 1, y: 0 }), enable: (v: boolean) => inputEnabled = v }),
       createGunnerInput: () => ({ read: () => ({ firing: false }), enable: (v: boolean) => gunnerInputEnabled = v }),
       createBomberInput: () => ({ read: () => ({ x: 1, y: 0, placing: true }), enable: (v: boolean) => bomberInputEnabled = v }),
+      createSpaceBomberInput: () => ({ read: () => ({ x: 1, y: 0, firing: true, placing: true }), enable: (v: boolean) => spaceBomberInputEnabled = v }),
       createLifeSupportInput: () => ({ read: () => ({ route: 'Shields' }), enable: (v: boolean) => lifeSupportInputEnabled = v, reset() {} }),
     },
   }, {
@@ -103,7 +105,7 @@ test('first launch waits for scene creation before starting simulation; retry re
   element('situation').value = 'Space Battle'; element('role').value = 'Gunner';
   element('situation').listeners.get('change')();
   assert.equal(element('role-gunner').disabled, true);
-  assert.equal(element('role-bomber').disabled, true);
+  assert.equal(element('role-bomber').disabled, false);
   assert.equal(element('role-life-support').disabled, true);
   assert.equal(element('role').value, 'Pilot');
   submit();
@@ -118,4 +120,11 @@ test('first launch waits for scene creation before starting simulation; retry re
   const beforePaint = JSON.stringify(readyScene.spacePilot);
   readyScene.update(0, 16);
   assert.equal(JSON.stringify(readyScene.spacePilot), beforePaint);
+  element('abandon').listeners.get('click')(); element('role').value = 'Bomber'; submit();
+  assert.equal(spaceBomberInputEnabled, true); assert.equal(inputEnabled, false);
+  assert.equal(element('fire-action').hidden, false); assert.equal(element('action').hidden, false);
+  assert.equal(element('fuel-wrap').hidden, true);
+  readyScene.update(0, 16); assert.ok(readyScene.spaceBomber.elapsed > 0);
+  assert.equal(readyScene.spaceBomber.missilesFired, 1); assert.equal(readyScene.spaceBomber.minesPlaced, 1);
+  assert.match(element('mode-label').textContent, /SPACE BATTLE \/ BOMBER/);
 });

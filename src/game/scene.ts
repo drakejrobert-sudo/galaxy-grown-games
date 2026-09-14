@@ -1,11 +1,13 @@
 import Phaser from 'phaser';
 import {
-  createBomber, createFlight, createGunner, createLifeSupport, createSpaceBattlePilot, stepBomber,
-  stepFlight, stepGunner, stepLifeSupport, stepSpaceBattlePilot, WIDTH, HEIGHT,
+  createBomber, createFlight, createGunner, createLifeSupport, createSpaceBattleBomber, createSpaceBattlePilot, stepBomber,
+  stepFlight, stepGunner, stepLifeSupport, stepSpaceBattleBomber, stepSpaceBattlePilot, WIDTH, HEIGHT,
   BOMBER_MINE_COOLDOWN, BOMBER_MINE_LIFETIME, GUNNER_DEFENSE_LINE, type Asteroid, type FlightConfig, type FlightState,
   type BomberInput, type BomberState, type GunnerInput, type GunnerState, type Role, type Situation,
   LIFE_SUPPORT_SWITCH_Y, type LifeSupportInput, type LifeSupportPacket, type LifeSupportRoute,
-  type LifeSupportState, type SpaceBattlePilotState, type EnemyShip, type EnemyShot, type FuelCell,
+  type LifeSupportState, type SpaceBattleBomberInput, type SpaceBattleBomberState,
+  type SpaceBattlePilotState, type EnemyShip, type EnemyShot, type FuelCell, type SpaceBomberEnemy,
+  SPACE_BOMBER_MINE_COOLDOWN, SPACE_BOMBER_MINE_LIFETIME,
 } from './rules';
 
 export class FlightScene extends Phaser.Scene {
@@ -14,6 +16,7 @@ export class FlightScene extends Phaser.Scene {
   bomber = createBomber();
   lifeSupport = createLifeSupport();
   spacePilot = createSpaceBattlePilot();
+  spaceBomber = createSpaceBattleBomber();
   activeFlight = false;
   role: Role = 'Pilot';
   situation: Situation = 'Asteroid Field';
@@ -23,11 +26,13 @@ export class FlightScene extends Phaser.Scene {
   readGunnerInput: () => GunnerInput = () => ({ firing: false });
   readBomberInput: (x: number, y: number) => BomberInput = () => ({ x: 0, y: 0, placing: false });
   readLifeSupportInput: () => LifeSupportInput = () => ({ route: 'Shields' });
+  readSpaceBomberInput: (x: number, y: number) => SpaceBattleBomberInput = () => ({ x: 0, y: 0, firing: false, placing: false });
   onFlightStep: (state: FlightState) => void = () => {};
   onGunnerStep: (state: GunnerState) => void = () => {};
   onBomberStep: (state: BomberState) => void = () => {};
   onLifeSupportStep: (state: LifeSupportState) => void = () => {};
   onSpacePilotStep: (state: SpaceBattlePilotState) => void = () => {};
+  onSpaceBomberStep: (state: SpaceBattleBomberState) => void = () => {};
   onReady: () => void = () => {};
 
   create() {
@@ -45,6 +50,7 @@ export class FlightScene extends Phaser.Scene {
     this.bomber = createBomber();
     this.lifeSupport = createLifeSupport();
     this.spacePilot = createSpaceBattlePilot();
+    this.spaceBomber = createSpaceBattleBomber();
     this.activeFlight = true;
   }
 
@@ -52,9 +58,16 @@ export class FlightScene extends Phaser.Scene {
     if (!this.graphics) return;
     if (this.activeFlight) {
       if (this.situation === 'Space Battle') {
-        stepSpaceBattlePilot(this.spacePilot, this.config, this.readInput(this.spacePilot.x, this.spacePilot.y), delta / 1000);
-        if (this.spacePilot.finished) this.activeFlight = false;
-        this.onSpacePilotStep(this.spacePilot);
+        if (this.role === 'Bomber') {
+          stepSpaceBattleBomber(this.spaceBomber, this.config,
+            this.readSpaceBomberInput(this.spaceBomber.x, this.spaceBomber.y), delta / 1000);
+          if (this.spaceBomber.finished) this.activeFlight = false;
+          this.onSpaceBomberStep(this.spaceBomber);
+        } else {
+          stepSpaceBattlePilot(this.spacePilot, this.config, this.readInput(this.spacePilot.x, this.spacePilot.y), delta / 1000);
+          if (this.spacePilot.finished) this.activeFlight = false;
+          this.onSpacePilotStep(this.spacePilot);
+        }
       } else if (this.role === 'Pilot') {
         stepFlight(this.flight, this.config, this.readInput(this.flight.x, this.flight.y), delta / 1000);
         if (this.flight.finished) this.activeFlight = false;
@@ -80,12 +93,15 @@ export class FlightScene extends Phaser.Scene {
     const g = this.graphics;
     g.clear();
     const elapsed = this.situation === 'Space Battle'
-      ? this.spacePilot.elapsed
+      ? this.role === 'Bomber' ? this.spaceBomber.elapsed : this.spacePilot.elapsed
       : this.role === 'Pilot' ? this.flight.elapsed
         : this.role === 'Gunner' ? this.gunner.elapsed
           : this.role === 'Bomber' ? this.bomber.elapsed : this.lifeSupport.elapsed;
     this.paintBackground(g, elapsed);
-    if (this.situation === 'Space Battle') this.paintSpaceBattlePilotMode(g);
+    if (this.situation === 'Space Battle') {
+      if (this.role === 'Bomber') this.paintSpaceBattleBomberMode(g);
+      else this.paintSpaceBattlePilotMode(g);
+    }
     else if (this.role === 'Pilot') this.paintPilotMode(g);
     else if (this.role === 'Gunner') this.paintGunnerMode(g);
     else if (this.role === 'Bomber') this.paintBomberMode(g);
@@ -200,6 +216,69 @@ export class FlightScene extends Phaser.Scene {
     for (const shot of s.shots) this.paintEnemyShot(g, shot, s.elapsed);
     if (s.invulnerable) { g.lineStyle(2, 0x8feaff, 0.55); g.strokeCircle(s.x, s.y, 26); }
     if (!s.invulnerable || Math.floor(s.elapsed * 10) % 2 !== 0) this.paintPlayerShip(g, s.x, s.y, s.elapsed);
+  }
+
+  private paintSpaceBattleBomberMode(g: Phaser.GameObjects.Graphics) {
+    const s = this.spaceBomber;
+    if (s.impactFlash) { g.fillStyle(0xff715b, 0.14); g.fillRect(9, 9, WIDTH - 18, HEIGHT - 18); }
+    for (const explosion of s.explosions) {
+      const progress = explosion.remaining / 0.28;
+      g.fillStyle(0xffb866, 0.08 + progress * 0.12); g.fillCircle(explosion.x, explosion.y, explosion.radius);
+      g.lineStyle(4, 0xffd995, 0.2 + progress * 0.5); g.strokeCircle(explosion.x, explosion.y, explosion.radius);
+      g.lineStyle(2, 0xffffff, progress * 0.75); g.strokeCircle(explosion.x, explosion.y, explosion.radius * (0.4 + (1 - progress) * 0.45));
+    }
+    for (const mine of s.mines) {
+      const armed = mine.armIn <= 0;
+      const pulse = 0.55 + Math.sin(s.elapsed * 12 + mine.id) * 0.2;
+      g.fillStyle(armed ? 0xffbb6d : 0xbba6ff, armed ? 0.035 : 0.02); g.fillCircle(mine.x, mine.y, mine.blastRadius);
+      g.lineStyle(1, armed ? 0xffca83 : 0xbba6ff, armed ? pulse * 0.42 : 0.2); g.strokeCircle(mine.x, mine.y, mine.blastRadius);
+      g.fillStyle(0x27344e); g.lineStyle(2, armed ? 0xffbc6f : 0xbba6ff, 0.95);
+      g.fillCircle(mine.x, mine.y, 9); g.strokeCircle(mine.x, mine.y, 9);
+      for (let i = 0; i < 4; i++) {
+        const angle = i * Math.PI / 2 + s.elapsed;
+        g.lineBetween(mine.x + Math.cos(angle) * 7, mine.y + Math.sin(angle) * 7,
+          mine.x + Math.cos(angle) * 14, mine.y + Math.sin(angle) * 14);
+      }
+      g.lineStyle(2, armed ? 0xffca83 : 0xbba6ff, 0.75);
+      g.beginPath(); g.arc(mine.x, mine.y, 17, -Math.PI / 2,
+        -Math.PI / 2 + Math.PI * 2 * Math.max(0, mine.expiresIn / SPACE_BOMBER_MINE_LIFETIME)); g.strokePath();
+    }
+    for (const enemy of s.enemies) {
+      this.paintEnemyShip(g, enemy, s.elapsed);
+      this.paintBomberApproachMarker(g, enemy);
+    }
+    for (const missile of s.missiles) {
+      g.lineStyle(10, 0x79e1ce, 0.08); g.lineBetween(missile.x, missile.y + 22, missile.x, missile.y);
+      g.lineStyle(3, 0xa8fff1, 0.9); g.lineBetween(missile.x, missile.y + 14, missile.x, missile.y - 4);
+      g.fillStyle(0xf4ffff); g.fillTriangle(missile.x, missile.y - 8, missile.x - 4, missile.y + 3, missile.x + 4, missile.y + 3);
+    }
+    if (s.invulnerable) { g.lineStyle(2, 0x8feaff, 0.55); g.strokeCircle(s.x, s.y, 30); }
+    if (!s.invulnerable || Math.floor(s.elapsed * 10) % 2 !== 0) {
+      this.paintPlayerShip(g, s.x, s.y, s.elapsed, false);
+      // Cyan nose launchers and amber aft racks keep both weapon states readable.
+      for (const dx of [-15, 15]) {
+        g.fillStyle(0x31435f); g.lineStyle(1, 0xa9bbcf); g.fillRoundedRect(s.x + dx - 3, s.y - 12, 6, 13, 2);
+        g.strokeRoundedRect(s.x + dx - 3, s.y - 12, 6, 13, 2);
+        g.fillStyle(s.missileCooldown <= 0 ? 0x79e1ce : 0x526982); g.fillCircle(s.x + dx, s.y - 10, 2);
+        g.fillStyle(s.mineCooldown <= 0 ? 0xffca83 : 0x665a76); g.fillCircle(s.x + dx, s.y + 12, 2);
+      }
+    }
+    if (s.missileCooldown > 0) {
+      g.lineStyle(2, 0x79e1ce, 0.75); g.beginPath();
+      g.arc(s.x, s.y, 25, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * (1 - s.missileCooldown / 0.38)); g.strokePath();
+    }
+    if (s.mineCooldown > 0) {
+      g.lineStyle(2, 0xffca83, 0.75); g.beginPath();
+      g.arc(s.x, s.y, 29, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * (1 - s.mineCooldown / SPACE_BOMBER_MINE_COOLDOWN)); g.strokePath();
+    }
+  }
+
+  private paintBomberApproachMarker(g: Phaser.GameObjects.Graphics, enemy: SpaceBomberEnemy) {
+    const direction = enemy.approach === 'forward' ? 1 : -1;
+    const y = enemy.y + direction * 25;
+    const color = enemy.approach === 'forward' ? 0xff7c8c : 0xffbd6b;
+    g.fillStyle(color, 0.75);
+    g.fillTriangle(enemy.x, y + direction * 5, enemy.x - 5, y - direction * 3, enemy.x + 5, y - direction * 3);
   }
 
   private paintFuelCell(g: Phaser.GameObjects.Graphics, cell: FuelCell, elapsed: number) {

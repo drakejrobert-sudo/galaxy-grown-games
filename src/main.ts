@@ -2,10 +2,11 @@ import Phaser from 'phaser';
 import './style.css';
 import './bomber.css';
 import { FlightScene } from './game/scene';
-import { createBomberInput, createGunnerInput, createInput, createLifeSupportInput } from './game/input';
+import { createBomberInput, createGunnerInput, createInput, createLifeSupportInput, createSpaceBomberInput } from './game/input';
 import {
   bomberResultText, bomberScoreFor, difficultyFor, parseTotal, resultText, scoreFor,
   gunnerResultText, gunnerScoreFor, spaceBattlePilotResultText, spaceBattlePilotScoreFor,
+  spaceBattleBomberResultText, spaceBattleBomberScoreFor,
   lifeSupportResultText, lifeSupportScoreFor, LIFE_SUPPORT_MAX_INTEGRITY,
   DURATION, WIDTH, HEIGHT, type FlightConfig, type Role, type Situation,
 } from './game/rules';
@@ -33,7 +34,7 @@ app.innerHTML = `
   <div class="play-heading"><div><p id="mode-label" class="eyebrow">ASTEROID FIELD / PILOT</p><h2 id="mode-heading">Keep your hull intact.</h2></div><div class="play-actions"><button id="pause" type="button">Pause</button></div></div>
   <div class="hud"><div><span>TIME LEFT</span><strong id="time">60s</strong></div><div><span id="health-label">HULL</span><strong id="hull">3 / 3</strong></div><div id="fuel-wrap" hidden><span>FUEL</span><strong id="fuel">18.0s</strong></div><div><span>SCORE</span><strong id="score">300</strong></div></div>
   <p id="flight-status" class="flight-status"></p>
-  <div class="flight-stage"><div class="flight-wrap"><div id="canvas" aria-label="Asteroid field. Steer with arrow keys, WASD, or touch." role="application" tabindex="0"></div><div id="pause-overlay" hidden><h2>Challenge paused</h2><p>Your timer is stopped.</p><button id="resume" class="primary" type="button">Resume challenge</button><button id="abandon" type="button">Back to setup</button></div></div><div id="action-rail" class="action-rail" hidden><button id="action" class="action" type="button" hidden>Drop mine</button></div></div>
+  <div class="flight-stage"><div class="flight-wrap"><div id="canvas" aria-label="Asteroid field. Steer with arrow keys, WASD, or touch." role="application" tabindex="0"></div><div id="pause-overlay" hidden><h2>Challenge paused</h2><p>Your timer is stopped.</p><button id="resume" class="primary" type="button">Resume challenge</button><button id="abandon" type="button">Back to setup</button></div></div><div id="action-rail" class="action-rail" hidden><button id="fire-action" class="action action-fire" type="button" hidden>Fire missile</button><button id="action" class="action action-mine" type="button" hidden>Drop mine</button></div></div>
   <div id="route-controls" class="route-controls" aria-label="Life Support routing switch" hidden><button id="route-thrusters" type="button" aria-pressed="false"><span>▲</span>Thrusters<small>1</small></button><button id="route-shields" type="button" aria-pressed="true"><span>●</span>Shields<small>2</small></button><button id="route-guns" type="button" aria-pressed="false"><span>✛</span>Guns<small>3</small></button></div>
   <p id="play-help" class="help center">Avoid asteroids · Arrow keys / WASD · Hold and drag to steer</p>
 </section>
@@ -51,16 +52,19 @@ const situationSelect = get<HTMLSelectElement>('situation');
 const scene = new FlightScene('flight');
 const canvas = get('canvas');
 const action = get<HTMLButtonElement>('action');
+const fireAction = get<HTMLButtonElement>('fire-action');
 const actionRail = get('action-rail');
 const routeControls = get('route-controls');
 const routeButtons = [get<HTMLButtonElement>('route-thrusters'), get<HTMLButtonElement>('route-shields'), get<HTMLButtonElement>('route-guns')];
 const input = createInput(canvas);
 const gunnerInput = createGunnerInput(canvas);
 const bomberInput = createBomberInput(canvas, action);
+const spaceBomberInput = createSpaceBomberInput(canvas, fireAction, action);
 const lifeSupportInput = createLifeSupportInput(routeButtons);
 scene.readInput = input.read;
 scene.readGunnerInput = gunnerInput.read;
 scene.readBomberInput = bomberInput.read;
+scene.readSpaceBomberInput = spaceBomberInput.read;
 scene.readLifeSupportInput = lifeSupportInput.read;
 let game: Phaser.Game | null = null;
 let config: FlightConfig = { total: 10, naturalOne: false };
@@ -79,9 +83,9 @@ function refreshSetup() {
   const bomberOption = get<HTMLOptionElement>('role-bomber');
   const lifeSupportOption = get<HTMLOptionElement>('role-life-support');
   gunnerOption.disabled = selectedSituation === 'Space Battle';
-  bomberOption.disabled = selectedSituation === 'Space Battle';
+  bomberOption.disabled = false;
   lifeSupportOption.disabled = selectedSituation === 'Space Battle';
-  if (selectedSituation === 'Space Battle' && roleSelect.value !== 'Pilot') roleSelect.value = 'Pilot';
+  if (selectedSituation === 'Space Battle' && !['Pilot', 'Bomber'].includes(roleSelect.value)) roleSelect.value = 'Pilot';
   const selectedRole = roleSelect.value as Role;
   get('impairment').textContent = selectedRole === 'Pilot'
     ? natural.checked ? 'Overloaded engine · 60% movement speed (playtest)' : 'Standard engine'
@@ -95,7 +99,9 @@ function refreshSetup() {
     : selectedRole === 'Gunner'
       ? 'Touch: tap, hold, or drag to aim and fire. Mouse: move to aim, then click or hold to fire.'
       : selectedRole === 'Bomber'
-        ? 'Arrow keys / WASD to steer and Space or Enter to drop mines. On touch, steer in the flight area and hold Drop mine to lay a trail. Only ship collisions cost hull; missed asteroids pass safely.'
+        ? selectedSituation === 'Space Battle'
+          ? 'Arrow keys / WASD steer, Space fires missiles, and Enter or Shift drops mines. On touch, steer in the flight area while using either weapon button.'
+          : 'Arrow keys / WASD to steer and Space or Enter to drop mines. On touch, steer in the flight area and hold Drop mine to lay a trail. Only ship collisions cost hull; missed asteroids pass safely.'
         : 'Use Left/Right or A/D to turn the routing switch. Use 1, 2, or 3 to choose a system directly. Touch players can tap a system button.';
   get('error').textContent = '';
 }
@@ -108,6 +114,7 @@ function setPaused(value: boolean) {
   input.enable(!value && role === 'Pilot');
   gunnerInput.enable(!value && situation === 'Asteroid Field' && role === 'Gunner');
   bomberInput.enable(!value && situation === 'Asteroid Field' && role === 'Bomber');
+  spaceBomberInput.enable(!value && situation === 'Space Battle' && role === 'Bomber');
   lifeSupportInput.enable(!value && situation === 'Asteroid Field' && role === 'Life Support');
   get('pause-overlay').hidden = !value;
   get('pause').textContent = value ? 'Resume' : 'Pause';
@@ -119,13 +126,14 @@ window.addEventListener('keydown', e => { if (inFlight && e.code === 'Escape') {
 window.addEventListener('blur', () => { if (inFlight) setPaused(true); });
 document.addEventListener('visibilitychange', () => { if (document.hidden && inFlight) setPaused(true); });
 function resetSetup() {
-  inFlight = false; scene.activeFlight = false; input.enable(false); gunnerInput.enable(false); bomberInput.enable(false); lifeSupportInput.enable(false); paused = false;
+  inFlight = false; scene.activeFlight = false; input.enable(false); gunnerInput.enable(false); bomberInput.enable(false); spaceBomberInput.enable(false); lifeSupportInput.enable(false); paused = false;
   get('pause-overlay').hidden = true; show('setup'); total.focus();
 }
 get('abandon').addEventListener('click', resetSetup); get('again').addEventListener('click', resetSetup);
 function preparePlayLayout() {
   get('play').setAttribute('data-role', role);
   action.hidden = role !== 'Bomber';
+  fireAction.hidden = role !== 'Bomber' || situation !== 'Space Battle';
   actionRail.hidden = role !== 'Bomber';
   routeControls.hidden = role !== 'Life Support';
 }
@@ -135,15 +143,16 @@ function launch() {
   input.enable(role === 'Pilot');
   gunnerInput.enable(situation === 'Asteroid Field' && role === 'Gunner');
   bomberInput.enable(situation === 'Asteroid Field' && role === 'Bomber');
+  spaceBomberInput.enable(situation === 'Space Battle' && role === 'Bomber');
   lifeSupportInput.enable(situation === 'Asteroid Field' && role === 'Life Support');
   inFlight = true; paused = false;
   get('pause').textContent = 'Pause'; get('pause-overlay').hidden = true;
-  get('fuel-wrap').hidden = situation !== 'Space Battle';
+  get('fuel-wrap').hidden = situation !== 'Space Battle' || role !== 'Pilot';
   get('health-label').textContent = role === 'Life Support' ? 'INTEGRITY' : 'HULL';
   get('hull').textContent = role === 'Life Support' ? `${LIFE_SUPPORT_MAX_INTEGRITY} / ${LIFE_SUPPORT_MAX_INTEGRITY}` : '3 / 3';
   get('mode-label').textContent = `${situation.toUpperCase()} / ${role.toUpperCase()}`;
   get('mode-heading').textContent = situation === 'Space Battle'
-    ? 'Collect fuel. Evade enemy fire.'
+    ? role === 'Bomber' ? 'Break the enemy formation.' : 'Collect fuel. Evade enemy fire.'
     : role === 'Pilot' ? 'Keep your hull intact.'
       : role === 'Gunner' ? 'Clear the path ahead.'
         : role === 'Bomber' ? 'Lay mines in their path.' : 'Route power to the right system.';
@@ -154,10 +163,14 @@ function launch() {
     : role === 'Gunner'
       ? 'Destroy asteroids · Touch to aim/fire · Mouse to aim, click to fire'
       : role === 'Bomber'
-        ? 'Only ship hits cost hull · Hold Space / Enter or Drop mine to lay a trail while steering'
+        ? situation === 'Space Battle'
+          ? 'Space: missiles · Enter/Shift: mines · Use both weapons while steering'
+          : 'Only ship hits cost hull · Hold Space / Enter or Drop mine to lay a trail while steering'
         : 'Match packet symbols · Left/Right or A/D · 1/2/3 · Tap a system';
   canvas.setAttribute('aria-label', situation === 'Space Battle'
-    ? 'Space battle pilot station. Collect fuel and evade enemy ships and fire with arrow keys, WASD, or touch.'
+    ? role === 'Bomber'
+      ? 'Space battle bomber station. Steer with arrow keys or WASD and use missiles and mines; on touch, steer in the field and use the two weapon buttons.'
+      : 'Space battle pilot station. Collect fuel and evade enemy ships and fire with arrow keys, WASD, or touch.'
     : role === 'Pilot' ? 'Asteroid field. Steer with arrow keys, WASD, or touch.'
     : role === 'Gunner' ? 'Asteroid gunner station. Tap, hold, or drag with touch; move a mouse to aim and click or hold to fire.'
     : role === 'Bomber' ? 'Asteroid bomber station. Steer with arrow keys or WASD and drop mines with Space or Enter; on touch, steer in the field and use the Drop mine button.'
@@ -176,7 +189,7 @@ get('flight-form').addEventListener('submit', e => {
   if (parsed === null) { get('error').textContent = 'Enter a whole-number check total, including modifiers.'; total.focus(); return; }
   config = { total: parsed, naturalOne: natural.checked };
   situation = situationSelect.value === 'Space Battle' ? 'Space Battle' : 'Asteroid Field';
-  role = situation === 'Space Battle' ? 'Pilot' : roleSelect.value as Role;
+  role = roleSelect.value as Role;
   preparePlayLayout();
   show('play');
   if (!game) {
@@ -201,7 +214,7 @@ scene.onFlightStep = s => {
   get('hull').textContent = `${s.hull} / 3`;
   get('score').textContent = String(scoreFor(s));
   if (s.finished) {
-    inFlight = false; input.enable(false); gunnerInput.enable(false); bomberInput.enable(false); lifeSupportInput.enable(false); show('results');
+    inFlight = false; input.enable(false); gunnerInput.enable(false); bomberInput.enable(false); spaceBomberInput.enable(false); lifeSupportInput.enable(false); show('results');
     get('outcome').textContent = s.hull > 0 ? 'Course complete.' : 'Hull depleted.';
     get('final-score').textContent = String(scoreFor(s));
     get<HTMLTextAreaElement>('summary').value = resultText(config, s);
@@ -213,7 +226,7 @@ scene.onGunnerStep = s => {
   get('hull').textContent = `${s.hull} / 3`;
   get('score').textContent = String(gunnerScoreFor(s));
   if (s.finished) {
-    inFlight = false; input.enable(false); gunnerInput.enable(false); bomberInput.enable(false); lifeSupportInput.enable(false); show('results');
+    inFlight = false; input.enable(false); gunnerInput.enable(false); bomberInput.enable(false); spaceBomberInput.enable(false); lifeSupportInput.enable(false); show('results');
     get('outcome').textContent = s.hull > 0 ? 'Field cleared.' : 'Hull depleted.';
     get('final-score').textContent = String(gunnerScoreFor(s));
     get<HTMLTextAreaElement>('summary').value = gunnerResultText(config, s);
@@ -225,7 +238,7 @@ scene.onBomberStep = s => {
   get('hull').textContent = `${s.hull} / 3`;
   get('score').textContent = String(bomberScoreFor(s));
   if (s.finished) {
-    inFlight = false; input.enable(false); gunnerInput.enable(false); bomberInput.enable(false); lifeSupportInput.enable(false); show('results');
+    inFlight = false; input.enable(false); gunnerInput.enable(false); bomberInput.enable(false); spaceBomberInput.enable(false); lifeSupportInput.enable(false); show('results');
     get('outcome').textContent = s.hull > 0 ? 'Field cleared.' : 'Hull depleted.';
     get('final-score').textContent = String(bomberScoreFor(s));
     get<HTMLTextAreaElement>('summary').value = bomberResultText(config, s);
@@ -239,7 +252,7 @@ scene.onLifeSupportStep = s => {
   const routes = ['Thrusters', 'Shields', 'Guns'];
   routeButtons.forEach((button, index) => button.setAttribute('aria-pressed', String(routes[index] === s.selectedRoute)));
   if (s.finished) {
-    inFlight = false; input.enable(false); gunnerInput.enable(false); bomberInput.enable(false); lifeSupportInput.enable(false); show('results');
+    inFlight = false; input.enable(false); gunnerInput.enable(false); bomberInput.enable(false); spaceBomberInput.enable(false); lifeSupportInput.enable(false); show('results');
     get('outcome').textContent = s.integrity > 0 ? 'Systems stabilized.' : 'Systems failed.';
     get('final-score').textContent = String(lifeSupportScoreFor(s));
     get<HTMLTextAreaElement>('summary').value = lifeSupportResultText(config, s);
@@ -252,10 +265,22 @@ scene.onSpacePilotStep = s => {
   get('fuel').textContent = `${s.fuel.toFixed(1)}s`;
   get('score').textContent = String(spaceBattlePilotScoreFor(s));
   if (s.finished) {
-    inFlight = false; input.enable(false); gunnerInput.enable(false); bomberInput.enable(false); lifeSupportInput.enable(false); show('results');
+    inFlight = false; input.enable(false); gunnerInput.enable(false); bomberInput.enable(false); spaceBomberInput.enable(false); lifeSupportInput.enable(false); show('results');
     get('outcome').textContent = s.endReason === 'time' ? 'Battle run complete.' : s.endReason === 'fuel' ? 'Fuel depleted.' : 'Hull depleted.';
     get('final-score').textContent = String(spaceBattlePilotScoreFor(s));
     get<HTMLTextAreaElement>('summary').value = spaceBattlePilotResultText(config, s);
+    get('copy-status').textContent = ''; get('copy').focus();
+  }
+};
+scene.onSpaceBomberStep = s => {
+  get('time').textContent = `${Math.ceil(DURATION - s.elapsed)}s`;
+  get('hull').textContent = `${s.hull} / 3`;
+  get('score').textContent = String(spaceBattleBomberScoreFor(s));
+  if (s.finished) {
+    inFlight = false; input.enable(false); gunnerInput.enable(false); bomberInput.enable(false); spaceBomberInput.enable(false); lifeSupportInput.enable(false); show('results');
+    get('outcome').textContent = s.hull > 0 ? 'Bombing run complete.' : 'Hull depleted.';
+    get('final-score').textContent = String(spaceBattleBomberScoreFor(s));
+    get<HTMLTextAreaElement>('summary').value = spaceBattleBomberResultText(config, s);
     get('copy-status').textContent = ''; get('copy').focus();
   }
 };

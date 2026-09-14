@@ -755,3 +755,199 @@ export function spaceBattlePilotResultText(config: FlightConfig, s: SpaceBattleP
     'Prototype scoring v0.1 — GM determines campaign outcome.',
   ].join('\n');
 }
+
+export interface SpaceBattleBomberTuning {
+  enemySpeed: number;
+  forwardSpawnEvery: number;
+  pursuerSpawnEvery: number;
+  pilotSpeed: number;
+}
+
+// Initial playtest values, not GM-approved balance.
+export const SPACE_BATTLE_BOMBER_TUNING: Record<Difficulty, SpaceBattleBomberTuning> = {
+  Hard: { enemySpeed: 180, forwardSpawnEvery: 0.82, pursuerSpawnEvery: 1.05, pilotSpeed: 215 },
+  Medium: { enemySpeed: 155, forwardSpawnEvery: 1.00, pursuerSpawnEvery: 1.28, pilotSpeed: 220 },
+  Easy: { enemySpeed: 130, forwardSpawnEvery: 1.22, pursuerSpawnEvery: 1.55, pilotSpeed: 225 },
+  'Very Easy': { enemySpeed: 105, forwardSpawnEvery: 1.48, pursuerSpawnEvery: 1.90, pilotSpeed: 230 },
+};
+export const SPACE_BOMBER_MISSILE_SPEED = 430;
+export const SPACE_BOMBER_MISSILE_COOLDOWN = 0.38;
+export const SPACE_BOMBER_MINE_COOLDOWN = 0.85;
+export const SPACE_BOMBER_MINE_ARM_TIME = 0.2;
+export const SPACE_BOMBER_MINE_LIFETIME = 4.5;
+export const SPACE_BOMBER_BLAST_RADIUS = 58;
+export const SPACE_BOMBER_PLAYER_RADIUS = 13;
+export const SPACE_BOMBER_COLLISION_GRACE = 1.25;
+
+export interface SpaceBomberEnemy extends EnemyShip {
+  approach: 'forward' | 'pursuer';
+}
+export interface SpaceBomberMissile {
+  id: number;
+  x: number;
+  y: number;
+  radius: number;
+  speed: number;
+}
+export interface SpaceBattleBomberInput {
+  x: number;
+  y: number;
+  firing: boolean;
+  placing: boolean;
+}
+export interface SpaceBattleBomberState {
+  x: number;
+  y: number;
+  elapsed: number;
+  hull: number;
+  hits: number;
+  destroyed: number;
+  missilesFired: number;
+  minesPlaced: number;
+  missileCooldown: number;
+  mineCooldown: number;
+  invulnerable: number;
+  forwardSpawnIn: number;
+  pursuerSpawnIn: number;
+  enemies: SpaceBomberEnemy[];
+  missiles: SpaceBomberMissile[];
+  mines: Mine[];
+  explosions: Explosion[];
+  nextId: number;
+  impactFlash: number;
+  finished: boolean;
+}
+
+/** Natural 1 affects this mode's circular mine blast target, not its missiles. */
+export function spaceBomberBlastRadius(config: FlightConfig): number {
+  return SPACE_BOMBER_BLAST_RADIUS * (config.naturalOne ? BOMBER_IMPAIRMENT_SCALE : 1);
+}
+
+export function createSpaceBattleBomber(): SpaceBattleBomberState {
+  return {
+    x: WIDTH / 2, y: HEIGHT * 0.56, elapsed: 0, hull: 3, hits: 0, destroyed: 0,
+    missilesFired: 0, minesPlaced: 0, missileCooldown: 0, mineCooldown: 0,
+    invulnerable: 0, forwardSpawnIn: 0.65, pursuerSpawnIn: 1.1,
+    enemies: [], missiles: [], mines: [], explosions: [], nextId: 1,
+    impactFlash: 0, finished: false,
+  };
+}
+
+export function stepSpaceBattleBomber(
+  s: SpaceBattleBomberState,
+  config: FlightConfig,
+  input: SpaceBattleBomberInput,
+  dt: number,
+  random: () => number = Math.random,
+): void {
+  if (s.finished) return;
+  dt = Math.min(Math.max(dt, 0), 0.05, DURATION - s.elapsed);
+  const tuning = SPACE_BATTLE_BOMBER_TUNING[difficultyFor(config.total)];
+  s.elapsed += dt;
+  s.invulnerable = Math.max(0, s.invulnerable - dt);
+  s.missileCooldown = Math.max(0, s.missileCooldown - dt);
+  s.mineCooldown = Math.max(0, s.mineCooldown - dt);
+  s.impactFlash = Math.max(0, s.impactFlash - dt);
+  for (const explosion of s.explosions) explosion.remaining -= dt;
+  s.explosions = s.explosions.filter(explosion => explosion.remaining > 0);
+
+  const magnitude = Math.max(1, Math.hypot(input.x, input.y));
+  s.x = Math.max(18, Math.min(WIDTH - 18, s.x + input.x / magnitude * tuning.pilotSpeed * dt));
+  s.y = Math.max(70, Math.min(HEIGHT - 70, s.y + input.y / magnitude * tuning.pilotSpeed * dt));
+
+  if (input.firing && s.missileCooldown <= 0) {
+    s.missiles.push({ id: s.nextId++, x: s.x, y: s.y - 22, radius: 5, speed: SPACE_BOMBER_MISSILE_SPEED });
+    s.missilesFired++;
+    s.missileCooldown = SPACE_BOMBER_MISSILE_COOLDOWN;
+  }
+  if (input.placing && s.mineCooldown <= 0) {
+    s.mines.push({
+      id: s.nextId++, x: s.x, y: s.y + 28, blastRadius: spaceBomberBlastRadius(config),
+      armIn: SPACE_BOMBER_MINE_ARM_TIME, expiresIn: SPACE_BOMBER_MINE_LIFETIME,
+    });
+    s.minesPlaced++;
+    s.mineCooldown = SPACE_BOMBER_MINE_COOLDOWN;
+  }
+
+  const spawnEnemy = (approach: SpaceBomberEnemy['approach']) => {
+    const radius = 16;
+    const x = radius + random() * (WIDTH - radius * 2);
+    const speed = tuning.enemySpeed * (0.88 + random() * 0.24);
+    s.enemies.push({
+      id: s.nextId++, x, y: approach === 'forward' ? -radius - 4 : HEIGHT + radius + 4,
+      radius, speed, vx: (random() - 0.5) * 36, shotIn: Infinity, approach,
+    });
+  };
+  s.forwardSpawnIn -= dt;
+  while (s.forwardSpawnIn <= 0) { spawnEnemy('forward'); s.forwardSpawnIn += tuning.forwardSpawnEvery; }
+  s.pursuerSpawnIn -= dt;
+  while (s.pursuerSpawnIn <= 0) { spawnEnemy('pursuer'); s.pursuerSpawnIn += tuning.pursuerSpawnEvery; }
+
+  for (const enemy of s.enemies) {
+    enemy.x += enemy.vx * dt;
+    enemy.y += enemy.speed * dt * (enemy.approach === 'forward' ? 1 : -1);
+    if (enemy.x < enemy.radius || enemy.x > WIDTH - enemy.radius) {
+      enemy.x = Math.max(enemy.radius, Math.min(WIDTH - enemy.radius, enemy.x));
+      enemy.vx *= -1;
+    }
+  }
+  for (const missile of s.missiles) missile.y -= missile.speed * dt;
+  for (const mine of s.mines) { mine.armIn -= dt; mine.expiresIn -= dt; }
+
+  const destroyedIds = new Set<number>();
+  const usedMissiles = new Set<number>();
+  for (const missile of s.missiles) {
+    const enemy = s.enemies.find(candidate => !destroyedIds.has(candidate.id)
+      && Math.hypot(candidate.x - missile.x, candidate.y - missile.y) <= candidate.radius + missile.radius);
+    if (enemy) { destroyedIds.add(enemy.id); usedMissiles.add(missile.id); }
+  }
+
+  const detonatedMines = new Set<number>();
+  for (const mine of s.mines) {
+    if (mine.armIn > 0 || mine.expiresIn <= 0) continue;
+    if (s.enemies.some(enemy => !destroyedIds.has(enemy.id)
+      && Math.hypot(enemy.x - mine.x, enemy.y - mine.y) <= enemy.radius + 8)) {
+      detonatedMines.add(mine.id);
+      s.explosions.push({ x: mine.x, y: mine.y, radius: mine.blastRadius, remaining: 0.28 });
+      for (const enemy of s.enemies) {
+        if (Math.hypot(enemy.x - mine.x, enemy.y - mine.y) <= mine.blastRadius) destroyedIds.add(enemy.id);
+      }
+    }
+  }
+  s.destroyed += destroyedIds.size;
+  s.enemies = s.enemies.filter(enemy => !destroyedIds.has(enemy.id));
+  s.missiles = s.missiles.filter(missile => missile.y + missile.radius >= 0 && !usedMissiles.has(missile.id));
+  s.mines = s.mines.filter(mine => mine.expiresIn > 0 && !detonatedMines.has(mine.id));
+
+  const colliding = s.enemies.filter(enemy =>
+    Math.hypot(enemy.x - s.x, enemy.y - s.y) < enemy.radius + SPACE_BOMBER_PLAYER_RADIUS);
+  if (colliding.length) {
+    if (s.invulnerable <= 0) {
+      s.hits++;
+      s.hull = Math.max(0, s.hull - 1);
+      s.invulnerable = SPACE_BOMBER_COLLISION_GRACE;
+      s.impactFlash = 0.18;
+    }
+    const collidedIds = new Set(colliding.map(enemy => enemy.id));
+    s.enemies = s.enemies.filter(enemy => !collidedIds.has(enemy.id));
+  }
+  s.enemies = s.enemies.filter(enemy => enemy.approach === 'forward'
+    ? enemy.y - enemy.radius < HEIGHT + 20 : enemy.y + enemy.radius > -20);
+  s.finished = s.hull <= 0 || s.elapsed >= DURATION;
+}
+
+export function spaceBattleBomberScoreFor(s: SpaceBattleBomberState): number {
+  return s.destroyed * 100 + Math.round(s.elapsed * 5) + s.hull * 100;
+}
+
+export function spaceBattleBomberResultText(config: FlightConfig, s: SpaceBattleBomberState): string {
+  return [
+    'Galaxy Grown — Space Battle / Bomber',
+    `Check total: ${config.total} • Difficulty: ${difficultyFor(config.total)}`,
+    `Natural 1: ${config.naturalOne ? 'Yes — mine blast target has half normal area' : 'No'}`,
+    `Score: ${spaceBattleBomberScoreFor(s)} • Time: ${s.elapsed.toFixed(1)}s • Destroyed: ${s.destroyed}`,
+    `Missiles: ${s.missilesFired} • Mines: ${s.minesPlaced} • Hull: ${s.hull}/3 • Hits: ${s.hits}`,
+    s.hull > 0 ? 'Bombing run complete' : 'Hull depleted',
+    'Prototype scoring v0.1 — GM determines campaign outcome.',
+  ].join('\n');
+}
