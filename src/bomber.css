@@ -10,15 +10,57 @@
   color: #fff;
   font-weight: 700;
   touch-action: none;
+  user-select: none;
+  position: sticky;
+  bottom: max(18px, calc(env(safe-area-inset-bottom) + 12px));
+  width: 88px;
+  min-height: 88px;
+  padding: 10px;
+  border-width: 2px;
+  border-radius: 50%;
+  box-shadow: 0 8px 28px #05081699;
+  line-height: 1.15;
 }
 
-@media (max-width: 460px) {
-  .play-heading {
-    align-items: flex-start;
+.action-rail {
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  min-width: 0;
+}
+
+.action:active {
+  background: #927bd0;
+  transform: scale(0.96);
+}
+
+@media (max-width: 480px), (any-pointer: coarse) {
+  #play[data-role="Bomber"] .flight-stage {
+    grid-template-columns: minmax(0, 480px) 76px;
   }
 
-  .play-actions {
-    flex-direction: column;
+  .action { width: 74px; min-height: 82px; }
+}
+
+/* Stack until the full layout fits: 480px canvas + 90px rail + 10px gap
+   + 2 * 18px mobile main padding = 616px viewport (also fits coarse input).
+   Keep this after coarse-pointer sizing so touch cannot restore the side column. */
+@media (max-width: 616px) {
+  #play[data-role="Bomber"] .flight-stage {
+    grid-template-columns: minmax(0, 480px);
+  }
+
+  #play[data-role="Bomber"] .action-rail {
+    justify-content: flex-end;
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+
+  #play[data-role="Bomber"] .action {
+    position: static;
+    width: 140px;
+    min-height: 56px;
+    border-radius: 14px;
+    box-shadow: none;
   }
 }
 

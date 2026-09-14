@@ -17,11 +17,17 @@ test('first launch waits for scene creation before starting simulation; retry re
   }
   let gameCount = 0;
   let readyScene: any;
+  const scaleRefreshRailStates: boolean[] = [];
   const graphics: any = new Proxy({}, { get: () => () => graphics });
   // Like Phaser, scene plugins are absent before Game initializes the scene.
   class Scene {}
   class Game {
-    scale = { refresh() {} };
+    scale = { refresh: () => {
+      const selectedRole = element('role').value;
+      assert.equal(element('play').attributes.get('data-role'), selectedRole);
+      assert.equal(element('action-rail').hidden, selectedRole !== 'Bomber');
+      scaleRefreshRailStates.push(element('action-rail').hidden);
+    } };
     constructor(config: any) {
       gameCount++;
       readyScene = config.scene[0];
@@ -82,6 +88,8 @@ test('first launch waits for scene creation before starting simulation; retry re
   assert.equal(readyScene.bomber.minesPlaced, 1);
   assert.match(element('flight-status').textContent, /Very Easy.*half-area mine blast target/);
   assert.equal(element('action').hidden, false);
+  assert.equal(element('action-rail').hidden, false);
+  assert.equal(scaleRefreshRailStates.at(-1), false);
   element('abandon').listeners.get('click')();
   element('role').value = 'Life Support'; submit();
   assert.equal(gameCount, 1); assert.equal(lifeSupportInputEnabled, true);

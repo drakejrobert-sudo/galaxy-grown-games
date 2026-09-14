@@ -358,6 +358,38 @@ export class FlightScene extends Phaser.Scene {
     return route === 'Thrusters' ? 0xffb866 : route === 'Shields' ? 0x79e1ce : 0xbba6ff;
   }
 
+  private paintLifeSupportPanel(g: Phaser.GameObjects.Graphics, elapsed: number) {
+    // A recessed ship console replaces the generic star field without reducing contrast around packets.
+    g.fillStyle(0x0b1324, 0.94); g.fillRoundedRect(15, 14, WIDTH - 30, HEIGHT - 28, 22);
+    g.lineStyle(3, 0x344866, 0.9); g.strokeRoundedRect(15, 14, WIDTH - 30, HEIGHT - 28, 22);
+    g.lineStyle(1, 0x7991b0, 0.32); g.strokeRoundedRect(22, 21, WIDTH - 44, HEIGHT - 42, 17);
+
+    // Structural seams, braces, and rivets make the bay read as machinery rather than open space.
+    for (const y of [118, 224, 330, 446]) {
+      g.lineStyle(1, 0x334762, 0.35); g.lineBetween(27, y, WIDTH - 27, y);
+      g.fillStyle(0x68809e, 0.6); g.fillCircle(29, y, 2); g.fillCircle(WIDTH - 29, y, 2);
+    }
+    for (const x of [38, WIDTH - 38]) {
+      g.lineStyle(8, 0x17243a, 0.96); g.lineBetween(x, 48, x, 432);
+      g.lineStyle(2, 0x526984, 0.7); g.lineBetween(x, 48, x, 432);
+      for (let y = 70; y < 430; y += 54) {
+        g.fillStyle(0x263955); g.fillRoundedRect(x - 10, y - 4, 20, 8, 3);
+        g.fillStyle(0x91a8bf, 0.65); g.fillCircle(x - 6, y, 1.5); g.fillCircle(x + 6, y, 1.5);
+      }
+    }
+
+    // Intake manifold and its animated diagnostic lights.
+    g.fillStyle(0x1b2942); g.lineStyle(2, 0x607895, 0.85);
+    g.fillRoundedRect(WIDTH / 2 - 74, 25, 148, 43, 10);
+    g.strokeRoundedRect(WIDTH / 2 - 74, 25, 148, 43, 10);
+    g.fillStyle(0x0d1728); g.fillRoundedRect(WIDTH / 2 - 48, 36, 96, 21, 5);
+    for (let i = 0; i < 5; i++) {
+      const active = i === Math.floor(elapsed * 4) % 5;
+      g.fillStyle(active ? 0x79e1ce : 0x405571, active ? 0.95 : 0.65);
+      g.fillCircle(WIDTH / 2 - 32 + i * 16, 46, active ? 3.2 : 2.4);
+    }
+  }
+
   private paintLifeSupportSymbol(
     g: Phaser.GameObjects.Graphics,
     packet: Pick<LifeSupportPacket, 'kind' | 'target'>,
@@ -394,39 +426,92 @@ export class FlightScene extends Phaser.Scene {
   private paintLifeSupportMode(g: Phaser.GameObjects.Graphics) {
     const s = this.lifeSupport;
     const feedbackColor = s.lastResult === 'correct' ? 0x79e1ce : 0xff715b;
-    if (s.feedbackTime > 0) {
-      g.fillStyle(feedbackColor, 0.08 + s.feedbackTime * 0.35); g.fillRect(9, 9, WIDTH - 18, HEIGHT - 18);
+    this.paintLifeSupportPanel(g, s.elapsed);
+
+    // Packet conduit: layered walls, regular braces, and a moving scanner pulse.
+    g.fillStyle(0x111d31, 0.99); g.fillRoundedRect(WIDTH / 2 - 55, 76, 110, LIFE_SUPPORT_SWITCH_Y - 88, 18);
+    g.lineStyle(2, 0x516686, 0.85); g.strokeRoundedRect(WIDTH / 2 - 55, 76, 110, LIFE_SUPPORT_SWITCH_Y - 88, 18);
+    g.lineStyle(7, 0x263852, 0.95); g.lineBetween(WIDTH / 2, 80, WIDTH / 2, LIFE_SUPPORT_SWITCH_Y);
+    g.lineStyle(1, 0x83a3c4, 0.52); g.lineBetween(WIDTH / 2 - 11, 83, WIDTH / 2 - 11, LIFE_SUPPORT_SWITCH_Y);
+    g.lineBetween(WIDTH / 2 + 11, 83, WIDTH / 2 + 11, LIFE_SUPPORT_SWITCH_Y);
+    for (let y = 98; y < LIFE_SUPPORT_SWITCH_Y - 18; y += 42) {
+      g.fillStyle(0x293c58); g.fillRoundedRect(WIDTH / 2 - 48, y, 96, 5, 2);
+      g.fillStyle(0x7188a4, 0.6); g.fillCircle(WIDTH / 2 - 42, y + 2.5, 1.5); g.fillCircle(WIDTH / 2 + 42, y + 2.5, 1.5);
     }
-    g.fillStyle(0x151f35, 0.96); g.fillRoundedRect(WIDTH / 2 - 48, 20, 96, LIFE_SUPPORT_SWITCH_Y - 42, 18);
-    g.lineStyle(2, 0x516686, 0.72); g.strokeRoundedRect(WIDTH / 2 - 48, 20, 96, LIFE_SUPPORT_SWITCH_Y - 42, 18);
-    g.lineStyle(5, 0x293a58, 0.9); g.lineBetween(WIDTH / 2, 36, WIDTH / 2, LIFE_SUPPORT_SWITCH_Y);
-    g.lineStyle(1, 0x7693b4, 0.5); g.lineBetween(WIDTH / 2 - 8, 36, WIDTH / 2 - 8, LIFE_SUPPORT_SWITCH_Y);
-    g.lineBetween(WIDTH / 2 + 8, 36, WIDTH / 2 + 8, LIFE_SUPPORT_SWITCH_Y);
+    const scannerY = 88 + (s.elapsed * 72) % Math.max(1, LIFE_SUPPORT_SWITCH_Y - 110);
+    g.lineStyle(7, 0x79e1ce, 0.06); g.lineBetween(WIDTH / 2 - 43, scannerY, WIDTH / 2 + 43, scannerY);
+    g.lineStyle(1, 0xbafff2, 0.5); g.lineBetween(WIDTH / 2 - 40, scannerY, WIDTH / 2 + 40, scannerY);
 
     const routes: LifeSupportRoute[] = ['Thrusters', 'Shields', 'Guns'];
-    for (const route of routes) {
+    for (const [routeIndex, route] of routes.entries()) {
       const x = this.lifeSupportRouteX(route);
       const selected = route === s.selectedRoute;
       const color = this.lifeSupportRouteColor(route);
+      g.lineStyle(15, 0x192840, 0.98);
+      g.lineBetween(WIDTH / 2, LIFE_SUPPORT_SWITCH_Y, x, 472);
       g.lineStyle(selected ? 7 : 3, color, selected ? 0.88 : 0.28);
       g.lineBetween(WIDTH / 2, LIFE_SUPPORT_SWITCH_Y, x, 472);
-      g.fillStyle(color, selected ? 0.16 : 0.06); g.fillRoundedRect(x - 48, 466, 96, 72, 14);
-      g.lineStyle(selected ? 3 : 1, color, selected ? 0.95 : 0.55); g.strokeRoundedRect(x - 48, 466, 96, 72, 14);
-      this.paintLifeSupportSymbol(g, { kind: 'power', target: route }, x, 501, 0.85);
+
+      if (selected) {
+        const flow = (s.elapsed * 1.15 + routeIndex * 0.19) % 1;
+        const flowX = WIDTH / 2 + (x - WIDTH / 2) * flow;
+        const flowY = LIFE_SUPPORT_SWITCH_Y + (472 - LIFE_SUPPORT_SWITCH_Y) * flow;
+        g.fillStyle(color, 0.18); g.fillCircle(flowX, flowY, 9);
+        g.fillStyle(0xf6ffff, 0.9); g.fillCircle(flowX, flowY, 2.5);
+      }
+
+      // Each destination is a small illuminated subsystem bay with a status rail and hardware.
+      g.fillStyle(0x111d30, 0.98); g.fillRoundedRect(x - 52, 458, 104, 82, 14);
+      g.fillStyle(color, selected ? 0.14 : 0.045); g.fillRoundedRect(x - 46, 464, 92, 70, 10);
+      g.lineStyle(selected ? 3 : 1, color, selected ? 0.95 : 0.55); g.strokeRoundedRect(x - 52, 458, 104, 82, 14);
+      g.fillStyle(color, selected ? 0.9 : 0.35); g.fillRoundedRect(x - 31, 469, 62, 4, 2);
+      for (const dx of [-43, 43]) for (const dy of [10, 71]) {
+        g.fillStyle(0x7890a9, 0.72); g.fillCircle(x + dx, 458 + dy, 2);
+      }
+      this.paintLifeSupportSymbol(g, { kind: 'power', target: route }, x, 501, 0.92);
+      g.lineStyle(1, color, 0.35); g.lineBetween(x - 23, 526, x + 23, 526);
+      for (const dx of [-14, 0, 14]) {
+        g.fillStyle(dx === 0 && selected ? color : 0x435873, selected ? 0.8 : 0.45); g.fillCircle(x + dx, 531, 1.8);
+      }
+    }
+
+    // Rotary switch with three detents and a bright mechanical selector arm.
+    g.fillStyle(0x0d1728, 0.95); g.lineStyle(2, 0x526a88, 0.8);
+    g.fillCircle(WIDTH / 2, LIFE_SUPPORT_SWITCH_Y, 34); g.strokeCircle(WIDTH / 2, LIFE_SUPPORT_SWITCH_Y, 34);
+    for (const route of routes) {
+      const routeAngle = Math.atan2(472 - LIFE_SUPPORT_SWITCH_Y, this.lifeSupportRouteX(route) - WIDTH / 2);
+      g.fillStyle(this.lifeSupportRouteColor(route), route === s.selectedRoute ? 0.95 : 0.35);
+      g.fillCircle(WIDTH / 2 + Math.cos(routeAngle) * 27, LIFE_SUPPORT_SWITCH_Y + Math.sin(routeAngle) * 27, 3.5);
     }
     g.fillStyle(0x22314d); g.lineStyle(3, 0xc8d9ef, 0.9);
-    g.fillCircle(WIDTH / 2, LIFE_SUPPORT_SWITCH_Y, 18); g.strokeCircle(WIDTH / 2, LIFE_SUPPORT_SWITCH_Y, 18);
+    g.fillCircle(WIDTH / 2, LIFE_SUPPORT_SWITCH_Y, 19); g.strokeCircle(WIDTH / 2, LIFE_SUPPORT_SWITCH_Y, 19);
     const selectedX = this.lifeSupportRouteX(s.selectedRoute);
     const angle = Math.atan2(472 - LIFE_SUPPORT_SWITCH_Y, selectedX - WIDTH / 2);
-    g.lineStyle(7, this.lifeSupportRouteColor(s.selectedRoute), 0.95);
-    g.lineBetween(WIDTH / 2, LIFE_SUPPORT_SWITCH_Y, WIDTH / 2 + Math.cos(angle) * 35, LIFE_SUPPORT_SWITCH_Y + Math.sin(angle) * 35);
+    g.lineStyle(11, 0x111c2d, 0.95);
+    g.lineBetween(WIDTH / 2, LIFE_SUPPORT_SWITCH_Y, WIDTH / 2 + Math.cos(angle) * 38, LIFE_SUPPORT_SWITCH_Y + Math.sin(angle) * 38);
+    g.lineStyle(6, this.lifeSupportRouteColor(s.selectedRoute), 0.98);
+    g.lineBetween(WIDTH / 2, LIFE_SUPPORT_SWITCH_Y, WIDTH / 2 + Math.cos(angle) * 38, LIFE_SUPPORT_SWITCH_Y + Math.sin(angle) * 38);
+    g.fillStyle(0xeaf7ff); g.fillCircle(WIDTH / 2, LIFE_SUPPORT_SWITCH_Y, 5);
 
     for (const packet of s.packets) {
       const pulse = 0.75 + Math.sin(s.elapsed * 10 + packet.id) * 0.12;
-      g.fillStyle(this.lifeSupportRouteColor(packet.target), 0.07); g.fillCircle(packet.x, packet.y, 28);
+      const packetColor = packet.kind === 'overload' ? 0xff8f6b : this.lifeSupportRouteColor(packet.target);
+      for (let trail = 3; trail > 0; trail--) {
+        g.fillStyle(packetColor, 0.035 * (4 - trail)); g.fillCircle(packet.x, packet.y - trail * 11, 5 + trail);
+      }
+      g.fillStyle(packetColor, 0.07); g.fillCircle(packet.x, packet.y, 31);
       g.fillStyle(0x1d2942, 0.98); g.lineStyle(2, this.lifeSupportRouteColor(packet.target), pulse);
       g.fillCircle(packet.x, packet.y, 22); g.strokeCircle(packet.x, packet.y, 22);
+      for (const rotation of [0, Math.PI / 2, Math.PI, Math.PI * 1.5]) {
+        g.fillStyle(0x91a8c1, 0.8);
+        g.fillRoundedRect(packet.x + Math.cos(rotation) * 22 - 3, packet.y + Math.sin(rotation) * 22 - 2, 6, 4, 1);
+      }
       this.paintLifeSupportSymbol(g, packet, packet.x, packet.y, 0.75);
+    }
+
+    if (s.feedbackTime > 0) {
+      g.fillStyle(feedbackColor, 0.06 + s.feedbackTime * 0.26); g.fillRect(16, 15, WIDTH - 32, HEIGHT - 30);
+      g.lineStyle(5, feedbackColor, 0.35 + s.feedbackTime * 0.4); g.strokeRoundedRect(17, 16, WIDTH - 34, HEIGHT - 32, 20);
     }
   }
 }
