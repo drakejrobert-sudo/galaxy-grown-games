@@ -100,8 +100,8 @@ function refreshSetup() {
       ? 'Ship flies automatically. Touch: tap, hold, or drag to aim and fire. Mouse: move to aim, then click or hold to fire.'
       : selectedRole === 'Bomber'
         ? selectedSituation === 'Space Battle'
-          ? 'Ship flies automatically. Touch or mouse positions the weapon targets; Arrow keys / WASD moves the reticle. Space fires toward the cyan forward target; Enter or Shift places a mine at the amber aft target. Touch: use the two weapon buttons.'
-          : 'Ship flies automatically. Touch or mouse positions the amber mine target behind the ship; Arrow keys / WASD moves the reticle. Hold Drop mine, Space, or Enter to place mines. Only ship collisions cost hull; missed asteroids pass safely.'
+          ? 'Ship flies automatically. Touch, mouse, or Arrow keys / WASD aims missiles ahead; Space or Fire missile launches from the nose. Enter, Shift, or Drop mine releases a mine directly behind the ship.'
+          : 'Ship flies automatically. Time your drops as the ship sweeps across the field. Hold Drop mine, Space, or Enter to release mines directly behind the ship. Only ship collisions cost hull; missed asteroids pass safely.'
         : 'Use Left/Right or A/D to turn the routing switch. Use 1, 2, or 3 to choose a system directly. Touch players can tap a system button.';
   get('error').textContent = '';
 }
@@ -164,16 +164,16 @@ function launch() {
       ? 'Automatic flight · Touch to aim/fire · Mouse to aim, click to fire'
       : role === 'Bomber'
         ? situation === 'Space Battle'
-          ? 'Automatic flight · Aim with touch, mouse, or arrows/WASD · Cyan: forward missiles (Space) · Amber: aft mines (Enter/Shift)'
-          : 'Automatic flight · Aim behind the ship with touch, mouse, or arrows/WASD · Space / Enter or Drop mine places mines · Only ship hits cost hull'
+          ? 'Automatic flight · Aim missiles ahead: touch, mouse, arrows/WASD · Space: fire · Enter/Shift: drop mine behind ship'
+          : 'Automatic flight · Time your mine drops · Space / Enter or Drop mine releases behind ship · Only ship hits cost hull'
         : 'Match packet symbols · Left/Right or A/D · 1/2/3 · Tap a system';
   canvas.setAttribute('aria-label', situation === 'Space Battle'
     ? role === 'Bomber'
-      ? 'Space battle bomber station. Ship flies automatically. Aim with touch, mouse, arrow keys or WASD. Space fires toward the cyan forward target; Enter or Shift places mines at the amber aft target. Touch uses two weapon buttons.'
+      ? 'Space battle bomber station. Ship flies automatically. Aim missiles ahead with touch, mouse, arrow keys or WASD. Space fires from the nose; Enter or Shift drops mines directly behind the ship. Touch uses two weapon buttons.'
       : 'Space battle pilot station. Collect fuel and evade enemy ships and fire with arrow keys, WASD, or touch.'
     : role === 'Pilot' ? 'Asteroid field. Steer with arrow keys, WASD, or touch.'
     : role === 'Gunner' ? 'Asteroid gunner station. Ship flies automatically. Tap, hold, or drag with touch; move a mouse to aim and click or hold to fire.'
-    : role === 'Bomber' ? 'Asteroid bomber station. Ship flies automatically. Aim mines behind the ship with touch, mouse, arrow keys or WASD. Space, Enter, or Drop mine places a mine at the amber target.'
+    : role === 'Bomber' ? 'Asteroid bomber station. Ship flies automatically. Time mine releases with Space, Enter, or Drop mine. Mines always drop directly behind the ship.'
     : 'Asteroid Life Support station. Route matching packets with Left and Right, A and D, number keys 1 through 3, or the three touch buttons.');
   const impairment = role === 'Pilot' ? 'overloaded engine'
     : role === 'Gunner' ? 'overheated gun'

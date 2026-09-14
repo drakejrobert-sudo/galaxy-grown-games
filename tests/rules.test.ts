@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  automaticShipX, BOMBER_AIM_SPEED, HEIGHT, difficultyFor, parseTotal, flightSpeed, createFlight, stepFlight, scoreFor, resultText,
+  mineDropPosition, automaticShipX, HEIGHT, difficultyFor, parseTotal, flightSpeed, createFlight, stepFlight, scoreFor, resultText,
   createGunner, stepGunner, gunnerFireEvery, gunnerScoreFor, gunnerResultText,
   bomberBlastRadius, bomberResultText, bomberScoreFor, createBomber, stepBomber,
   createLifeSupport, lifeSupportPacketKind, lifeSupportResultText, lifeSupportScoreFor, stepLifeSupport,
@@ -156,7 +156,7 @@ test('bomber natural one gives the rendered and collision target exactly half no
   assert.equal(createBlastTest(true).destroyed, 1);
 });
 
-test('bomber reticle and mine placement are independent of automatic flight', () => {
+test('bomber drops mines directly behind the automatically flying ship', () => {
   const s = createBomber(); s.spawnIn = 100;
   const oldX = s.x;
   stepBomber(s, {total:12,naturalOne:false}, {x:1,y:0,placing:true}, 0.05);
@@ -164,7 +164,7 @@ test('bomber reticle and mine placement are independent of automatic flight', ()
   assert.equal(s.minesPlaced, 1);
   assert.equal(s.mines.length, 1);
   assert.equal(s.x, automaticShipX(s.elapsed));
-  assert.equal(s.aimX, 240 + BOMBER_AIM_SPEED * 0.05);
+  assert.equal(s.aimX, s.x);
   assert.equal(s.mines[0].x, s.aimX);
   assert.equal(s.mines[0].y, s.aimY);
   assert.equal(s.mines[0].blastRadius, BOMBER_BLAST_RADIUS);
@@ -430,7 +430,8 @@ test('bomber automatic course ignores targeting in every band and natural-one st
         assert.equal(a.x, automaticShipX(a.elapsed));
       }
       assert.notEqual(a.x, WIDTH / 2);
-      assert.notEqual(a.aimX, b.aimX);
+      if (battle) assert.notEqual(a.aimX, b.aimX);
+      else assert.equal(a.aimX, b.aimX);
       const snapshot = JSON.stringify(a);
       step(a, config, {x:0,y:0,firing:false,placing:false}, 0);
       assert.equal(JSON.stringify(a), snapshot);
@@ -442,21 +443,38 @@ test('bomber automatic course ignores targeting in every band and natural-one st
   }
 });
 
-test('aimed mines stay aft and bounded, preserve fuse and cooldown, and destroy targets', () => {
-  const config = {total:10,naturalOne:false}, s = createBomber();
-  s.spawnIn = 100;
-  stepBomber(s, config, {x:0,y:0,aimX:100,aimY:400,placing:true}, 0.01);
-  assert.equal(s.mines[0].x, 100); assert.equal(s.mines[0].y, 400);
-  assert.ok(s.mines[0].armIn > 0);
-  s.asteroids = [{id:90,x:100,y:400,radius:15,speed:0}];
-  stepBomber(s, config, {x:0,y:0,placing:true}, 0.01);
-  assert.equal(s.destroyed, 0); assert.equal(s.minesPlaced, 1);
-  for (let i=0;i<6;i++) stepBomber(s, config, {x:0,y:0,placing:false}, 0.05);
-  assert.equal(s.destroyed, 1);
-  stepBomber(s, config, {x:0,y:0,aimX:-100,aimY:-100,placing:false}, 0.01);
-  assert.equal(s.aimX, 18); assert.equal(s.aimY, s.y + 34);
-  stepBomber(s, config, {x:0,y:0,aimX:1000,aimY:1000,placing:false}, 0.01);
-  assert.equal(s.aimX, WIDTH - 18); assert.equal(s.aimY, HEIGHT - 18);
+test('mines release behind the ship regardless of aim, retain their position, and keep the fuse', () => {
+  for (const battle of [false, true]) for (const naturalOne of [false, true]) {
+    const config = {total:10,naturalOne};
+    const s: any = battle ? createSpaceBattleBomber() : createBomber();
+    const step: any = battle ? stepSpaceBattleBomber : stepBomber;
+    Object.assign(s, {spawnIn:100,forwardSpawnIn:100,pursuerSpawnIn:100});
+    step(s, config, {x:1,y:-1,aimX:18,aimY:18,firing:false,placing:true}, 0.01);
+    const mine = s.mines[0], drop = mineDropPosition(s);
+    assert.equal(mine.x, s.x); assert.equal(mine.x, drop.x);
+    assert.equal(mine.y, s.y + 34); assert.equal(mine.y, drop.y);
+    assert.ok(mine.armIn > 0);
+    const target = {id:90,x:mine.x,y:mine.y,radius:15,speed:0,vx:0,shotIn:Infinity,approach:'pursuer'};
+    if (battle) s.enemies = [target]; else s.asteroids = [target];
+    step(s, config, {x:-1,y:1,aimX:460,aimY:540,firing:false,placing:true}, 0.01);
+    assert.equal(s.destroyed, 0); assert.equal(s.minesPlaced, 1);
+    assert.equal(mine.x, drop.x); assert.equal(mine.y, drop.y);
+    for(let frame=0;frame<6;frame++) step(s,config,{x:0,y:0,firing:false,placing:false},0.05);
+    assert.equal(s.destroyed, 1);
+    assert.equal(s.hull, 3);
+  }
+});
+
+test('automatic flight traverses a broad course in seconds with smooth bounded movement', () => {
+  assert.equal(automaticShipX(0), WIDTH / 2);
+  assert.ok(automaticShipX(1) - automaticShipX(0) > 80);
+  assert.ok(automaticShipX(2) - automaticShipX(6) >= 230);
+  assert.ok(Math.abs(automaticShipX(8) - automaticShipX(0)) < 1e-9);
+  for(let frame=1;frame<=1200;frame++) {
+    const x=automaticShipX(frame*0.05), previous=automaticShipX((frame-1)*0.05);
+    assert.ok(x >= 120 && x <= WIDTH-120);
+    assert.ok(Math.abs(x-previous) < 5, 'no jumps at course turns');
+  }
 });
 
 test('space bomber missiles travel toward the forward target and mine targets stay aft', () => {
@@ -467,7 +485,7 @@ test('space bomber missiles travel toward the forward target and mine targets st
   stepSpaceBattleBomber(s, config, action, 0.01);
   assert.ok(s.missiles[0].vx > 0); assert.ok(s.missiles[0].vy < 0);
   assert.ok(Math.abs(Math.hypot(s.missiles[0].vx,s.missiles[0].vy)-s.missiles[0].speed) < 1e-9);
-  assert.equal(s.mines[0].x,350); assert.equal(s.mines[0].y,s.y+34);
+  assert.equal(s.mines[0].x,s.x); assert.equal(s.mines[0].y,s.y+34);
   assert.equal(s.mines[0].blastRadius,spaceBomberBlastRadius(config));
   stepSpaceBattleBomber(s, config, action, 0.01);
   assert.equal(s.missilesFired,1); assert.equal(s.minesPlaced,1);

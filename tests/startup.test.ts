@@ -89,7 +89,8 @@ test('first launch waits for scene creation before starting simulation; retry re
   readyScene.update(0, 16); assert.ok(readyScene.bomber.elapsed > 0);
   assert.equal(readyScene.bomber.minesPlaced, 1);
   assert.equal(readyScene.bomber.x, rules.automaticShipX(readyScene.bomber.elapsed));
-  assert.notEqual(readyScene.bomber.aimX, readyScene.bomber.x);
+  assert.equal(readyScene.bomber.mines[0].x, readyScene.bomber.x);
+  assert.match(element('play-help').textContent, /Time your mine drops/);
   element('pause').listeners.get('click')();
   const pausedBomber = JSON.stringify(readyScene.bomber);
   readyScene.update(0, 50);

@@ -70,56 +70,34 @@ test('gunner mouse input follows hover and preserves a quick click until simulat
   } finally { globalThis.window = oldWindow; }
 });
 
-test('bomber supports simultaneous keyboard aiming and mine placement', () => {
-  const windowListeners = new Map<string, Function>();
-  const surfaceListeners = new Map<string, Function>();
-  const actionListeners = new Map<string, Function>();
+test('asteroid bomber only times mine releases and ignores aiming controls', () => {
   const oldWindow = globalThis.window;
-  globalThis.window = { addEventListener: (type: string, listener: Function) => windowListeners.set(type, listener) } as any;
+  const windowListeners = new Map<string, Function>(), actions = new Map<string, Function>();
+  globalThis.window = {addEventListener:(type:string, listener:Function)=>windowListeners.set(type,listener)} as any;
   try {
-    let prevented = 0;
-    const surface = {
-      addEventListener: (type: string, listener: Function) => surfaceListeners.set(type, listener),
-      querySelector: () => ({ getBoundingClientRect: () => ({left:0,top:0,width:480,height:560}) }),
-      setPointerCapture() {},
-    } as any;
-    const action = {
-      addEventListener: (type: string, listener: Function) => actionListeners.set(type, listener),
-      setPointerCapture() {},
-    } as any;
-    const input = createBomberInput(surface, action); input.enable(true);
-    windowListeners.get('keydown')!({code:'KeyD',preventDefault:() => prevented++});
-    windowListeners.get('keydown')!({code:'Space',preventDefault:() => prevented++});
-    assert.deepEqual(input.read(), {x:1,y:0,aimX:undefined,aimY:undefined,placing:true});
-    assert.equal(prevented, 2);
+    const surface = {addEventListener() { throw new Error('Asteroid Bomber must not bind aim controls'); }} as any;
+    const action = {addEventListener:(type:string, listener:Function)=>actions.set(type,listener),setPointerCapture() {}} as any;
+    const input = createBomberInput(surface,action); input.enable(true);
+    windowListeners.get('keydown')!({code:'KeyD',preventDefault() {throw new Error('steering key consumed');}});
+    assert.deepEqual(input.read(),{x:0,y:0,placing:false});
+    windowListeners.get('keydown')!({code:'Space',preventDefault() {}});
+    assert.equal(input.read().placing,true);
     windowListeners.get('keyup')!({code:'Space'});
-    assert.deepEqual(input.read(), {x:1,y:0,aimX:undefined,aimY:undefined,placing:false});
-  } finally { globalThis.window = oldWindow; }
-});
-
-test('bomber touch can aim while the separate mine control is held', () => {
-  const windowListeners = new Map<string, Function>();
-  const surfaceListeners = new Map<string, Function>();
-  const actionListeners = new Map<string, Function>();
-  const oldWindow = globalThis.window;
-  globalThis.window = { addEventListener: (type: string, listener: Function) => windowListeners.set(type, listener) } as any;
-  try {
-    const surface = {
-      addEventListener: (type: string, listener: Function) => surfaceListeners.set(type, listener),
-      querySelector: () => ({ getBoundingClientRect: () => ({left:0,top:0,width:480,height:560}) }),
-      setPointerCapture() {},
-    } as any;
-    const action = {
-      addEventListener: (type: string, listener: Function) => actionListeners.set(type, listener),
-      setPointerCapture() {},
-    } as any;
-    const input = createBomberInput(surface, action); input.enable(true);
-    surfaceListeners.get('pointerdown')!({pointerId:4,clientX:480,clientY:100,preventDefault() {}});
-    actionListeners.get('pointerdown')!({pointerId:9,preventDefault() {}});
-    assert.deepEqual(input.read(), {x:0,y:0,aimX:480,aimY:100,placing:true});
-    actionListeners.get('pointerup')!({pointerId:9});
-    assert.deepEqual(input.read(), {x:0,y:0,aimX:480,aimY:100,placing:false});
-  } finally { globalThis.window = oldWindow; }
+    assert.equal(input.read().placing,false);
+    actions.get('pointerdown')!({pointerId:1,preventDefault() {}});
+    actions.get('pointerup')!({pointerId:1});
+    assert.equal(input.read().placing,true);
+    assert.equal(input.read().placing,false);
+    actions.get('pointerdown')!({pointerId:2,preventDefault() {}});
+    actions.get('pointercancel')!({pointerId:2});
+    assert.equal(input.read().placing,false);
+    actions.get('pointerdown')!({pointerId:3,preventDefault() {}});
+    input.enable(false); input.enable(true);
+    assert.equal(input.read().placing,false);
+    windowListeners.get('keydown')!({code:'Enter',preventDefault() {}});
+    windowListeners.get('blur')!();
+    assert.equal(input.read().placing,false);
+  } finally {globalThis.window=oldWindow;}
 });
 
 test('space battle bomber keeps touch aiming, missiles, and mines independent', () => {
@@ -199,8 +177,8 @@ test('life support switch supports cycling, direct keyboard selection, and touch
   } finally { globalThis.window = oldWindow; }
 });
 
-test('bomber retains scaled pointer aim, switches to keyboard, and clears actions on pause or blur', () => {
-  for (const battle of [false, true]) {
+test('space bomber retains scaled missile aim, switches to keyboard, and clears actions on pause or blur', () => {
+  {
     const oldWindow = globalThis.window;
     const windowListeners = new Map<string, Function>();
     const surfaceListeners = new Map<string, Function>();
@@ -214,7 +192,7 @@ test('bomber retains scaled pointer aim, switches to keyboard, and clears action
         setPointerCapture() {},
       }) as any;
       const surface = element(surfaceListeners), mine = element(mineListeners);
-      const input = battle ? createSpaceBomberInput(surface, element(fireListeners), mine) : createBomberInput(surface, mine);
+      const input = createSpaceBomberInput(surface, element(fireListeners), mine);
       input.enable(true);
       const event = {pointerId:1,pointerType:'touch',clientX:160,clientY:230,preventDefault() {}};
       surfaceListeners.get('pointerdown')!(event);
