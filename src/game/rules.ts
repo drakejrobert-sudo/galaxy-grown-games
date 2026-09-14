@@ -252,16 +252,15 @@ export function gunnerResultText(config: FlightConfig, s: GunnerState): string {
 export interface BomberTuning {
   speed: number;
   spawnEvery: number;
-  pilotSpeed: number;
   drift: number;
 }
 
 // Initial playtest values, not GM-approved balance.
 export const BOMBER_TUNING: Record<Difficulty, BomberTuning> = {
-  Hard: { speed: 200, spawnEvery: 0.58, pilotSpeed: 225, drift: 0.58 },
-  Medium: { speed: 170, spawnEvery: 0.74, pilotSpeed: 225, drift: 0.48 },
-  Easy: { speed: 140, spawnEvery: 0.92, pilotSpeed: 225, drift: 0.38 },
-  'Very Easy': { speed: 115, spawnEvery: 1.12, pilotSpeed: 225, drift: 0.28 },
+  Hard: { speed: 200, spawnEvery: 0.58, drift: 0.58 },
+  Medium: { speed: 170, spawnEvery: 0.74, drift: 0.48 },
+  Easy: { speed: 140, spawnEvery: 0.92, drift: 0.38 },
+  'Very Easy': { speed: 115, spawnEvery: 1.12, drift: 0.28 },
 };
 export const BOMBER_BLAST_RADIUS = 66;
 export const BOMBER_IMPAIRMENT_SCALE = Math.SQRT1_2;
@@ -287,13 +286,18 @@ export interface Explosion {
   remaining: number;
 }
 export interface BomberInput {
+  /** Keyboard reticle direction, never ship steering. */
   x: number;
   y: number;
+  aimX?: number;
+  aimY?: number;
   placing: boolean;
 }
 export interface BomberState {
   x: number;
   y: number;
+  aimX: number;
+  aimY: number;
   elapsed: number;
   hull: number;
   impacts: number;
@@ -310,13 +314,35 @@ export interface BomberState {
   impactFlash: number;
 }
 
+/** A predictable flight course independent of targeting, difficulty, or impairment.
+ * Scrolling scenery supplies forward travel; the slow weave makes autopilot visible.
+ * Provisional playtest values: 60px lateral amplitude, 8-second sine scale.
+ */
+export function automaticShipX(elapsed: number): number {
+  return WIDTH / 2 + Math.sin(elapsed / 8) * 60;
+}
+
+export const BOMBER_AIM_SPEED = 225;
+function aimBomber(
+  s: { aimX: number; aimY: number },
+  input: BomberInput,
+  dt: number,
+  minY: number,
+): void {
+  const magnitude = Math.max(1, Math.hypot(input.x, input.y));
+  s.aimX = Math.max(18, Math.min(WIDTH - 18,
+    input.aimX ?? s.aimX + input.x / magnitude * BOMBER_AIM_SPEED * dt));
+  s.aimY = Math.max(minY, Math.min(HEIGHT - 18,
+    input.aimY ?? s.aimY + input.y / magnitude * BOMBER_AIM_SPEED * dt));
+}
+
 export function bomberBlastRadius(config: FlightConfig): number {
   return BOMBER_BLAST_RADIUS * (config.naturalOne ? BOMBER_IMPAIRMENT_SCALE : 1);
 }
 
 export function createBomber(): BomberState {
   return {
-    x: WIDTH / 2, y: 105, elapsed: 0, hull: 3, impacts: 0, destroyed: 0,
+    x: WIDTH / 2, y: 105, aimX: WIDTH / 2, aimY: 300, elapsed: 0, hull: 3, impacts: 0, destroyed: 0,
     minesPlaced: 0, invulnerable: 0, cooldown: 0, spawnIn: 0.8, asteroids: [], mines: [],
     explosions: [], finished: false, nextId: 1, impactFlash: 0,
   };
@@ -339,13 +365,12 @@ export function stepBomber(
   for (const explosion of s.explosions) explosion.remaining -= dt;
   s.explosions = s.explosions.filter(explosion => explosion.remaining > 0);
 
-  const magnitude = Math.max(1, Math.hypot(input.x, input.y));
-  s.x = Math.max(18, Math.min(WIDTH - 18, s.x + input.x / magnitude * tuning.pilotSpeed * dt));
-  s.y = Math.max(42, Math.min(HEIGHT * 0.42, s.y + input.y / magnitude * tuning.pilotSpeed * dt));
+  s.x = automaticShipX(s.elapsed);
+  aimBomber(s, input, dt, s.y + 34);
 
   if (input.placing && s.cooldown <= 0) {
     s.mines.push({
-      id: s.nextId++, x: s.x, y: s.y + 34, blastRadius: bomberBlastRadius(config),
+      id: s.nextId++, x: s.aimX, y: s.aimY, blastRadius: bomberBlastRadius(config),
       armIn: BOMBER_MINE_ARM_TIME, expiresIn: BOMBER_MINE_LIFETIME,
     });
     s.minesPlaced++;
@@ -760,15 +785,14 @@ export interface SpaceBattleBomberTuning {
   enemySpeed: number;
   forwardSpawnEvery: number;
   pursuerSpawnEvery: number;
-  pilotSpeed: number;
 }
 
 // Initial playtest values, not GM-approved balance.
 export const SPACE_BATTLE_BOMBER_TUNING: Record<Difficulty, SpaceBattleBomberTuning> = {
-  Hard: { enemySpeed: 180, forwardSpawnEvery: 0.82, pursuerSpawnEvery: 1.05, pilotSpeed: 215 },
-  Medium: { enemySpeed: 155, forwardSpawnEvery: 1.00, pursuerSpawnEvery: 1.28, pilotSpeed: 220 },
-  Easy: { enemySpeed: 130, forwardSpawnEvery: 1.22, pursuerSpawnEvery: 1.55, pilotSpeed: 225 },
-  'Very Easy': { enemySpeed: 105, forwardSpawnEvery: 1.48, pursuerSpawnEvery: 1.90, pilotSpeed: 230 },
+  Hard: { enemySpeed: 180, forwardSpawnEvery: 0.82, pursuerSpawnEvery: 1.05 },
+  Medium: { enemySpeed: 155, forwardSpawnEvery: 1.00, pursuerSpawnEvery: 1.28 },
+  Easy: { enemySpeed: 130, forwardSpawnEvery: 1.22, pursuerSpawnEvery: 1.55 },
+  'Very Easy': { enemySpeed: 105, forwardSpawnEvery: 1.48, pursuerSpawnEvery: 1.90 },
 };
 export const SPACE_BOMBER_MISSILE_SPEED = 430;
 export const SPACE_BOMBER_MISSILE_COOLDOWN = 0.38;
@@ -783,21 +807,23 @@ export interface SpaceBomberEnemy extends EnemyShip {
   approach: 'forward' | 'pursuer';
 }
 export interface SpaceBomberMissile {
+  vx: number;
+  vy: number;
   id: number;
   x: number;
   y: number;
   radius: number;
   speed: number;
 }
-export interface SpaceBattleBomberInput {
-  x: number;
-  y: number;
+export interface SpaceBattleBomberInput extends BomberInput {
   firing: boolean;
   placing: boolean;
 }
 export interface SpaceBattleBomberState {
   x: number;
   y: number;
+  aimX: number;
+  aimY: number;
   elapsed: number;
   hull: number;
   hits: number;
@@ -825,7 +851,7 @@ export function spaceBomberBlastRadius(config: FlightConfig): number {
 
 export function createSpaceBattleBomber(): SpaceBattleBomberState {
   return {
-    x: WIDTH / 2, y: HEIGHT * 0.56, elapsed: 0, hull: 3, hits: 0, destroyed: 0,
+    x: WIDTH / 2, y: HEIGHT * 0.56, aimX: WIDTH / 2, aimY: 170, elapsed: 0, hull: 3, hits: 0, destroyed: 0,
     missilesFired: 0, minesPlaced: 0, missileCooldown: 0, mineCooldown: 0,
     invulnerable: 0, forwardSpawnIn: 0.65, pursuerSpawnIn: 1.1,
     enemies: [], missiles: [], mines: [], explosions: [], nextId: 1,
@@ -851,18 +877,24 @@ export function stepSpaceBattleBomber(
   for (const explosion of s.explosions) explosion.remaining -= dt;
   s.explosions = s.explosions.filter(explosion => explosion.remaining > 0);
 
-  const magnitude = Math.max(1, Math.hypot(input.x, input.y));
-  s.x = Math.max(18, Math.min(WIDTH - 18, s.x + input.x / magnitude * tuning.pilotSpeed * dt));
-  s.y = Math.max(70, Math.min(HEIGHT - 70, s.y + input.y / magnitude * tuning.pilotSpeed * dt));
+  s.x = automaticShipX(s.elapsed);
+  aimBomber(s, input, dt, 18);
 
   if (input.firing && s.missileCooldown <= 0) {
-    s.missiles.push({ id: s.nextId++, x: s.x, y: s.y - 22, radius: 5, speed: SPACE_BOMBER_MISSILE_SPEED });
+    const dx = s.aimX - s.x;
+    const dy = Math.min(s.y - 34, s.aimY) - (s.y - 22);
+    const length = Math.hypot(dx, dy);
+    s.missiles.push({
+      id: s.nextId++, x: s.x, y: s.y - 22, radius: 5, speed: SPACE_BOMBER_MISSILE_SPEED,
+      vx: dx / length * SPACE_BOMBER_MISSILE_SPEED,
+      vy: dy / length * SPACE_BOMBER_MISSILE_SPEED,
+    });
     s.missilesFired++;
     s.missileCooldown = SPACE_BOMBER_MISSILE_COOLDOWN;
   }
   if (input.placing && s.mineCooldown <= 0) {
     s.mines.push({
-      id: s.nextId++, x: s.x, y: s.y + 28, blastRadius: spaceBomberBlastRadius(config),
+      id: s.nextId++, x: s.aimX, y: Math.max(s.y + 34, s.aimY), blastRadius: spaceBomberBlastRadius(config),
       armIn: SPACE_BOMBER_MINE_ARM_TIME, expiresIn: SPACE_BOMBER_MINE_LIFETIME,
     });
     s.minesPlaced++;
@@ -891,7 +923,7 @@ export function stepSpaceBattleBomber(
       enemy.vx *= -1;
     }
   }
-  for (const missile of s.missiles) missile.y -= missile.speed * dt;
+  for (const missile of s.missiles) { missile.x += missile.vx * dt; missile.y += missile.vy * dt; }
   for (const mine of s.mines) { mine.armIn -= dt; mine.expiresIn -= dt; }
 
   const destroyedIds = new Set<number>();
@@ -916,7 +948,7 @@ export function stepSpaceBattleBomber(
   }
   s.destroyed += destroyedIds.size;
   s.enemies = s.enemies.filter(enemy => !destroyedIds.has(enemy.id));
-  s.missiles = s.missiles.filter(missile => missile.y + missile.radius >= 0 && !usedMissiles.has(missile.id));
+  s.missiles = s.missiles.filter(missile => missile.y + missile.radius >= 0 && missile.x >= -20 && missile.x <= WIDTH + 20 && !usedMissiles.has(missile.id));
   s.mines = s.mines.filter(mine => mine.expiresIn > 0 && !detonatedMines.has(mine.id));
 
   const colliding = s.enemies.filter(enemy =>

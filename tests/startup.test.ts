@@ -88,6 +88,15 @@ test('first launch waits for scene creation before starting simulation; retry re
   assert.equal(gameCount, 1); assert.equal(bomberInputEnabled, true);
   readyScene.update(0, 16); assert.ok(readyScene.bomber.elapsed > 0);
   assert.equal(readyScene.bomber.minesPlaced, 1);
+  assert.equal(readyScene.bomber.x, rules.automaticShipX(readyScene.bomber.elapsed));
+  assert.notEqual(readyScene.bomber.aimX, readyScene.bomber.x);
+  element('pause').listeners.get('click')();
+  const pausedBomber = JSON.stringify(readyScene.bomber);
+  readyScene.update(0, 50);
+  assert.equal(JSON.stringify(readyScene.bomber), pausedBomber);
+  assert.equal(bomberInputEnabled, false);
+  element('resume').listeners.get('click')();
+  assert.equal(bomberInputEnabled, true);
   assert.match(element('flight-status').textContent, /Very Easy.*half-area mine blast target/);
   assert.equal(element('action').hidden, false);
   assert.equal(element('action-rail').hidden, false);
@@ -127,6 +136,15 @@ test('first launch waits for scene creation before starting simulation; retry re
   readyScene.update(0, 16); assert.ok(readyScene.spaceBomber.elapsed > 0);
   assert.equal(readyScene.spaceBomber.missilesFired, 1); assert.equal(readyScene.spaceBomber.minesPlaced, 1);
   assert.match(element('mode-label').textContent, /SPACE BATTLE \/ BOMBER/);
+  assert.match(element('play-help').textContent, /Automatic flight/);
+  assert.equal(readyScene.spaceBomber.x, rules.automaticShipX(readyScene.spaceBomber.elapsed));
+  element('pause').listeners.get('click')();
+  const pausedSpaceBomber = JSON.stringify(readyScene.spaceBomber);
+  readyScene.update(0, 50);
+  assert.equal(JSON.stringify(readyScene.spaceBomber), pausedSpaceBomber);
+  assert.equal(spaceBomberInputEnabled, false);
+  element('resume').listeners.get('click')();
+  assert.equal(spaceBomberInputEnabled, true);
 });
 
 test('space battle bomber cooldown dial shares the simulation constant', () => {

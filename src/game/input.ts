@@ -103,6 +103,7 @@ export function createBomberInput(surface: HTMLElement, action: HTMLElement) {
   const down = (e: KeyboardEvent) => {
     if (!enabled || (!movement.includes(e.code) && !mineKeys.includes(e.code))) return;
     e.preventDefault();
+    if (movement.includes(e.code)) touch = null;
     if (mineKeys.includes(e.code) && !keys.has(e.code)) queuedMine = true;
     keys.add(e.code);
   };
@@ -112,10 +113,10 @@ export function createBomberInput(surface: HTMLElement, action: HTMLElement) {
     e.preventDefault(); pointer = e.pointerId; surface.setPointerCapture(pointer); setTouch(e);
   });
   surface.addEventListener('pointermove', e => {
-    if (enabled && e.pointerId === pointer) { e.preventDefault(); setTouch(e); }
+    if (enabled && (e.pointerId === pointer || (e.pointerType === 'mouse' && pointer === null))) { e.preventDefault(); setTouch(e); }
   });
   const releaseSurface = (e: PointerEvent) => {
-    if (e.pointerId === pointer) { pointer = null; touch = null; }
+    if (e.pointerId === pointer) { pointer = null; }
   };
   for (const event of ['pointerup', 'pointercancel', 'lostpointercapture']) {
     surface.addEventListener(event, releaseSurface as EventListener);
@@ -136,18 +137,12 @@ export function createBomberInput(surface: HTMLElement, action: HTMLElement) {
   window.addEventListener('blur', clear);
   return {
     enable(value: boolean) { enabled = value; clear(); },
-    read(x: number, y: number) {
-      let movementInput;
-      if (touch) {
-        const dx = touch.x - x, dy = touch.y - y;
-        const distance = Math.hypot(dx, dy);
-        movementInput = distance < 5 ? { x: 0, y: 0 } : { x: dx / distance, y: dy / distance };
-      } else {
-        movementInput = {
-          x: Number(keys.has('ArrowRight') || keys.has('KeyD')) - Number(keys.has('ArrowLeft') || keys.has('KeyA')),
-          y: Number(keys.has('ArrowDown') || keys.has('KeyS')) - Number(keys.has('ArrowUp') || keys.has('KeyW')),
-        };
-      }
+    read() {
+      const movementInput = {
+        x: Number(keys.has('ArrowRight') || keys.has('KeyD')) - Number(keys.has('ArrowLeft') || keys.has('KeyA')),
+        y: Number(keys.has('ArrowDown') || keys.has('KeyS')) - Number(keys.has('ArrowUp') || keys.has('KeyW')),
+        aimX: touch?.x, aimY: touch?.y,
+      };
       const placing = queuedMine || actionPointer !== null || mineKeys.some(key => keys.has(key));
       queuedMine = false;
       return { ...movementInput, placing };
@@ -181,6 +176,7 @@ export function createSpaceBomberInput(surface: HTMLElement, fireAction: HTMLEle
   const down = (e: KeyboardEvent) => {
     if (!enabled || (!movement.includes(e.code) && !fireKeys.includes(e.code) && !mineKeys.includes(e.code))) return;
     e.preventDefault();
+    if (movement.includes(e.code)) touch = null;
     if (fireKeys.includes(e.code) && !keys.has(e.code)) queuedFire = true;
     if (mineKeys.includes(e.code) && !keys.has(e.code)) queuedMine = true;
     keys.add(e.code);
@@ -191,10 +187,10 @@ export function createSpaceBomberInput(surface: HTMLElement, fireAction: HTMLEle
     e.preventDefault(); movementPointer = e.pointerId; surface.setPointerCapture(movementPointer); setTouch(e);
   });
   surface.addEventListener('pointermove', e => {
-    if (enabled && e.pointerId === movementPointer) { e.preventDefault(); setTouch(e); }
+    if (enabled && (e.pointerId === movementPointer || (e.pointerType === 'mouse' && movementPointer === null))) { e.preventDefault(); setTouch(e); }
   });
   const releaseMovement = (e: PointerEvent) => {
-    if (e.pointerId === movementPointer) { movementPointer = null; touch = null; }
+    if (e.pointerId === movementPointer) { movementPointer = null; }
   };
   for (const event of ['pointerup', 'pointercancel', 'lostpointercapture']) {
     surface.addEventListener(event, releaseMovement as EventListener);
@@ -222,18 +218,12 @@ export function createSpaceBomberInput(surface: HTMLElement, fireAction: HTMLEle
   window.addEventListener('blur', clear);
   return {
     enable(value: boolean) { enabled = value; clear(); },
-    read(x: number, y: number) {
-      let movementInput;
-      if (touch) {
-        const dx = touch.x - x, dy = touch.y - y;
-        const distance = Math.hypot(dx, dy);
-        movementInput = distance < 5 ? { x: 0, y: 0 } : { x: dx / distance, y: dy / distance };
-      } else {
-        movementInput = {
-          x: Number(keys.has('ArrowRight') || keys.has('KeyD')) - Number(keys.has('ArrowLeft') || keys.has('KeyA')),
-          y: Number(keys.has('ArrowDown') || keys.has('KeyS')) - Number(keys.has('ArrowUp') || keys.has('KeyW')),
-        };
-      }
+    read() {
+      const movementInput = {
+        x: Number(keys.has('ArrowRight') || keys.has('KeyD')) - Number(keys.has('ArrowLeft') || keys.has('KeyA')),
+        y: Number(keys.has('ArrowDown') || keys.has('KeyS')) - Number(keys.has('ArrowUp') || keys.has('KeyW')),
+        aimX: touch?.x, aimY: touch?.y,
+      };
       const firing = queuedFire || firePointer !== null || fireKeys.some(key => keys.has(key));
       const placing = queuedMine || minePointer !== null || mineKeys.some(key => keys.has(key));
       queuedFire = false; queuedMine = false;
