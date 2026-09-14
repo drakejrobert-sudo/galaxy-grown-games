@@ -42,9 +42,10 @@
   .action { width: 74px; min-height: 82px; }
 }
 
-/* Preserve the same canvas width as the other roles on narrow phones.
+/* Stack until the full layout fits: 480px canvas + 90px rail + 10px gap
+   + 2 * 18px mobile main padding = 616px viewport (also fits coarse input).
    Keep this after coarse-pointer sizing so touch cannot restore the side column. */
-@media (max-width: 480px) {
+@media (max-width: 616px) {
   #play[data-role="Bomber"] .flight-stage {
     grid-template-columns: minmax(0, 480px);
   }
