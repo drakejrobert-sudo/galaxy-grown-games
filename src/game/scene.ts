@@ -7,7 +7,7 @@ import {
   LIFE_SUPPORT_SWITCH_Y, type LifeSupportInput, type LifeSupportPacket, type LifeSupportRoute,
   type LifeSupportState, type SpaceBattleBomberInput, type SpaceBattleBomberState,
   type SpaceBattlePilotState, type EnemyShip, type EnemyShot, type FuelCell, type SpaceBomberEnemy,
-  SPACE_BOMBER_MINE_COOLDOWN, SPACE_BOMBER_MINE_LIFETIME,
+  SPACE_BOMBER_MINE_COOLDOWN, SPACE_BOMBER_MINE_LIFETIME, SPACE_BOMBER_MISSILE_COOLDOWN,
 } from './rules';
 
 export class FlightScene extends Phaser.Scene {
@@ -265,7 +265,8 @@ export class FlightScene extends Phaser.Scene {
     }
     if (s.missileCooldown > 0) {
       g.lineStyle(2, 0x79e1ce, 0.75); g.beginPath();
-      g.arc(s.x, s.y, 25, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * (1 - s.missileCooldown / 0.38)); g.strokePath();
+      g.arc(s.x, s.y, 25, -Math.PI / 2,
+        -Math.PI / 2 + Math.PI * 2 * (1 - s.missileCooldown / SPACE_BOMBER_MISSILE_COOLDOWN)); g.strokePath();
     }
     if (s.mineCooldown > 0) {
       g.lineStyle(2, 0xffca83, 0.75); g.beginPath();
