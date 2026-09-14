@@ -113,7 +113,7 @@ Space Battle fuel timing, enemy pressure, collision tolerance, and scoring are p
 
 ### Proposed Space Battle bomber balance
 
-Harder checks send faster forward and pursuing enemy ships more frequently. Bomber movement and both weapon cooldowns stay consistent across difficulty bands; Natural 1 independently halves the mine blast target area.
+Harder checks send faster forward and pursuing enemy ships more frequently and modestly reduce Bomber movement speed. Both weapon cooldowns stay consistent across difficulty bands; Natural 1 independently halves the mine blast target area.
 
 | Difficulty | Enemy speed (px/s) | Forward spawn (s) | Pursuer spawn (s) | Ship speed (px/s) |
 | --- | ---: | ---: | ---: | ---: |
