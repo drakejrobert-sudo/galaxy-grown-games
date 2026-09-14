@@ -3,7 +3,7 @@ A repository for hosting mini games for the galaxy grown campaign.
 
 ## First playable slice
 
-Asteroid Field / Pilot, Gunner, Bomber, and Life Support, plus Space Battle / Pilot, are implemented as **prototypes awaiting balance and device QA**. Other situation/role combinations are visibly disabled. Players enter their GM-requested final skill-check total and a separate Natural 1 flag, play independently, and manually share their score. No campaign data or live multiplayer service is included.
+Asteroid Field / Pilot, Gunner, Bomber, and Life Support, plus Space Battle / Pilot and Bomber, are implemented as **prototypes awaiting balance and device QA**. Other situation/role combinations are visibly disabled. Players enter their GM-requested final skill-check total and a separate Natural 1 flag, play independently, and manually share their score. No campaign data or live multiplayer service is included.
 
 ### Run locally
 
@@ -42,6 +42,10 @@ Open the local URL printed by Vite, including `/galaxy-grown-games/`. If network
 - Space Battle enemies cross the field and fire shots aimed at the ship's position when fired. Contact with a ship or shot removes one of 3 hull points, with 1.25 seconds of collision grace.
 - Space Battle / Pilot ends after 60 seconds, at zero hull, or when fuel is depleted. Its score is rounded survival seconds × 10, plus 100 per remaining hull point and 50 per fuel cell collected.
 - Space Battle / Pilot uses the shared keyboard/touch steering path. A Natural 1 applies the same overloaded-engine impairment: 60% of the selected difficulty's normal movement speed.
+- Space Battle / Bomber steers while firing forward missiles and deploying aft mines. Keyboard uses Arrow keys/WASD, Space for missiles, and Enter or Shift for mines; touch uses the playfield plus two independent weapon buttons.
+- Forward enemy ships enter from the top while pursuing ships enter from behind. Missiles and mines can destroy either when their paths overlap; ship collisions cost one of 3 hull points with 1.25 seconds of collision grace.
+- Space Battle / Bomber missiles have a 0.38-second cooldown. Mines arm after 0.2 seconds, last 4.5 seconds, and have a 0.85-second cooldown. Natural 1 affects the circular mine blast target: multiplying its radius by `sqrt(0.5)` gives the rendered target and collision target exactly half normal area. Missiles are unaffected.
+- Space Battle / Bomber score is 100 per destroyed ship, rounded survival seconds × 5, and 100 per remaining hull point. The run ends after 60 seconds or when hull reaches zero.
 - Pause or Escape stops the round. Switching away automatically pauses; resumption is explicit.
 - Final reports include the selected role, check total, difficulty, natural-1 impairment, role-specific statistics, hull, and score. Clipboard failure selects the report for manual copying. GM decides all outcomes.
 - All art is original code-drawn geometry. No commercial game assets or GM-only lore are included.
@@ -56,13 +60,13 @@ The build targets `/galaxy-grown-games/`. The check workflow runs tests and buil
 
 ### Validation status
 
-- Thirty-seven automated tests pass, covering the shared difficulty bands and lifecycle; Pilot touch/keyboard input and Asteroid movement/collisions; Gunner touch/mouse pointer input, cooldown, targeting, armor, impacts, scoring, and reporting; Bomber simultaneous movement/action input, mine placement and detonation, exact half-area impairment, impacts, scoring, reporting, and the reserved sticky control rail across touch viewport widths; Life Support keyboard/touch routing, deterministic heart/overload cycles, integrity, difficulty, scoring, and reporting; Space Battle Pilot fuel, enemies, shots, collisions, all end conditions, impairment, tuning, scoring, and reporting; and the retry-safe Pages job structure.
+- Forty-three automated tests pass, covering the shared difficulty bands and lifecycle; Pilot touch/keyboard input and Asteroid movement/collisions; Gunner touch/mouse pointer input, cooldown, targeting, armor, impacts, scoring, and reporting; Asteroid Bomber simultaneous movement/action input, mine placement and detonation, exact half-area impairment, impacts, scoring, reporting, and the reserved sticky control rail across touch viewport widths; Life Support keyboard/touch routing, deterministic heart/overload cycles, integrity, difficulty, scoring, and reporting; Space Battle Pilot fuel, enemies, shots, collisions, all end conditions, impairment, tuning, scoring, and reporting; Space Battle Bomber independent missile/mine inputs, exact half-area target, enemy destruction, collisions, difficulty, scoring, and startup integration; and the retry-safe Pages job structure.
 - TypeScript check and Vite production build pass.
 - Phaser produces a large-bundle advisory (~337 KB gzip); bundle optimization remains future work.
 - Connected-browser QA cannot reach the local Vite address from mobile ChatGPT Work sessions. Automated checks still run there, but real iPhone/iPad Safari behavior remains a manual playtest requirement; desktop mobile emulation must not be reported as real-device Safari QA.
 - Before merging, verify Life Support launch → switch routing → repair/overload feedback → pause/resume → results → retry, copy fallback, viewport rotation, and touch behavior on iPhone/iPad Safari plus a desktop browser. Confirm the three route buttons stay visible without obstructing the playfield and that packet symbols remain readable at phone size.
 
-Issues #1 and #4–#8 are implemented on `main`. This branch implements #9 and continues progress toward the shared setup, controls, and reporting issues #2, #3, and #12.
+The Asteroid Field roles and Space Battle / Pilot are implemented on `main`. This branch implements Space Battle / Bomber issue #8 and continues progress toward the shared setup, controls, and reporting issues #2, #3, and #12.
 
 ### Development context and review
 
@@ -106,6 +110,19 @@ Harder checks send faster, more frequent enemy ships; shorten their firing inter
 | Hard | 145 | 1.15 | 1.00 | 230 | 3.8 | 210 |
 
 Space Battle fuel timing, enemy pressure, collision tolerance, and scoring are provisional playtest values. The mode still needs human playtesting on touch and desktop controls, especially Hard with Natural 1.
+
+### Proposed Space Battle bomber balance
+
+Harder checks send faster forward and pursuing enemy ships more frequently and modestly reduce Bomber movement speed. Both weapon cooldowns stay consistent across difficulty bands; Natural 1 independently halves the mine blast target area.
+
+| Difficulty | Enemy speed (px/s) | Forward spawn (s) | Pursuer spawn (s) | Ship speed (px/s) |
+| --- | ---: | ---: | ---: | ---: |
+| Very Easy | 105 | 1.48 | 1.90 | 230 |
+| Easy | 130 | 1.22 | 1.55 | 225 |
+| Medium | 155 | 1.00 | 1.28 | 220 |
+| Hard | 180 | 0.82 | 1.05 | 215 |
+
+Enemy pressure, 58px mine radius, weapon cadence, collision tolerance, and scoring are provisional playtest values. Real-device testing should confirm that both weapon buttons remain reachable while steering, especially on narrow iPhone screens.
 
 ### Proposed Asteroid Field bomber balance
 

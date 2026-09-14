@@ -24,6 +24,8 @@
 
 .action-rail {
   display: flex;
+  flex-direction: column;
+  gap: 10px;
   align-items: flex-end;
   justify-content: center;
   min-width: 0;
@@ -33,6 +35,13 @@
   background: #927bd0;
   transform: scale(0.96);
 }
+
+.action-fire {
+  background: #246d78;
+  border-color: #79e1ce;
+}
+
+.action-fire:active { background: #328994; }
 
 @media (max-width: 480px), (any-pointer: coarse) {
   #play[data-role="Bomber"] .flight-stage {
@@ -51,6 +60,8 @@
   }
 
   #play[data-role="Bomber"] .action-rail {
+    flex-direction: row;
+    flex-wrap: wrap;
     justify-content: flex-end;
     padding-bottom: env(safe-area-inset-bottom, 0px);
   }
