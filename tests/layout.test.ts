@@ -11,5 +11,9 @@ test('bomber mine control uses a reserved sticky rail across touch viewport widt
   assert.match(css, /\.action\s*\{[^}]*position:\s*sticky[^}]*bottom:\s*max\(/s);
   assert.match(css, /@media \(max-width: 480px\), \(any-pointer: coarse\)/);
   assert.doesNotMatch(shell + css, /:has\(/);
+  const narrow = css.slice(css.indexOf('@media (max-width: 480px) {'));
+  assert.match(narrow, /grid-template-columns:\s*minmax\(0, 480px\);/);
+  assert.match(narrow, /position:\s*static/);
+  assert.ok(css.indexOf('@media (max-width: 480px) {') > css.indexOf('(any-pointer: coarse)'));
   assert.doesNotMatch(css, /position:\s*fixed/);
 });

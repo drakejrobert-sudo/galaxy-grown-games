@@ -30,6 +30,7 @@ Open the local URL printed by Vite, including `/galaxy-grown-games/`. If network
 - Gunner controls: tap, hold, or drag on touch screens; move the mouse to aim and click or hold to fire on computers. Both use the same Pointer Events path, direct reticle placement, and weapon cooldown; Gunner intentionally does not use keyboard reticle movement.
 - Gunner score: 100 per destroyed asteroid, rounded survival seconds × 5, and 100 per remaining hull point. This is provisional and is not a cross-role scoring standard.
 - Bomber steers through the upper portion of the field while pursuing asteroids travel upward through the mine trail. Arrow keys/WASD steer and Space/Enter lays mines; touch steering and the separate **Drop mine** control work simultaneously.
+- On phones up to 480px wide, Bomber keeps the full canvas width and places Drop mine in a separate row immediately below it. Wider screens use a reserved side rail.
 - Bomber mines arm after 0.25 seconds, last 5 seconds, and can be placed every 0.65 seconds. Contact detonates a mine and destroys asteroid centers inside its visible blast circle.
 - Bomber Natural 1 reduces the mine blast radius by `sqrt(0.5)`, so both the drawn target and collision target have exactly half their normal area. The trigger remains a close-contact fuse.
 - Bomber score: 100 per destroyed asteroid, rounded survival seconds × 5, and 100 per remaining hull point. The round ends after 60 seconds or when asteroid impacts deplete three hull points.
