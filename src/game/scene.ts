@@ -244,7 +244,7 @@ export class FlightScene extends Phaser.Scene {
         -Math.PI / 2 + Math.PI * 2 * Math.max(0, mine.expiresIn / SPACE_BOMBER_MINE_LIFETIME)); g.strokePath();
     }
     for (const enemy of s.enemies) {
-      this.paintEnemyShip(g, enemy, s.elapsed);
+      this.paintEnemyShip(g, enemy, s.elapsed, enemy.approach === 'forward' ? 1 : -1);
       this.paintBomberApproachMarker(g, enemy);
     }
     for (const missile of s.missiles) {
@@ -312,43 +312,44 @@ export class FlightScene extends Phaser.Scene {
     g.fillStyle(0xffffff, pulse); g.fillCircle(x - 2, y - 3, 1);
   }
 
-  private paintEnemyShip(g: Phaser.GameObjects.Graphics, enemy: EnemyShip, elapsed: number) {
+  private paintEnemyShip(g: Phaser.GameObjects.Graphics, enemy: EnemyShip, elapsed: number, direction: 1 | -1 = 1) {
     const x = enemy.x;
     const y = enemy.y;
+    const fy = (offset: number) => y + offset * direction;
     const enginePulse = 3 + Math.sin(elapsed * 28 + enemy.id) * 2;
 
-    // Enemy craft fly downward, so their twin exhaust plumes stream upward.
+    // Mirror the craft and its exhaust when a Bomber pursuer travels upward.
     for (const dx of [-8, 8]) {
-      g.fillStyle(0xff596f, 0.10); g.fillEllipse(x + dx, y - 19, 11, 24 + enginePulse);
-      g.fillStyle(0xff6575, 0.8); g.fillTriangle(x + dx - 3, y - 10, x + dx + 3, y - 10, x + dx, y - 20 - enginePulse);
-      g.fillStyle(0xffd0a8, 0.95); g.fillTriangle(x + dx - 1.5, y - 10, x + dx + 1.5, y - 10, x + dx, y - 16 - enginePulse);
+      g.fillStyle(0xff596f, 0.10); g.fillEllipse(x + dx, fy(-19), 11, 24 + enginePulse);
+      g.fillStyle(0xff6575, 0.8); g.fillTriangle(x + dx - 3, fy(-10), x + dx + 3, fy(-10), x + dx, fy(-20 - enginePulse));
+      g.fillStyle(0xffd0a8, 0.95); g.fillTriangle(x + dx - 1.5, fy(-10), x + dx + 1.5, fy(-10), x + dx, fy(-16 - enginePulse));
     }
     g.fillStyle(0xff6575, 0.07); g.fillEllipse(x, y, 54, 42);
 
     // Swept wings, armored centerline, and panel seams create a compact fighter.
     g.fillStyle(0x4b3049); g.lineStyle(2, 0xe36f7f, 0.9);
     g.beginPath();
-    g.moveTo(x, y + 18);
-    g.lineTo(x - 8, y + 5);
-    g.lineTo(x - 22, y + 9);
-    g.lineTo(x - 16, y - 10);
-    g.lineTo(x - 6, y - 7);
-    g.lineTo(x, y - 15);
-    g.lineTo(x + 6, y - 7);
-    g.lineTo(x + 16, y - 10);
-    g.lineTo(x + 22, y + 9);
-    g.lineTo(x + 8, y + 5);
+    g.moveTo(x, fy(18));
+    g.lineTo(x - 8, fy(5));
+    g.lineTo(x - 22, fy(9));
+    g.lineTo(x - 16, fy(-10));
+    g.lineTo(x - 6, fy(-7));
+    g.lineTo(x, fy(-15));
+    g.lineTo(x + 6, fy(-7));
+    g.lineTo(x + 16, fy(-10));
+    g.lineTo(x + 22, fy(9));
+    g.lineTo(x + 8, fy(5));
     g.closePath(); g.fillPath(); g.strokePath();
-    g.fillStyle(0x7a4658); g.fillTriangle(x, y + 15, x - 7, y - 7, x + 7, y - 7);
+    g.fillStyle(0x7a4658); g.fillTriangle(x, fy(15), x - 7, fy(-7), x + 7, fy(-7));
     g.lineStyle(1, 0xffa2a9, 0.65);
-    g.lineBetween(x - 17, y + 6, x - 7, y + 1);
-    g.lineBetween(x + 17, y + 6, x + 7, y + 1);
-    g.lineBetween(x, y + 13, x, y + 3);
+    g.lineBetween(x - 17, fy(6), x - 7, fy(1));
+    g.lineBetween(x + 17, fy(6), x + 7, fy(1));
+    g.lineBetween(x, fy(13), x, fy(3));
     g.fillStyle(0x201d34); g.lineStyle(1, 0xffd2b2, 0.9);
-    g.fillEllipse(x, y - 1, 8, 13); g.strokeEllipse(x, y - 1, 8, 13);
-    g.fillStyle(0xffa85f, 0.9); g.fillEllipse(x, y + 1, 4, 7);
-    g.fillStyle(0xff6575); g.fillCircle(x - 17, y + 7, 1.8); g.fillCircle(x + 17, y + 7, 1.8);
-    g.fillStyle(0xffd66f, 0.9); g.fillCircle(x, y + 13, 1.5);
+    g.fillEllipse(x, fy(-1), 8, 13); g.strokeEllipse(x, fy(-1), 8, 13);
+    g.fillStyle(0xffa85f, 0.9); g.fillEllipse(x, fy(1), 4, 7);
+    g.fillStyle(0xff6575); g.fillCircle(x - 17, fy(7), 1.8); g.fillCircle(x + 17, fy(7), 1.8);
+    g.fillStyle(0xffd66f, 0.9); g.fillCircle(x, fy(13), 1.5);
   }
 
   private paintEnemyShot(g: Phaser.GameObjects.Graphics, shot: EnemyShot, elapsed: number) {
