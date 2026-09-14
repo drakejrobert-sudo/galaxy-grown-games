@@ -95,7 +95,7 @@ function refreshSetup() {
     : selectedRole === 'Gunner'
       ? 'Touch: tap, hold, or drag to aim and fire. Mouse: move to aim, then click or hold to fire.'
       : selectedRole === 'Bomber'
-        ? 'Arrow keys / WASD to steer and Space or Enter to drop mines. On touch, steer in the flight area and use Drop mine.'
+        ? 'Arrow keys / WASD to steer and Space or Enter to drop mines. On touch, steer in the flight area and hold Drop mine to lay a trail. Only ship collisions cost hull; missed asteroids pass safely.'
         : 'Use Left/Right or A/D to turn the routing switch. Use 1, 2, or 3 to choose a system directly. Touch players can tap a system button.';
   get('error').textContent = '';
 }
@@ -154,7 +154,7 @@ function launch() {
     : role === 'Gunner'
       ? 'Destroy asteroids · Touch to aim/fire · Mouse to aim, click to fire'
       : role === 'Bomber'
-        ? 'Steer and lay mines · Arrow keys / WASD + Space · Touch steering + Drop mine'
+        ? 'Only ship hits cost hull · Hold Space / Enter or Drop mine to lay a trail while steering'
         : 'Match packet symbols · Left/Right or A/D · 1/2/3 · Tap a system';
   canvas.setAttribute('aria-label', situation === 'Space Battle'
     ? 'Space battle pilot station. Collect fuel and evade enemy ships and fire with arrow keys, WASD, or touch.'

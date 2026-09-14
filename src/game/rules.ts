@@ -269,6 +269,7 @@ export const BOMBER_MINE_COOLDOWN = 0.65;
 export const BOMBER_MINE_ARM_TIME = 0.25;
 export const BOMBER_MINE_LIFETIME = 5;
 export const BOMBER_PLAYER_RADIUS = 13;
+export const BOMBER_COLLISION_GRACE = 1.25;
 
 export interface BomberAsteroid extends Asteroid { id: number }
 export interface Mine {
@@ -298,6 +299,7 @@ export interface BomberState {
   impacts: number;
   destroyed: number;
   minesPlaced: number;
+  invulnerable: number;
   cooldown: number;
   spawnIn: number;
   asteroids: BomberAsteroid[];
@@ -315,7 +317,7 @@ export function bomberBlastRadius(config: FlightConfig): number {
 export function createBomber(): BomberState {
   return {
     x: WIDTH / 2, y: 105, elapsed: 0, hull: 3, impacts: 0, destroyed: 0,
-    minesPlaced: 0, cooldown: 0, spawnIn: 0.8, asteroids: [], mines: [],
+    minesPlaced: 0, invulnerable: 0, cooldown: 0, spawnIn: 0.8, asteroids: [], mines: [],
     explosions: [], finished: false, nextId: 1, impactFlash: 0,
   };
 }
@@ -331,6 +333,7 @@ export function stepBomber(
   dt = Math.min(Math.max(dt, 0), 0.05, DURATION - s.elapsed);
   const tuning = BOMBER_TUNING[difficultyFor(config.total)];
   s.elapsed += dt;
+  s.invulnerable = Math.max(0, s.invulnerable - dt);
   s.cooldown = Math.max(0, s.cooldown - dt);
   s.impactFlash = Math.max(0, s.impactFlash - dt);
   for (const explosion of s.explosions) explosion.remaining -= dt;
@@ -395,15 +398,19 @@ export function stepBomber(
   s.mines = s.mines.filter(mine => mine.expiresIn > 0 && !detonatedMineIds.has(mine.id));
 
   const impacts = s.asteroids.filter(asteroid =>
-    Math.hypot(asteroid.x - s.x, asteroid.y - s.y) < asteroid.radius + BOMBER_PLAYER_RADIUS
-    || asteroid.y + asteroid.radius < -10);
+    Math.hypot(asteroid.x - s.x, asteroid.y - s.y) < asteroid.radius + BOMBER_PLAYER_RADIUS);
   if (impacts.length) {
-    s.impacts += impacts.length;
-    s.hull = Math.max(0, s.hull - impacts.length);
-    s.impactFlash = 0.18;
+    if (s.invulnerable <= 0) {
+      s.impacts++;
+      s.hull = Math.max(0, s.hull - 1);
+      s.invulnerable = BOMBER_COLLISION_GRACE;
+      s.impactFlash = 0.18;
+    }
     const impactedIds = new Set(impacts.map(asteroid => asteroid.id));
     s.asteroids = s.asteroids.filter(asteroid => !impactedIds.has(asteroid.id));
   }
+  // Escaping asteroids are safe misses, not ship impacts or scoring events.
+  s.asteroids = s.asteroids.filter(asteroid => asteroid.y + asteroid.radius >= -10);
   s.finished = s.hull <= 0 || s.elapsed >= DURATION;
 }
 
