@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  difficultyFor, parseTotal, flightSpeed, createFlight, stepFlight, scoreFor, resultText,
+  automaticShipX, BOMBER_AIM_SPEED, HEIGHT, difficultyFor, parseTotal, flightSpeed, createFlight, stepFlight, scoreFor, resultText,
   createGunner, stepGunner, gunnerFireEvery, gunnerScoreFor, gunnerResultText,
   bomberBlastRadius, bomberResultText, bomberScoreFor, createBomber, stepBomber,
   createLifeSupport, lifeSupportPacketKind, lifeSupportResultText, lifeSupportScoreFor, stepLifeSupport,
@@ -156,14 +156,17 @@ test('bomber natural one gives the rendered and collision target exactly half no
   assert.equal(createBlastTest(true).destroyed, 1);
 });
 
-test('bomber steering and mine placement share one simulation action', () => {
+test('bomber reticle and mine placement are independent of automatic flight', () => {
   const s = createBomber(); s.spawnIn = 100;
   const oldX = s.x;
   stepBomber(s, {total:12,naturalOne:false}, {x:1,y:0,placing:true}, 0.05);
   assert.ok(s.x > oldX);
   assert.equal(s.minesPlaced, 1);
   assert.equal(s.mines.length, 1);
-  assert.equal(s.mines[0].x, s.x);
+  assert.equal(s.x, automaticShipX(s.elapsed));
+  assert.equal(s.aimX, 240 + BOMBER_AIM_SPEED * 0.05);
+  assert.equal(s.mines[0].x, s.aimX);
+  assert.equal(s.mines[0].y, s.aimY);
   assert.equal(s.mines[0].blastRadius, BOMBER_BLAST_RADIUS);
   assert.ok(s.cooldown > 0);
 });
@@ -339,7 +342,7 @@ test('space battle bomber natural one halves the visible mine target area', () =
   assert.equal(s.mines[0].blastRadius, impaired);
 });
 
-test('space battle bomber fires missiles and drops mines independently while steering', () => {
+test('space battle bomber fires missiles and drops mines independently while aiming', () => {
   const s = createSpaceBattleBomber(); s.forwardSpawnIn = s.pursuerSpawnIn = 100;
   const oldX = s.x;
   stepSpaceBattleBomber(s, {total:12,naturalOne:false}, {x:1,y:0,firing:true,placing:false}, 0.01);
@@ -352,7 +355,7 @@ test('space battle bomber fires missiles and drops mines independently while ste
 test('space battle bomber missiles and mines destroy enemy ships', () => {
   const missileRun = createSpaceBattleBomber(); missileRun.forwardSpawnIn = missileRun.pursuerSpawnIn = 100;
   missileRun.enemies = [{id:1,x:200,y:200,radius:16,speed:0,vx:0,shotIn:Infinity,approach:'forward'}];
-  missileRun.missiles = [{id:2,x:200,y:200,radius:5,speed:0}];
+  missileRun.missiles = [{id:2,x:200,y:200,radius:5,speed:0,vx:0,vy:0}];
   stepSpaceBattleBomber(missileRun, {total:10,naturalOne:false}, {x:0,y:0,firing:false,placing:false}, 0.01);
   assert.equal(missileRun.destroyed, 1); assert.equal(missileRun.enemies.length, 0);
 
@@ -408,4 +411,71 @@ test('bomber clustered collisions cost one hull and grace expires before the nex
   for (let i = 0; i < 26; i++) stepBomber(s, config, input, 0.05);
   assert.equal(s.invulnerable, 0);
   hit([5]); assert.equal(s.hull, 1); assert.equal(s.impacts, 2);
+});
+
+test('bomber automatic course ignores targeting in every band and natural-one state', () => {
+  for (const total of [5,10,15,16]) for (const naturalOne of [false,true]) {
+    const config = {total,naturalOne};
+    for (const battle of [false,true]) {
+      const a = battle ? createSpaceBattleBomber() : createBomber();
+      const b = battle ? createSpaceBattleBomber() : createBomber();
+      const step: any = battle ? stepSpaceBattleBomber : stepBomber;
+      Object.assign(a, {spawnIn:100,forwardSpawnIn:100,pursuerSpawnIn:100});
+      Object.assign(b, {spawnIn:100,forwardSpawnIn:100,pursuerSpawnIn:100});
+      const initialY = a.y;
+      for (let frame = 0; frame < 200; frame++) {
+        step(a, config, {x:1,y:-1,aimX:460,aimY:40,firing:false,placing:false}, 0.05);
+        step(b, config, {x:-1,y:1,firing:false,placing:false}, 0.05);
+        assert.equal(a.x, b.x); assert.equal(a.y, initialY); assert.equal(b.y, initialY);
+        assert.equal(a.x, automaticShipX(a.elapsed));
+      }
+      assert.notEqual(a.x, WIDTH / 2);
+      assert.notEqual(a.aimX, b.aimX);
+      const snapshot = JSON.stringify(a);
+      step(a, config, {x:0,y:0,firing:false,placing:false}, 0);
+      assert.equal(JSON.stringify(a), snapshot);
+      a.finished = true;
+      const finished = JSON.stringify(a);
+      step(a, config, {x:1,y:1,firing:true,placing:true}, 0.05);
+      assert.equal(JSON.stringify(a), finished);
+    }
+  }
+});
+
+test('aimed mines stay aft and bounded, preserve fuse and cooldown, and destroy targets', () => {
+  const config = {total:10,naturalOne:false}, s = createBomber();
+  s.spawnIn = 100;
+  stepBomber(s, config, {x:0,y:0,aimX:100,aimY:400,placing:true}, 0.01);
+  assert.equal(s.mines[0].x, 100); assert.equal(s.mines[0].y, 400);
+  assert.ok(s.mines[0].armIn > 0);
+  s.asteroids = [{id:90,x:100,y:400,radius:15,speed:0}];
+  stepBomber(s, config, {x:0,y:0,placing:true}, 0.01);
+  assert.equal(s.destroyed, 0); assert.equal(s.minesPlaced, 1);
+  for (let i=0;i<6;i++) stepBomber(s, config, {x:0,y:0,placing:false}, 0.05);
+  assert.equal(s.destroyed, 1);
+  stepBomber(s, config, {x:0,y:0,aimX:-100,aimY:-100,placing:false}, 0.01);
+  assert.equal(s.aimX, 18); assert.equal(s.aimY, s.y + 34);
+  stepBomber(s, config, {x:0,y:0,aimX:1000,aimY:1000,placing:false}, 0.01);
+  assert.equal(s.aimX, WIDTH - 18); assert.equal(s.aimY, HEIGHT - 18);
+});
+
+test('space bomber missiles travel toward the forward target and mine targets stay aft', () => {
+  const config = {total:10,naturalOne:true}, s = createSpaceBattleBomber();
+  s.forwardSpawnIn = s.pursuerSpawnIn = 100;
+  const action = {x:0,y:0,aimX:350,aimY:180,firing:true,placing:true};
+  s.enemies = [{id:99,x:350,y:180,radius:16,speed:0,vx:0,shotIn:Infinity,approach:'forward'}];
+  stepSpaceBattleBomber(s, config, action, 0.01);
+  assert.ok(s.missiles[0].vx > 0); assert.ok(s.missiles[0].vy < 0);
+  assert.ok(Math.abs(Math.hypot(s.missiles[0].vx,s.missiles[0].vy)-s.missiles[0].speed) < 1e-9);
+  assert.equal(s.mines[0].x,350); assert.equal(s.mines[0].y,s.y+34);
+  assert.equal(s.mines[0].blastRadius,spaceBomberBlastRadius(config));
+  stepSpaceBattleBomber(s, config, action, 0.01);
+  assert.equal(s.missilesFired,1); assert.equal(s.minesPlaced,1);
+  for(let i=0;i<12;i++) stepSpaceBattleBomber(s,config,{x:0,y:0,firing:false,placing:false},0.05);
+  assert.equal(s.destroyed,1);
+  s.missileCooldown=0;
+  stepSpaceBattleBomber(s,config,{x:0,y:0,aimX:450,aimY:500,firing:true,placing:false},0.01);
+  assert.ok(s.missiles.at(-1)!.vy < 0, 'forward launcher stays forward even with an aft aim');
+  for(let i=0;i<100;i++) stepSpaceBattleBomber(s,config,{x:0,y:0,firing:false,placing:false},0.05);
+  assert.equal(s.missiles.length,0, 'missed angled missiles leave the field');
 });

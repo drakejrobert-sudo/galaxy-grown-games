@@ -2,7 +2,7 @@ import Phaser from 'phaser';
 import {
   createBomber, createFlight, createGunner, createLifeSupport, createSpaceBattleBomber, createSpaceBattlePilot, stepBomber,
   stepFlight, stepGunner, stepLifeSupport, stepSpaceBattleBomber, stepSpaceBattlePilot, WIDTH, HEIGHT,
-  BOMBER_MINE_COOLDOWN, BOMBER_MINE_LIFETIME, GUNNER_DEFENSE_LINE, type Asteroid, type FlightConfig, type FlightState,
+  automaticShipX, bomberBlastRadius, spaceBomberBlastRadius, BOMBER_MINE_COOLDOWN, BOMBER_MINE_LIFETIME, GUNNER_DEFENSE_LINE, type Asteroid, type FlightConfig, type FlightState,
   type BomberInput, type BomberState, type GunnerInput, type GunnerState, type Role, type Situation,
   LIFE_SUPPORT_SWITCH_Y, type LifeSupportInput, type LifeSupportPacket, type LifeSupportRoute,
   type LifeSupportState, type SpaceBattleBomberInput, type SpaceBattleBomberState,
@@ -24,9 +24,9 @@ export class FlightScene extends Phaser.Scene {
   private graphics!: Phaser.GameObjects.Graphics;
   readInput: (x: number, y: number) => { x: number; y: number } = () => ({ x: 0, y: 0 });
   readGunnerInput: () => GunnerInput = () => ({ firing: false });
-  readBomberInput: (x: number, y: number) => BomberInput = () => ({ x: 0, y: 0, placing: false });
+  readBomberInput: () => BomberInput = () => ({ x: 0, y: 0, placing: false });
   readLifeSupportInput: () => LifeSupportInput = () => ({ route: 'Shields' });
-  readSpaceBomberInput: (x: number, y: number) => SpaceBattleBomberInput = () => ({ x: 0, y: 0, firing: false, placing: false });
+  readSpaceBomberInput: () => SpaceBattleBomberInput = () => ({ x: 0, y: 0, firing: false, placing: false });
   onFlightStep: (state: FlightState) => void = () => {};
   onGunnerStep: (state: GunnerState) => void = () => {};
   onBomberStep: (state: BomberState) => void = () => {};
@@ -60,7 +60,7 @@ export class FlightScene extends Phaser.Scene {
       if (this.situation === 'Space Battle') {
         if (this.role === 'Bomber') {
           stepSpaceBattleBomber(this.spaceBomber, this.config,
-            this.readSpaceBomberInput(this.spaceBomber.x, this.spaceBomber.y), delta / 1000);
+            this.readSpaceBomberInput(), delta / 1000);
           if (this.spaceBomber.finished) this.activeFlight = false;
           this.onSpaceBomberStep(this.spaceBomber);
         } else {
@@ -77,7 +77,7 @@ export class FlightScene extends Phaser.Scene {
         if (this.gunner.finished) this.activeFlight = false;
         this.onGunnerStep(this.gunner);
       } else if (this.role === 'Bomber') {
-        stepBomber(this.bomber, this.config, this.readBomberInput(this.bomber.x, this.bomber.y), delta / 1000);
+        stepBomber(this.bomber, this.config, this.readBomberInput(), delta / 1000);
         if (this.bomber.finished) this.activeFlight = false;
         this.onBomberStep(this.bomber);
       } else {
@@ -220,6 +220,8 @@ export class FlightScene extends Phaser.Scene {
 
   private paintSpaceBattleBomberMode(g: Phaser.GameObjects.Graphics) {
     const s = this.spaceBomber;
+    this.paintWeaponTarget(g, s.aimX, Math.min(s.y - 34, s.aimY), 14, 0x79e1ce, s.missileCooldown <= 0);
+    this.paintWeaponTarget(g, s.aimX, Math.max(s.y + 34, s.aimY), spaceBomberBlastRadius(this.config), 0xffca83, s.mineCooldown <= 0);
     if (s.impactFlash) { g.fillStyle(0xff715b, 0.14); g.fillRect(9, 9, WIDTH - 18, HEIGHT - 18); }
     for (const explosion of s.explosions) {
       const progress = explosion.remaining / 0.28;
@@ -248,9 +250,12 @@ export class FlightScene extends Phaser.Scene {
       this.paintBomberApproachMarker(g, enemy);
     }
     for (const missile of s.missiles) {
-      g.lineStyle(10, 0x79e1ce, 0.08); g.lineBetween(missile.x, missile.y + 22, missile.x, missile.y);
-      g.lineStyle(3, 0xa8fff1, 0.9); g.lineBetween(missile.x, missile.y + 14, missile.x, missile.y - 4);
-      g.fillStyle(0xf4ffff); g.fillTriangle(missile.x, missile.y - 8, missile.x - 4, missile.y + 3, missile.x + 4, missile.y + 3);
+      g.save(); g.translateCanvas(missile.x, missile.y);
+      g.rotateCanvas(Math.atan2(missile.vy, missile.vx) + Math.PI / 2);
+      g.lineStyle(10, 0x79e1ce, 0.08); g.lineBetween(0, 22, 0, 0);
+      g.lineStyle(3, 0xa8fff1, 0.9); g.lineBetween(0, 14, 0, -4);
+      g.fillStyle(0xf4ffff); g.fillTriangle(0, -8, -4, 3, 4, 3);
+      g.restore();
     }
     if (s.invulnerable) { g.lineStyle(2, 0x8feaff, 0.55); g.strokeCircle(s.x, s.y, 30); }
     if (!s.invulnerable || Math.floor(s.elapsed * 10) % 2 !== 0) {
@@ -388,7 +393,8 @@ export class FlightScene extends Phaser.Scene {
         for (let hp = 0; hp < asteroid.hp; hp++) g.fillCircle(asteroid.x - 4 + hp * 8, asteroid.y - asteroid.radius - 7, 2.5);
       }
     }
-    const turretX = WIDTH / 2, turretY = HEIGHT - 30;
+    const turretX = automaticShipX(s.elapsed), turretY = HEIGHT - 30;
+    this.paintPlayerShip(g, turretX, turretY, s.elapsed, false);
     if (s.beamTime > 0) {
       g.lineStyle(8, 0x79e1ce, 0.10); g.lineBetween(turretX, turretY, s.beamX, s.beamY);
       g.lineStyle(2, 0xd9fff6, 0.9); g.lineBetween(turretX, turretY, s.beamX, s.beamY);
@@ -411,8 +417,16 @@ export class FlightScene extends Phaser.Scene {
     g.fillStyle(ready ? 0x79e1ce : 0xbba6ff, pulse); g.fillCircle(s.crosshairX, s.crosshairY, 2.5);
   }
 
+  private paintWeaponTarget(g: Phaser.GameObjects.Graphics, x: number, y: number, radius: number, color: number, ready: boolean) {
+    g.lineStyle(1, color, ready ? 0.45 : 0.2); g.strokeCircle(x, y, radius);
+    g.lineStyle(2, color, ready ? 0.9 : 0.4);
+    g.lineBetween(x - 10, y, x + 10, y);
+    g.lineBetween(x, y - 10, x, y + 10);
+  }
+
   private paintBomberMode(g: Phaser.GameObjects.Graphics) {
     const s = this.bomber;
+    this.paintWeaponTarget(g, s.aimX, s.aimY, bomberBlastRadius(this.config), 0xffca83, s.cooldown <= 0);
     if (s.impactFlash) { g.fillStyle(0xff715b, 0.14); g.fillRect(9, 9, WIDTH - 18, HEIGHT - 18); }
     for (const explosion of s.explosions) {
       const progress = explosion.remaining / 0.28;
@@ -443,7 +457,7 @@ export class FlightScene extends Phaser.Scene {
       g.fillStyle(armed ? 0xfff1b3 : 0xbba6ff, pulse); g.fillCircle(mine.x, mine.y, 3);
     }
     for (const asteroid of s.asteroids) this.paintAsteroid(g, asteroid, false, false, -1);
-    g.lineStyle(1, 0x79e1ce, 0.18); g.lineBetween(12, HEIGHT * 0.42 + 18, WIDTH - 12, HEIGHT * 0.42 + 18);
+    g.lineStyle(1, 0x79e1ce, 0.18); g.lineBetween(12, s.y + 34, WIDTH - 12, s.y + 34);
     this.paintPlayerShip(g, s.x, s.y, s.elapsed, false);
     // Twin mine racks give this station a distinct silhouette using the shared ship art.
     for (const dx of [-18, 18]) {
