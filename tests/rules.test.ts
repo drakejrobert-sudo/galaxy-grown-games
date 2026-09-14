@@ -325,3 +325,35 @@ test('space battle can also end by hull loss or completing the timer', () => {
   assert.equal(complete.finished, true);
   assert.equal(complete.endReason, 'time');
 });
+
+test('bomber misses leave the field without damage, score, or impact feedback in every band', () => {
+  for (const total of [5, 10, 15, 16]) for (const naturalOne of [false, true]) {
+    const s = createBomber(); s.spawnIn = 100; s.hull = 1;
+    s.asteroids = [
+      {id:1,x:60,y:-40,radius:15,speed:0},
+      {id:2,x:s.x + 29,y:s.y,radius:15,speed:0},
+    ];
+    stepBomber(s, {total,naturalOne}, {x:0,y:0,placing:false}, 0.01);
+    assert.equal(s.hull, 1); assert.equal(s.impacts, 0); assert.equal(s.impactFlash, 0);
+    assert.equal(s.finished, false); assert.equal(s.destroyed, 0);
+    assert.deepEqual(s.asteroids.map(a => a.id), [2]);
+    assert.equal(bomberScoreFor(s), 100);
+  }
+});
+
+test('bomber clustered collisions cost one hull and grace expires before the next damaging hit', () => {
+  const s = createBomber(); s.spawnIn = 100;
+  const config = {total:10,naturalOne:false}, input = {x:0,y:0,placing:false};
+  const hit = (ids: number[]) => {
+    s.asteroids = ids.map(id => ({id,x:s.x,y:s.y,radius:15,speed:0}));
+    stepBomber(s, config, input, 0.01);
+  };
+  hit([1,2,3]);
+  assert.equal(s.hull, 2); assert.equal(s.impacts, 1); assert.equal(s.asteroids.length, 0);
+  assert.equal(s.invulnerable, 1.25);
+  hit([4]);
+  assert.equal(s.hull, 2); assert.equal(s.impacts, 1); assert.equal(s.asteroids.length, 0);
+  for (let i = 0; i < 26; i++) stepBomber(s, config, input, 0.05);
+  assert.equal(s.invulnerable, 0);
+  hit([5]); assert.equal(s.hull, 1); assert.equal(s.impacts, 2);
+});

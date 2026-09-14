@@ -2,7 +2,7 @@ import Phaser from 'phaser';
 import {
   createBomber, createFlight, createGunner, createLifeSupport, createSpaceBattlePilot, stepBomber,
   stepFlight, stepGunner, stepLifeSupport, stepSpaceBattlePilot, WIDTH, HEIGHT,
-  GUNNER_DEFENSE_LINE, type Asteroid, type FlightConfig, type FlightState,
+  BOMBER_MINE_COOLDOWN, BOMBER_MINE_LIFETIME, GUNNER_DEFENSE_LINE, type Asteroid, type FlightConfig, type FlightState,
   type BomberInput, type BomberState, type GunnerInput, type GunnerState, type Role, type Situation,
   LIFE_SUPPORT_SWITCH_Y, type LifeSupportInput, type LifeSupportPacket, type LifeSupportRoute,
   type LifeSupportState, type SpaceBattlePilotState, type EnemyShip, type EnemyShot, type FuelCell,
@@ -90,6 +90,21 @@ export class FlightScene extends Phaser.Scene {
     else if (this.role === 'Gunner') this.paintGunnerMode(g);
     else if (this.role === 'Bomber') this.paintBomberMode(g);
     else this.paintLifeSupportMode(g);
+    this.paintFrame(g);
+  }
+
+  private paintFrame(g: Phaser.GameObjects.Graphics) {
+    // Shared edge hardware stays outside the action and makes each station feel related.
+    for (const x of [8, WIDTH - 8]) {
+      const inward = x < WIDTH / 2 ? 1 : -1;
+      for (const y of [8, HEIGHT - 8]) {
+        const vertical = y < HEIGHT / 2 ? 1 : -1;
+        g.lineStyle(2, 0x8facc7, 0.75);
+        g.lineBetween(x, y, x + inward * 22, y);
+        g.lineBetween(x, y, x, y + vertical * 22);
+        g.fillStyle(0x79e1ce, 0.85); g.fillCircle(x + inward * 5, y + vertical * 5, 1.5);
+      }
+    }
   }
 
   private paintBackground(g: Phaser.GameObjects.Graphics, elapsed: number) {
@@ -338,13 +353,31 @@ export class FlightScene extends Phaser.Scene {
         g.lineBetween(mine.x + Math.cos(angle) * 7, mine.y + Math.sin(angle) * 7,
           mine.x + Math.cos(angle) * 14, mine.y + Math.sin(angle) * 14);
       }
+      // A shrinking lifetime dial distinguishes an expiring mine from a newly armed one.
+      g.lineStyle(2, armed ? 0xffca83 : 0xbba6ff, 0.75);
+      g.beginPath();
+      g.arc(mine.x, mine.y, 18, -Math.PI / 2,
+        -Math.PI / 2 + Math.PI * 2 * Math.max(0, mine.expiresIn / BOMBER_MINE_LIFETIME));
+      g.strokePath();
       g.fillStyle(armed ? 0xfff1b3 : 0xbba6ff, pulse); g.fillCircle(mine.x, mine.y, 3);
     }
     for (const asteroid of s.asteroids) this.paintAsteroid(g, asteroid, false, false, -1);
     g.lineStyle(1, 0x79e1ce, 0.18); g.lineBetween(12, HEIGHT * 0.42 + 18, WIDTH - 12, HEIGHT * 0.42 + 18);
     this.paintPlayerShip(g, s.x, s.y, s.elapsed, false);
+    // Twin mine racks give this station a distinct silhouette using the shared ship art.
+    for (const dx of [-18, 18]) {
+      g.fillStyle(0x33435e); g.lineStyle(1, 0xa9bbcf);
+      g.fillRoundedRect(s.x + dx - 4, s.y + 3, 8, 15, 3);
+      g.strokeRoundedRect(s.x + dx - 4, s.y + 3, 8, 15, 3);
+      g.fillStyle(s.cooldown <= 0 ? 0xffca83 : 0xbba6ff);
+      g.fillCircle(s.x + dx, s.y + 12, 2);
+    }
+    if (s.invulnerable > 0) {
+      g.lineStyle(2, 0x8feaff, 0.55 + Math.sin(s.elapsed * 18) * 0.2);
+      g.strokeCircle(s.x, s.y, 32);
+    }
     if (s.cooldown > 0) {
-      const readyFraction = 1 - s.cooldown / 0.65;
+      const readyFraction = 1 - s.cooldown / BOMBER_MINE_COOLDOWN;
       g.lineStyle(3, 0xbba6ff, 0.8);
       g.beginPath(); g.arc(s.x, s.y, 27, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * readyFraction); g.strokePath();
     }

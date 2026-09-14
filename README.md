@@ -33,7 +33,7 @@ Open the local URL printed by Vite, including `/galaxy-grown-games/`. If network
 - Up to 616px viewport width, Bomber keeps the full available canvas width and places Drop mine in a separate row immediately below it. The side rail starts only when the full 480px canvas, 90px rail, 10px gap, and page padding fit; wider touch devices use a compact rail.
 - Bomber mines arm after 0.25 seconds, last 5 seconds, and can be placed every 0.65 seconds. Contact detonates a mine and destroys asteroid centers inside its visible blast circle.
 - Bomber Natural 1 reduces the mine blast radius by `sqrt(0.5)`, so both the drawn target and collision target have exactly half their normal area. The trigger remains a close-contact fuse.
-- Bomber score: 100 per destroyed asteroid, rounded survival seconds × 5, and 100 per remaining hull point. The round ends after 60 seconds or when asteroid impacts deplete three hull points.
+- Bomber score: 100 per destroyed asteroid, rounded survival seconds × 5, and 100 per remaining hull point. Only direct asteroid–ship collisions cost hull; asteroids that escape off the top are removed without damage or points. Each damaging collision removes one hull point and grants 1.25 seconds of collision grace, including protection from simultaneous hits. The round ends after 60 seconds or when collisions deplete three hull points.
 - Life Support routes falling packets through a three-way switch to matching Thrusters, Shields, or Guns bays. Arrow Left/Right or A/D cycles the switch; 1/2/3 selects a bay directly; touch players tap the three labeled bay controls.
 - Ordinary power packets match their bay's color and symbol. Heart packets route to Shields and restore one system-integrity point up to a maximum of 5. Overload packets route to Guns and cost two integrity when misrouted; every other mistake costs one.
 - Each complete 12-packet cycle normally contains two hearts and one overload. A Natural 1 changes the cycle to one heart and two overloads, exactly halving hearts and adding one overload; an incomplete final cycle is truncated rather than rounded up.
@@ -56,7 +56,7 @@ The build targets `/galaxy-grown-games/`. The check workflow runs tests and buil
 
 ### Validation status
 
-- Thirty-four automated tests pass, covering the shared difficulty bands and lifecycle; Pilot touch/keyboard input and Asteroid movement/collisions; Gunner touch/mouse pointer input, cooldown, targeting, armor, impacts, scoring, and reporting; Bomber simultaneous movement/action input, mine placement and detonation, exact half-area impairment, impacts, scoring, reporting, and the reserved sticky control rail across touch viewport widths; Life Support keyboard/touch routing, deterministic heart/overload cycles, integrity, difficulty, scoring, and reporting; Space Battle Pilot fuel, enemies, shots, collisions, all end conditions, impairment, tuning, scoring, and reporting; and the retry-safe Pages job structure.
+- Thirty-seven automated tests pass, covering the shared difficulty bands and lifecycle; Pilot touch/keyboard input and Asteroid movement/collisions; Gunner touch/mouse pointer input, cooldown, targeting, armor, impacts, scoring, and reporting; Bomber simultaneous movement/action input, mine placement and detonation, exact half-area impairment, impacts, scoring, reporting, and the reserved sticky control rail across touch viewport widths; Life Support keyboard/touch routing, deterministic heart/overload cycles, integrity, difficulty, scoring, and reporting; Space Battle Pilot fuel, enemies, shots, collisions, all end conditions, impairment, tuning, scoring, and reporting; and the retry-safe Pages job structure.
 - TypeScript check and Vite production build pass.
 - Phaser produces a large-bundle advisory (~337 KB gzip); bundle optimization remains future work.
 - Connected-browser QA cannot reach the local Vite address from mobile ChatGPT Work sessions. Automated checks still run there, but real iPhone/iPad Safari behavior remains a manual playtest requirement; desktop mobile emulation must not be reported as real-device Safari QA.
@@ -118,7 +118,7 @@ Harder checks send faster, more frequent pursuing asteroids with stronger inward
 | Medium | 170 | 0.74 | 225 | 0.48 |
 | Hard | 200 | 0.58 | 225 | 0.58 |
 
-Bomber hazard pressure, blast radius, mine cadence, scoring, and collision tolerance are provisional playtest values. The mode still needs human playtesting on touch and desktop controls, especially simultaneous touch steering and mine placement.
+Bomber hazard pressure, blast radius, mine cadence, scoring, collision tolerance, and the 1.25-second collision grace are provisional playtest values. Hold Space/Enter or Drop mine to lay a trail while steering. Mine lifetime dials, ready lights on the ship’s mine racks, and a cyan collision-grace ring provide feedback. All five playable modes share corner hardware and consistent HUD/playfield widths (Bomber includes its reserved control rail on wide screens). The mode still needs human playtesting on touch and desktop controls, especially simultaneous touch steering and mine placement.
 
 ### Proposed Asteroid Field Life Support balance
 
@@ -132,3 +132,12 @@ Harder checks shorten the time between packets and move each packet down the con
 | Hard | 142 | 0.72 |
 
 Life Support packet timing, five-point integrity pool, two-damage overload mistakes, special-packet bonuses, and scoring are provisional playtest values. The mode still needs human playtesting on touch and desktop controls, especially symbol readability and switch timing at Hard with Natural 1.
+
+### Bomber refinement playtest checklist
+
+Automated regression coverage verifies safe escapes and near misses in all four bands with/without Natural 1, simultaneous collision protection, grace expiry, and later damaging hits. `npm test` passes 37 tests; `npm run build` passes with the existing Phaser bundle-size advisory. The connected preview browser returned `net::ERR_BLOCKED_BY_CLIENT` for the local Vite address; rendered appearance, console health, and real-device interactions are not verified for this refinement.
+
+- On iPhone/iPad Safari and desktop, steer while holding the mine action, let asteroids escape, and confirm only ship collisions reduce hull.
+- Check the protection ring after a hit, mine lifetime dials, and the smaller Natural-1 blast circle; confirm pause freezes their timing and explicit resume continues it.
+- Check all five playable modes in portrait/landscape: aligned HUD and canvas, readable scores/fuel, reachable Pause, and unobstructed mine/routing controls. Include widths around 616px for the Bomber rail transition.
+- Complete a run, inspect/copy the result report, and retry. Assess whether collision-only damage is now too forgiving before adjusting hazard pressure or score values.
