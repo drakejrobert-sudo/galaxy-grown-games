@@ -128,3 +128,10 @@ test('first launch waits for scene creation before starting simulation; retry re
   assert.equal(readyScene.spaceBomber.missilesFired, 1); assert.equal(readyScene.spaceBomber.minesPlaced, 1);
   assert.match(element('mode-label').textContent, /SPACE BATTLE \/ BOMBER/);
 });
+
+test('space battle bomber cooldown dial shares the simulation constant', () => {
+  const scene = readFileSync(new URL('../src/game/scene.ts', import.meta.url), 'utf8');
+
+  assert.match(scene, /missileCooldown \/ SPACE_BOMBER_MISSILE_COOLDOWN/);
+  assert.doesNotMatch(scene, /missileCooldown \/ 0\.38/);
+});
