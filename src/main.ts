@@ -1,7 +1,7 @@
-import Phaser from 'phaser';
+import type Phaser from 'phaser';
 import './style.css';
 import './bomber.css';
-import { FlightScene } from './game/scene';
+import type { FlightScene } from './game/scene';
 import { createBomberInput, createGunnerInput, createInput, createLifeSupportInput, createSpaceBomberInput } from './game/input';
 import {
   bomberResultText, bomberScoreFor, difficultyFor, parseTotal, resultText, scoreFor,
@@ -26,7 +26,8 @@ app.innerHTML = `
     <label class="check"><input type="checkbox" id="natural-one" /> I rolled a natural 1</label>
     <div class="readout" aria-live="polite"><span>CHALLENGE DIFFICULTY</span><strong id="difficulty">Awaiting check</strong><p id="impairment">Standard engine</p></div>
     <p id="error" class="error" role="alert"></p>
-    <button class="primary" type="submit">Start challenge <span>↗</span></button>
+    <button id="start" class="primary" type="submit"><span id="start-label">Start challenge</span> <span>↗</span></button>
+    <p id="load-status" class="help" role="status" aria-live="polite"></p>
     <p id="controls-help" class="help">Arrow keys / WASD to steer. On touch screens, hold and drag in the flight area. The ship follows at its movement speed.</p>
   </form>
 </section>
@@ -49,7 +50,7 @@ const get = <T extends HTMLElement>(id: string) => document.getElementById(id) a
 const total = get<HTMLInputElement>('total'), natural = get<HTMLInputElement>('natural-one');
 const roleSelect = get<HTMLSelectElement>('role');
 const situationSelect = get<HTMLSelectElement>('situation');
-const scene = new FlightScene('flight');
+let scene: FlightScene | null = null;
 const canvas = get('canvas');
 const action = get<HTMLButtonElement>('action');
 const fireAction = get<HTMLButtonElement>('fire-action');
@@ -61,12 +62,10 @@ const gunnerInput = createGunnerInput(canvas);
 const bomberInput = createBomberInput(canvas, action);
 const spaceBomberInput = createSpaceBomberInput(canvas, fireAction, action);
 const lifeSupportInput = createLifeSupportInput(routeButtons);
-scene.readInput = input.read;
-scene.readGunnerInput = gunnerInput.read;
-scene.readBomberInput = bomberInput.read;
-scene.readSpaceBomberInput = spaceBomberInput.read;
-scene.readLifeSupportInput = lifeSupportInput.read;
 let game: Phaser.Game | null = null;
+let loading = false;
+let launchPending = false;
+let pauseOnReady = false;
 let config: FlightConfig = { total: 10, naturalOne: false };
 let role: Role = 'Pilot';
 let situation: Situation = 'Asteroid Field';
@@ -110,7 +109,7 @@ roleSelect.addEventListener('change', refreshSetup);
 situationSelect.addEventListener('change', refreshSetup);
 function setPaused(value: boolean) {
   if (!inFlight) return;
-  paused = value; scene.activeFlight = !value;
+  paused = value; scene!.activeFlight = !value;
   input.enable(!value && role === 'Pilot');
   gunnerInput.enable(!value && situation === 'Asteroid Field' && role === 'Gunner');
   bomberInput.enable(!value && situation === 'Asteroid Field' && role === 'Bomber');
@@ -123,10 +122,14 @@ function setPaused(value: boolean) {
 get('pause').addEventListener('click', () => setPaused(!paused));
 get('resume').addEventListener('click', () => setPaused(false));
 window.addEventListener('keydown', e => { if (inFlight && e.code === 'Escape') { e.preventDefault(); setPaused(!paused); } });
-window.addEventListener('blur', () => { if (inFlight) setPaused(true); });
-document.addEventListener('visibilitychange', () => { if (document.hidden && inFlight) setPaused(true); });
+window.addEventListener('blur', () => { if (inFlight) setPaused(true); else if (launchPending) pauseOnReady = true; });
+document.addEventListener('visibilitychange', () => {
+  if (!document.hidden) return;
+  if (inFlight) setPaused(true); else if (launchPending) pauseOnReady = true;
+});
 function resetSetup() {
-  inFlight = false; scene.activeFlight = false; input.enable(false); gunnerInput.enable(false); bomberInput.enable(false); spaceBomberInput.enable(false); lifeSupportInput.enable(false); paused = false;
+  launchPending = false; pauseOnReady = false;
+  inFlight = false; if (scene) scene.activeFlight = false; input.enable(false); gunnerInput.enable(false); bomberInput.enable(false); spaceBomberInput.enable(false); lifeSupportInput.enable(false); paused = false;
   get('pause-overlay').hidden = true; show('setup'); total.focus();
 }
 get('abandon').addEventListener('click', resetSetup); get('again').addEventListener('click', resetSetup);
@@ -138,7 +141,10 @@ function preparePlayLayout() {
   routeControls.hidden = role !== 'Life Support';
 }
 function launch() {
-  scene.begin(config, situation, role);
+  const startPaused = pauseOnReady || document.hidden;
+  launchPending = false;
+  pauseOnReady = false;
+  scene!.begin(config, situation, role);
   lifeSupportInput.reset();
   input.enable(role === 'Pilot');
   gunnerInput.enable(situation === 'Asteroid Field' && role === 'Gunner');
@@ -182,33 +188,59 @@ function launch() {
     : role === 'Gunner' ? 'Standard weapon cooling'
       : role === 'Bomber' ? 'Standard mine blast target' : 'Standard packet mix';
   get('flight-status').textContent = `${difficultyFor(config.total)} · Check ${config.total} · ${config.naturalOne ? `Natural 1: ${impairment}` : standard}`;
-  get('canvas').focus();
+  if (startPaused) setPaused(true); else get('canvas').focus();
 }
-get('flight-form').addEventListener('submit', e => {
-  e.preventDefault(); const parsed = parseTotal(total.value);
+function setLoading(value: boolean) {
+  loading = value;
+  get<HTMLButtonElement>('start').disabled = value;
+  total.disabled = value; natural.disabled = value; roleSelect.disabled = value; situationSelect.disabled = value;
+  get('start-label').textContent = value ? 'Loading flight…' : 'Start challenge';
+  get('load-status').textContent = value ? 'Preparing the game. Your challenge will start when it is ready.' : '';
+}
+get('flight-form').addEventListener('submit', async e => {
+  e.preventDefault();
+  if (loading) return;
+  const parsed = parseTotal(total.value);
   if (parsed === null) { get('error').textContent = 'Enter a whole-number check total, including modifiers.'; total.focus(); return; }
   config = { total: parsed, naturalOne: natural.checked };
   situation = situationSelect.value === 'Space Battle' ? 'Space Battle' : 'Asteroid Field';
   role = roleSelect.value as Role;
-  preparePlayLayout();
-  show('play');
+  launchPending = true;
   if (!game) {
-    // Scene plugins (including events) do not exist until Phaser boots.
-    // A plain callback is safe to assign before constructing the game.
-    scene.onReady = launch;
+    setLoading(true);
     try {
+      const { Phaser, FlightScene } = await import('./game/runtime');
+      if (!scene) {
+        scene = new FlightScene('flight');
+        scene.readInput = input.read;
+        scene.readGunnerInput = gunnerInput.read;
+        scene.readBomberInput = bomberInput.read;
+        scene.readSpaceBomberInput = spaceBomberInput.read;
+        scene.readLifeSupportInput = lifeSupportInput.read;
+        attachSceneCallbacks(scene);
+      }
+      preparePlayLayout();
+      show('play');
+      get('flight-status').textContent = 'Starting challenge…';
+      // Scene plugins (including events) do not exist until Phaser boots.
+      scene.onReady = launch;
       game = new Phaser.Game({ type: Phaser.CANVAS, parent: 'canvas', width: WIDTH, height: HEIGHT,
-      backgroundColor: '#101528', scene: [scene], banner: false,
-      scale: { mode: Phaser.Scale.FIT, autoCenter: Phaser.Scale.CENTER_BOTH },
-      render: { antialias: true } });
+        backgroundColor: '#101528', scene: [scene], banner: false,
+        scale: { mode: Phaser.Scale.FIT, autoCenter: Phaser.Scale.CENTER_BOTH },
+        render: { antialias: true } });
     } catch (error) {
       console.error('Flight startup failed', error);
       game = null;
+      scene = null;
+      canvas.replaceChildren();
       resetSetup();
-      get('error').textContent = 'The flight could not start. Please reload the page and try again.';
+      get('error').textContent = 'The flight could not start. Try again, or reload the page if it keeps happening.';
+    } finally {
+      setLoading(false);
     }
-  } else { game.scale.refresh(); launch(); }
+  } else { preparePlayLayout(); show('play'); game.scale.refresh(); launch(); }
 });
+function attachSceneCallbacks(scene: FlightScene) {
 scene.onFlightStep = s => {
   get('time').textContent = `${Math.ceil(DURATION - s.elapsed)}s`;
   get('hull').textContent = `${s.hull} / 3`;
@@ -284,6 +316,7 @@ scene.onSpaceBomberStep = s => {
     get('copy-status').textContent = ''; get('copy').focus();
   }
 };
+}
 get('copy').addEventListener('click', async () => {
   const summary = get<HTMLTextAreaElement>('summary');
   try { await navigator.clipboard.writeText(summary.value); get('copy-status').textContent = 'Copied. Share it with your GM.'; }
