@@ -7,9 +7,11 @@ import * as rules from '../src/game/rules.ts';
 
 test('deferred first launch recovers from load failure, starts once, and retry reuses game', async () => {
   const elements = new Map<string, any>();
+  const windowListeners = new Map<string, Function>();
   function element(id: string): any {
     if (!elements.has(id)) elements.set(id, { hidden: false, value: '', checked: false,
-      textContent: '', listeners: new Map(), attributes: new Map(), focus() {},
+      textContent: '', listeners: new Map(), attributes: new Map(), style: {}, scrollHeight: 260,
+      focus() {}, select() { this.selected = true; },
       setAttribute(name: string, value: string) { this.attributes.set(name, value); },
       replaceChildren() {},
       addEventListener(type: string, listener: Function) { this.listeners.set(type, listener); },
@@ -56,6 +58,8 @@ test('deferred first launch recovers from load failure, starts once, and retry r
   let spaceBomberInputEnabled = false, lifeSupportInputEnabled = false;
   let runtimeImports = 0;
   let runtimeShouldFail = true;
+  let copyShouldFail = false;
+  let copiedText = '';
   load('../src/main.ts', { './style.css': {}, './bomber.css': {},
     get './game/runtime'() {
       runtimeImports++;
@@ -71,7 +75,11 @@ test('deferred first launch recovers from load failure, starts once, and retry r
     },
   }, {
     document: { querySelector: () => element('app'), getElementById: element, addEventListener() {} },
-    window: { addEventListener() {} }, navigator: {}, console: { error() {} },
+    window: { addEventListener(type: string, listener: Function) { windowListeners.set(type, listener); } },
+    navigator: { clipboard: { async writeText(text: string) {
+      if (copyShouldFail) throw new Error('clipboard denied');
+      copiedText = text;
+    } } }, console: { error() {} },
   });
   element('situation').value = 'Asteroid Field'; element('role').value = 'Pilot';
   element('total').value = '17'; element('natural-one').checked = true;
@@ -176,6 +184,20 @@ test('deferred first launch recovers from load failure, starts once, and retry r
   assert.equal(spaceBomberInputEnabled, false);
   element('resume').listeners.get('click')();
   assert.equal(spaceBomberInputEnabled, true);
+  readyScene.spaceBomber.finished = true;
+  readyScene.onSpaceBomberStep(readyScene.spaceBomber);
+  assert.equal(element('results').hidden, false);
+  assert.match(element('summary').value, /Space Battle \/ Bomber/);
+  assert.equal(element('summary').style.height, '260px');
+  element('summary').scrollHeight = 310;
+  windowListeners.get('resize')!();
+  assert.equal(element('summary').style.height, '310px');
+  await element('copy').listeners.get('click')();
+  assert.equal(copiedText, element('summary').value);
+  copyShouldFail = true;
+  await element('copy').listeners.get('click')();
+  assert.equal(element('summary').selected, true);
+  assert.match(element('copy-status').textContent, /Copy it manually/);
 });
 
 test('a deferred launch stays paused after switching away until explicit resume', async () => {
