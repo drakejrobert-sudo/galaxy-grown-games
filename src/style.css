@@ -4,6 +4,7 @@
 /* Align station HUDs with their playfield (including Bomber's reserved action rail). */
 #play { max-width: 480px; }
 #play[data-role="Bomber"] { max-width: 580px; }
+#summary { resize: none; overflow-y: hidden; }
 .hud { gap: 8px; }
 .hud > div { min-width: 0; }
 .hud strong { font-variant-numeric: tabular-nums; white-space: nowrap; }

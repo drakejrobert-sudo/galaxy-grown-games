@@ -74,6 +74,17 @@ let paused = false;
 function show(section: string) {
   for (const id of ['setup', 'play', 'results']) get(id).hidden = id !== section;
 }
+function sizeSummary() {
+  const summary = get<HTMLTextAreaElement>('summary');
+  if (get('results').hidden) return;
+  summary.style.height = 'auto';
+  summary.style.height = `${summary.scrollHeight}px`;
+}
+function fillSummary(text: string) {
+  get<HTMLTextAreaElement>('summary').value = text;
+  sizeSummary();
+}
+window.addEventListener('resize', sizeSummary);
 function refreshSetup() {
   const parsed = parseTotal(total.value);
   get('difficulty').textContent = parsed === null ? 'Awaiting valid check' : difficultyFor(parsed);
@@ -249,7 +260,7 @@ scene.onFlightStep = s => {
     inFlight = false; input.enable(false); gunnerInput.enable(false); bomberInput.enable(false); spaceBomberInput.enable(false); lifeSupportInput.enable(false); show('results');
     get('outcome').textContent = s.hull > 0 ? 'Course complete.' : 'Hull depleted.';
     get('final-score').textContent = String(scoreFor(s));
-    get<HTMLTextAreaElement>('summary').value = resultText(config, s);
+    fillSummary(resultText(config, s));
     get('copy-status').textContent = ''; get('copy').focus();
   }
 };
@@ -261,7 +272,7 @@ scene.onGunnerStep = s => {
     inFlight = false; input.enable(false); gunnerInput.enable(false); bomberInput.enable(false); spaceBomberInput.enable(false); lifeSupportInput.enable(false); show('results');
     get('outcome').textContent = s.hull > 0 ? 'Field cleared.' : 'Hull depleted.';
     get('final-score').textContent = String(gunnerScoreFor(s));
-    get<HTMLTextAreaElement>('summary').value = gunnerResultText(config, s);
+    fillSummary(gunnerResultText(config, s));
     get('copy-status').textContent = ''; get('copy').focus();
   }
 };
@@ -273,7 +284,7 @@ scene.onBomberStep = s => {
     inFlight = false; input.enable(false); gunnerInput.enable(false); bomberInput.enable(false); spaceBomberInput.enable(false); lifeSupportInput.enable(false); show('results');
     get('outcome').textContent = s.hull > 0 ? 'Field cleared.' : 'Hull depleted.';
     get('final-score').textContent = String(bomberScoreFor(s));
-    get<HTMLTextAreaElement>('summary').value = bomberResultText(config, s);
+    fillSummary(bomberResultText(config, s));
     get('copy-status').textContent = ''; get('copy').focus();
   }
 };
@@ -287,7 +298,7 @@ scene.onLifeSupportStep = s => {
     inFlight = false; input.enable(false); gunnerInput.enable(false); bomberInput.enable(false); spaceBomberInput.enable(false); lifeSupportInput.enable(false); show('results');
     get('outcome').textContent = s.integrity > 0 ? 'Systems stabilized.' : 'Systems failed.';
     get('final-score').textContent = String(lifeSupportScoreFor(s));
-    get<HTMLTextAreaElement>('summary').value = lifeSupportResultText(config, s);
+    fillSummary(lifeSupportResultText(config, s));
     get('copy-status').textContent = ''; get('copy').focus();
   }
 };
@@ -300,7 +311,7 @@ scene.onSpacePilotStep = s => {
     inFlight = false; input.enable(false); gunnerInput.enable(false); bomberInput.enable(false); spaceBomberInput.enable(false); lifeSupportInput.enable(false); show('results');
     get('outcome').textContent = s.endReason === 'time' ? 'Battle run complete.' : s.endReason === 'fuel' ? 'Fuel depleted.' : 'Hull depleted.';
     get('final-score').textContent = String(spaceBattlePilotScoreFor(s));
-    get<HTMLTextAreaElement>('summary').value = spaceBattlePilotResultText(config, s);
+    fillSummary(spaceBattlePilotResultText(config, s));
     get('copy-status').textContent = ''; get('copy').focus();
   }
 };
@@ -312,7 +323,7 @@ scene.onSpaceBomberStep = s => {
     inFlight = false; input.enable(false); gunnerInput.enable(false); bomberInput.enable(false); spaceBomberInput.enable(false); lifeSupportInput.enable(false); show('results');
     get('outcome').textContent = s.hull > 0 ? 'Bombing run complete.' : 'Hull depleted.';
     get('final-score').textContent = String(spaceBattleBomberScoreFor(s));
-    get<HTMLTextAreaElement>('summary').value = spaceBattleBomberResultText(config, s);
+    fillSummary(spaceBattleBomberResultText(config, s));
     get('copy-status').textContent = ''; get('copy').focus();
   }
 };
