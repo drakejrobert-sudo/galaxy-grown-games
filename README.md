@@ -5,6 +5,8 @@ A repository for hosting mini games for the galaxy grown campaign.
 
 Asteroid Field / Pilot, Gunner, Bomber, and Life Support, plus Space Battle / Pilot and Bomber, are implemented as **prototypes awaiting balance and device QA**. Other situation/role combinations are visibly disabled. Players enter their GM-requested final skill-check total and a separate Natural 1 flag, play independently, and manually share their score. No campaign data or live multiplayer service is included.
 
+Player link: [play.drakesfood.com](https://play.drakesfood.com/). This HTTPS shortlink redirects to the current GitHub Pages deployment and remains the link to share if the underlying hosting URL changes.
+
 ### Run locally
 
 Requires Node 22.12+.
@@ -58,6 +60,8 @@ Open the local URL printed by Vite, including `/galaxy-grown-games/`. If network
 ### GitHub Pages
 
 The build targets `/galaxy-grown-games/`. The check workflow runs tests and builds on pushes and pull requests. After a reviewed pull request is merged, the **Deploy game hub** workflow runs on `main`. Its build job repeats `npm test` and `npm run build`, uploads one Pages artifact, and then a separate dependent job deploys that artifact. Keeping deployment separate means retrying a transient deploy failure does not upload a duplicate artifact. The workflow can also be run manually from `main` when Drake explicitly approves that deployment. GitHub Actions must be selected as the Pages source in repository Settings → Pages.
+
+The canonical player-facing shortlink is `https://play.drakesfood.com/`; Drake's Food OpenTofu manages its redirect independently of this Pages workflow.
 
 ### Validation status
 
