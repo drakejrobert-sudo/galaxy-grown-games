@@ -5,17 +5,19 @@ import { runInNewContext } from 'node:vm';
 import ts from 'typescript';
 import * as rules from '../src/game/rules.ts';
 
-test('first launch waits for scene creation before starting simulation; retry reuses game', () => {
+test('deferred first launch recovers from load failure, starts once, and retry reuses game', async () => {
   const elements = new Map<string, any>();
   function element(id: string): any {
     if (!elements.has(id)) elements.set(id, { hidden: false, value: '', checked: false,
       textContent: '', listeners: new Map(), attributes: new Map(), focus() {},
       setAttribute(name: string, value: string) { this.attributes.set(name, value); },
+      replaceChildren() {},
       addEventListener(type: string, listener: Function) { this.listeners.set(type, listener); },
     });
     return elements.get(id);
   }
   let gameCount = 0;
+  let gameShouldFail = false;
   let readyScene: any;
   const scaleRefreshRailStates: boolean[] = [];
   const graphics: any = new Proxy({}, { get: () => () => graphics });
@@ -29,6 +31,7 @@ test('first launch waits for scene creation before starting simulation; retry re
       scaleRefreshRailStates.push(element('action-rail').hidden);
     } };
     constructor(config: any) {
+      if (gameShouldFail) throw new Error('renderer unavailable');
       gameCount++;
       readyScene = config.scene[0];
       assert.equal(readyScene.events, undefined);
@@ -51,7 +54,14 @@ test('first launch waits for scene creation before starting simulation; retry re
   const scenes = load('../src/game/scene.ts', { phaser, './rules': rules });
   let inputEnabled = false, gunnerInputEnabled = false, bomberInputEnabled = false;
   let spaceBomberInputEnabled = false, lifeSupportInputEnabled = false;
-  load('../src/main.ts', { phaser, './style.css': {}, './bomber.css': {}, './game/scene': scenes,
+  let runtimeImports = 0;
+  let runtimeShouldFail = true;
+  load('../src/main.ts', { './style.css': {}, './bomber.css': {},
+    get './game/runtime'() {
+      runtimeImports++;
+      if (runtimeShouldFail) throw new Error('offline');
+      return { Phaser: phaser, FlightScene: scenes.FlightScene };
+    },
     './game/rules': rules, './game/input': {
       createInput: () => ({ read: () => ({ x: 1, y: 0 }), enable: (v: boolean) => inputEnabled = v }),
       createGunnerInput: () => ({ read: () => ({ firing: false }), enable: (v: boolean) => gunnerInputEnabled = v }),
@@ -61,13 +71,33 @@ test('first launch waits for scene creation before starting simulation; retry re
     },
   }, {
     document: { querySelector: () => element('app'), getElementById: element, addEventListener() {} },
-    window: { addEventListener() {} }, navigator: {},
+    window: { addEventListener() {} }, navigator: {}, console: { error() {} },
   });
   element('situation').value = 'Asteroid Field'; element('role').value = 'Pilot';
   element('total').value = '17'; element('natural-one').checked = true;
   const submit = () => element('flight-form').listeners.get('submit')({ preventDefault() {} });
-  submit();
+  await submit();
+  assert.equal(gameCount, 0);
+  assert.equal(element('setup').hidden, false);
+  assert.match(element('error').textContent, /Try again/);
+  assert.equal(element('start').disabled, false);
+  runtimeShouldFail = false;
+  gameShouldFail = true;
+  await submit();
+  assert.equal(gameCount, 0);
+  assert.equal(element('setup').hidden, false);
+  assert.match(element('error').textContent, /Try again/);
+  assert.equal(element('start').disabled, false);
+  gameShouldFail = false;
+  const firstStart = submit();
+  assert.equal(gameCount, 0);
+  assert.equal(element('start').disabled, true);
+  assert.match(element('load-status').textContent, /Preparing the game/);
+  await Promise.all([firstStart, submit()]);
+  assert.equal(runtimeImports, 3);
   assert.equal(gameCount, 1); assert.equal(readyScene.activeFlight, true); assert.equal(inputEnabled, true);
+  assert.equal(element('start').disabled, false);
+  assert.equal(element('load-status').textContent, '');
   assert.match(element('flight-status').textContent, /Very Easy.*Natural 1/);
   const oldX = readyScene.flight.x;
   readyScene.update(0, 16);
@@ -78,13 +108,13 @@ test('first launch waits for scene creation before starting simulation; retry re
   element('resume').listeners.get('click')(); readyScene.update(0, 16);
   assert.ok(readyScene.flight.elapsed > elapsed);
   element('abandon').listeners.get('click')();
-  element('role').value = 'Gunner'; submit();
+  element('role').value = 'Gunner'; await submit();
   assert.equal(gameCount, 1); assert.equal(readyScene.gunner.elapsed, 0);
   assert.equal(inputEnabled, false); assert.equal(gunnerInputEnabled, true);
   readyScene.update(0, 16); assert.ok(readyScene.gunner.elapsed > 0);
   assert.match(element('flight-status').textContent, /Very Easy.*overheated gun/);
   element('abandon').listeners.get('click')();
-  element('role').value = 'Bomber'; submit();
+  element('role').value = 'Bomber'; await submit();
   assert.equal(gameCount, 1); assert.equal(bomberInputEnabled, true);
   readyScene.update(0, 16); assert.ok(readyScene.bomber.elapsed > 0);
   assert.equal(readyScene.bomber.minesPlaced, 1);
@@ -103,7 +133,7 @@ test('first launch waits for scene creation before starting simulation; retry re
   assert.equal(element('action-rail').hidden, false);
   assert.equal(scaleRefreshRailStates.at(-1), false);
   element('abandon').listeners.get('click')();
-  element('role').value = 'Life Support'; submit();
+  element('role').value = 'Life Support'; await submit();
   assert.equal(gameCount, 1); assert.equal(lifeSupportInputEnabled, true);
   readyScene.lifeSupport.spawnIn = 100;
   readyScene.lifeSupport.packets = [{id:1,x:240,y:404,speed:100,target:'Shields',kind:'power'}];
@@ -118,7 +148,7 @@ test('first launch waits for scene creation before starting simulation; retry re
   assert.equal(element('role-bomber').disabled, false);
   assert.equal(element('role-life-support').disabled, true);
   assert.equal(element('role').value, 'Pilot');
-  submit();
+  await submit();
   assert.equal(gameCount, 1); assert.equal(readyScene.situation, 'Space Battle');
   assert.equal(inputEnabled, true); assert.equal(gunnerInputEnabled, false);
   readyScene.update(0, 16); assert.ok(readyScene.spacePilot.elapsed > 0);
@@ -130,7 +160,7 @@ test('first launch waits for scene creation before starting simulation; retry re
   const beforePaint = JSON.stringify(readyScene.spacePilot);
   readyScene.update(0, 16);
   assert.equal(JSON.stringify(readyScene.spacePilot), beforePaint);
-  element('abandon').listeners.get('click')(); element('role').value = 'Bomber'; submit();
+  element('abandon').listeners.get('click')(); element('role').value = 'Bomber'; await submit();
   assert.equal(spaceBomberInputEnabled, true); assert.equal(inputEnabled, false);
   assert.equal(element('fire-action').hidden, false); assert.equal(element('action').hidden, false);
   assert.equal(element('fuel-wrap').hidden, true);
