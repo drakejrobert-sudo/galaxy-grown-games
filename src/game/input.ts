@@ -81,71 +81,39 @@ export function createGunnerInput(surface: HTMLElement) {
   };
 }
 
-export function createBomberInput(surface: HTMLElement, action: HTMLElement) {
+/** Asteroid Bomber only times releases; flight and the aft drop point are automatic. */
+export function createBomberInput(_surface: HTMLElement, action: HTMLElement) {
   const keys = new Set<string>();
-  let touch: { x: number; y: number } | null = null;
   let pointer: number | null = null;
-  let actionPointer: number | null = null;
   let queuedMine = false;
   let enabled = false;
-  const movement = ['ArrowLeft','ArrowRight','ArrowUp','ArrowDown','KeyW','KeyA','KeyS','KeyD'];
-  const mineKeys = ['Space', 'Enter'];
-  const clear = () => {
-    keys.clear(); touch = null; pointer = null; actionPointer = null; queuedMine = false;
-  };
-  const setTouch = (e: PointerEvent) => {
-    const box = surface.querySelector('canvas')?.getBoundingClientRect();
-    if (box) touch = {
-      x: (e.clientX - box.left) / box.width * 480,
-      y: (e.clientY - box.top) / box.height * 560,
-    };
-  };
-  const down = (e: KeyboardEvent) => {
-    if (!enabled || (!movement.includes(e.code) && !mineKeys.includes(e.code))) return;
+  const clear = () => { keys.clear(); pointer = null; queuedMine = false; };
+  window.addEventListener('keydown', e => {
+    if (!enabled || !['Space', 'Enter'].includes(e.code)) return;
     e.preventDefault();
-    if (movement.includes(e.code)) touch = null;
-    if (mineKeys.includes(e.code) && !keys.has(e.code)) queuedMine = true;
+    if (!keys.has(e.code)) queuedMine = true;
     keys.add(e.code);
-  };
-  const up = (e: KeyboardEvent) => keys.delete(e.code);
-  surface.addEventListener('pointerdown', e => {
-    if (!enabled || pointer !== null) return;
-    e.preventDefault(); pointer = e.pointerId; surface.setPointerCapture(pointer); setTouch(e);
   });
-  surface.addEventListener('pointermove', e => {
-    if (enabled && (e.pointerId === pointer || (e.pointerType === 'mouse' && pointer === null))) { e.preventDefault(); setTouch(e); }
-  });
-  const releaseSurface = (e: PointerEvent) => {
-    if (e.pointerId === pointer) { pointer = null; }
-  };
-  for (const event of ['pointerup', 'pointercancel', 'lostpointercapture']) {
-    surface.addEventListener(event, releaseSurface as EventListener);
-  }
-  action.addEventListener('pointerdown', e => {
-    if (!enabled || actionPointer !== null) return;
-    e.preventDefault(); actionPointer = e.pointerId; queuedMine = true;
-    action.setPointerCapture?.(actionPointer);
-  });
-  const releaseAction = (e: PointerEvent) => {
-    if (e.pointerId === actionPointer) actionPointer = null;
-  };
-  for (const event of ['pointerup', 'pointercancel', 'lostpointercapture']) {
-    action.addEventListener(event, releaseAction as EventListener);
-  }
-  window.addEventListener('keydown', down);
-  window.addEventListener('keyup', up);
+  window.addEventListener('keyup', e => keys.delete(e.code));
   window.addEventListener('blur', clear);
+  action.addEventListener('pointerdown', e => {
+    if (!enabled || pointer !== null) return;
+    e.preventDefault(); pointer = e.pointerId; queuedMine = true;
+    action.setPointerCapture?.(pointer);
+  });
+  for (const event of ['pointerup', 'pointercancel', 'lostpointercapture']) {
+    action.addEventListener(event, ((e: PointerEvent) => {
+      if (e.pointerId !== pointer) return;
+      pointer = null;
+      if (event !== 'pointerup') queuedMine = false;
+    }) as EventListener);
+  }
   return {
     enable(value: boolean) { enabled = value; clear(); },
     read() {
-      const movementInput = {
-        x: Number(keys.has('ArrowRight') || keys.has('KeyD')) - Number(keys.has('ArrowLeft') || keys.has('KeyA')),
-        y: Number(keys.has('ArrowDown') || keys.has('KeyS')) - Number(keys.has('ArrowUp') || keys.has('KeyW')),
-        aimX: touch?.x, aimY: touch?.y,
-      };
-      const placing = queuedMine || actionPointer !== null || mineKeys.some(key => keys.has(key));
+      const placing = queuedMine || pointer !== null || keys.size > 0;
       queuedMine = false;
-      return { ...movementInput, placing };
+      return { x: 0, y: 0, placing };
     },
   };
 }

@@ -2,7 +2,7 @@ import Phaser from 'phaser';
 import {
   createBomber, createFlight, createGunner, createLifeSupport, createSpaceBattleBomber, createSpaceBattlePilot, stepBomber,
   stepFlight, stepGunner, stepLifeSupport, stepSpaceBattleBomber, stepSpaceBattlePilot, WIDTH, HEIGHT,
-  automaticShipX, bomberBlastRadius, spaceBomberBlastRadius, BOMBER_MINE_COOLDOWN, BOMBER_MINE_LIFETIME, GUNNER_DEFENSE_LINE, type Asteroid, type FlightConfig, type FlightState,
+  mineDropPosition, automaticShipX, bomberBlastRadius, spaceBomberBlastRadius, BOMBER_MINE_COOLDOWN, BOMBER_MINE_LIFETIME, GUNNER_DEFENSE_LINE, type Asteroid, type FlightConfig, type FlightState,
   type BomberInput, type BomberState, type GunnerInput, type GunnerState, type Role, type Situation,
   LIFE_SUPPORT_SWITCH_Y, type LifeSupportInput, type LifeSupportPacket, type LifeSupportRoute,
   type LifeSupportState, type SpaceBattleBomberInput, type SpaceBattleBomberState,
@@ -132,9 +132,14 @@ export class FlightScene extends Phaser.Scene {
     g.fillStyle(0x26364f); g.fillCircle(385, 100, 43);
     g.fillStyle(0x172338); g.fillCircle(397, 94, 38);
     g.lineStyle(1, 0x60839d, 0.25); g.strokeCircle(385, 100, 45);
+    const automaticFlight = this.role === 'Bomber' || this.role === 'Gunner';
     for (let i = 0; i < 100; i++) {
       const x = (i * 137.5) % WIDTH;
-      const y = ((i * 79.3) + elapsed * (12 + i % 3 * 8)) % HEIGHT;
+      const speed = automaticFlight ? 110 + i % 3 * 45 : 12 + i % 3 * 8;
+      const y = ((i * 79.3) + elapsed * speed) % HEIGHT;
+      if (automaticFlight && i % 3 === 0) {
+        g.lineStyle(1, 0x8ab9dc, 0.25); g.lineBetween(x, y, x, y - 9);
+      }
       g.fillStyle(i % 3 ? 0x607999 : 0xc8e5ff, 0.8); g.fillCircle(x, y, i % 3 ? 1 : 1.6);
     }
     g.lineStyle(1, 0x344563); g.strokeRect(8, 8, WIDTH - 16, HEIGHT - 16);
@@ -221,7 +226,8 @@ export class FlightScene extends Phaser.Scene {
   private paintSpaceBattleBomberMode(g: Phaser.GameObjects.Graphics) {
     const s = this.spaceBomber;
     this.paintWeaponTarget(g, s.aimX, Math.min(s.y - 34, s.aimY), 14, 0x79e1ce, s.missileCooldown <= 0);
-    this.paintWeaponTarget(g, s.aimX, Math.max(s.y + 34, s.aimY), spaceBomberBlastRadius(this.config), 0xffca83, s.mineCooldown <= 0);
+    const drop = mineDropPosition(s);
+    this.paintWeaponTarget(g, drop.x, drop.y, spaceBomberBlastRadius(this.config), 0xffca83, s.mineCooldown <= 0);
     if (s.impactFlash) { g.fillStyle(0xff715b, 0.14); g.fillRect(9, 9, WIDTH - 18, HEIGHT - 18); }
     for (const explosion of s.explosions) {
       const progress = explosion.remaining / 0.28;
@@ -393,19 +399,60 @@ export class FlightScene extends Phaser.Scene {
         for (let hp = 0; hp < asteroid.hp; hp++) g.fillCircle(asteroid.x - 4 + hp * 8, asteroid.y - asteroid.radius - 7, 2.5);
       }
     }
-    const turretX = automaticShipX(s.elapsed), turretY = HEIGHT - 30;
-    this.paintPlayerShip(g, turretX, turretY, s.elapsed, false);
-    if (s.beamTime > 0) {
-      g.lineStyle(8, 0x79e1ce, 0.10); g.lineBetween(turretX, turretY, s.beamX, s.beamY);
-      g.lineStyle(2, 0xd9fff6, 0.9); g.lineBetween(turretX, turretY, s.beamX, s.beamY);
-      g.fillStyle(0xffffff, 0.9); g.fillCircle(s.beamX, s.beamY, 5);
+    const turretX = automaticShipX(s.elapsed), turretY = HEIGHT - 44;
+    // A larger armored weapon deck, exposed engines and service lights.
+    g.save(); g.translateCanvas(turretX, turretY); g.scaleCanvas(1.65, 1.25);
+    this.paintPlayerShip(g, 0, 0, s.elapsed, false); g.restore();
+    for (const side of [-1, 1]) {
+      const x = turretX + side * 32;
+      g.fillStyle(0x26384f); g.lineStyle(1, 0x91b7d5, 0.9);
+      g.fillRoundedRect(x - 7, turretY - 11, 14, 31, 4);
+      g.strokeRoundedRect(x - 7, turretY - 11, 14, 31, 4);
+      for (let vent = 0; vent < 3; vent++) {
+        g.lineStyle(2, 0x101b30); g.lineBetween(x - 4, turretY + vent * 5, x + 4, turretY + vent * 5);
+      }
+      g.fillStyle(0x79e1ce, 0.8); g.fillCircle(x, turretY - 6, 2);
+      const flame = 12 + Math.sin(s.elapsed * 35) * 4;
+      g.fillStyle(0x71e4f5, 0.22); g.fillTriangle(x - 6, turretY + 20, x + 6, turretY + 20, x, turretY + 20 + flame);
+      g.fillStyle(0xe4ffff); g.fillTriangle(x - 2, turretY + 20, x + 2, turretY + 20, x, turretY + 27);
     }
     const angle = Math.atan2(s.crosshairY - turretY, s.crosshairX - turretX);
-    g.fillStyle(0x31435f); g.lineStyle(2, 0x8facc7);
-    g.fillRoundedRect(turretX - 30, turretY - 13, 60, 28, 8); g.strokeRoundedRect(turretX - 30, turretY - 13, 60, 28, 8);
-    g.lineStyle(9, this.config.naturalOne ? 0xe29a62 : 0x91b7d5);
-    g.lineBetween(turretX, turretY - 5, turretX + Math.cos(angle) * 27, turretY - 5 + Math.sin(angle) * 27);
-    g.fillStyle(this.config.naturalOne ? 0xffac64 : 0x71e4f5); g.fillCircle(turretX, turretY - 4, 7);
+    const muzzleX = turretX + Math.cos(angle) * 30;
+    const muzzleY = turretY + Math.sin(angle) * 30;
+    if (s.beamTime > 0) {
+      g.lineStyle(8, 0x79e1ce, 0.10); g.lineBetween(muzzleX, muzzleY, s.beamX, s.beamY);
+      g.lineStyle(2, 0xd9fff6, 0.9); g.lineBetween(muzzleX, muzzleY, s.beamX, s.beamY);
+      g.fillStyle(0xffffff, 0.9); g.fillCircle(s.beamX, s.beamY, 5);
+    }
+    g.fillStyle(0x26364f); g.lineStyle(2, 0x8facc7);
+    g.fillCircle(turretX, turretY, 17); g.strokeCircle(turretX, turretY, 17);
+    g.lineStyle(1, 0x506b88); g.strokeCircle(turretX, turretY, 12);
+    // Twin barrels rotate with the aim, with visible recoil and cooling bands.
+    const recoil = s.beamTime > 0 ? 3 : 0;
+    const color = this.config.naturalOne ? 0xffac64 : 0x91b7d5;
+    for (const side of [-1, 1]) {
+      const ox = -Math.sin(angle) * side * 5, oy = Math.cos(angle) * side * 5;
+      g.lineStyle(5, color);
+      g.lineBetween(turretX + ox, turretY + oy,
+        turretX + ox + Math.cos(angle) * (30 - recoil), turretY + oy + Math.sin(angle) * (30 - recoil));
+      for (const length of [14, 20]) {
+        const x = turretX + ox + Math.cos(angle) * length;
+        const y = turretY + oy + Math.sin(angle) * length;
+        g.lineStyle(2, 0x354c65);
+        g.lineBetween(x - Math.sin(angle) * 3, y + Math.cos(angle) * 3,
+          x + Math.sin(angle) * 3, y - Math.cos(angle) * 3);
+      }
+    }
+    if (s.beamTime > 0) {
+      g.fillStyle(0xd9fff6, 0.7); g.fillCircle(muzzleX, muzzleY, 6);
+      g.lineStyle(2, 0xffca83, 0.8);
+      for (let spark = 0; spark < 6; spark++) {
+        const direction = spark * Math.PI / 3 + s.elapsed;
+        g.lineBetween(s.beamX + Math.cos(direction) * 8, s.beamY + Math.sin(direction) * 8,
+          s.beamX + Math.cos(direction) * 16, s.beamY + Math.sin(direction) * 16);
+      }
+    }
+    g.fillStyle(s.cooldown <= 0 ? 0x79e1ce : 0xffac64); g.fillCircle(turretX, turretY, 5);
     const ready = s.cooldown <= 0;
     const pulse = ready ? 1 : 0.45;
     g.lineStyle(2, ready ? 0x79e1ce : 0xbba6ff, pulse);
@@ -426,7 +473,8 @@ export class FlightScene extends Phaser.Scene {
 
   private paintBomberMode(g: Phaser.GameObjects.Graphics) {
     const s = this.bomber;
-    this.paintWeaponTarget(g, s.aimX, s.aimY, bomberBlastRadius(this.config), 0xffca83, s.cooldown <= 0);
+    const drop = mineDropPosition(s);
+    this.paintWeaponTarget(g, drop.x, drop.y, bomberBlastRadius(this.config), 0xffca83, s.cooldown <= 0);
     if (s.impactFlash) { g.fillStyle(0xff715b, 0.14); g.fillRect(9, 9, WIDTH - 18, HEIGHT - 18); }
     for (const explosion of s.explosions) {
       const progress = explosion.remaining / 0.28;

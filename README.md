@@ -27,10 +27,10 @@ Open the local URL printed by Vite, including `/galaxy-grown-games/`. If network
 - Pilot controls: Arrow keys/WASD steer; holding/dragging on the playfield steers toward a destination at the same speed cap. Touch never teleports the ship.
 - Gunner impairment: an overheated gun has **double the selected difficulty's cooldown**, producing half its normal sustained rate of fire.
 - Gunner round: destroy incoming asteroids before they cross the defense line. Each impact costs one of 3 hull points. Armored asteroids take two hits and are introduced more often on harder difficulties.
-- Gunner flies automatically, with scrolling scenery and a slowly weaving ship-mounted turret. Players control only the weapon. Crossing the defense line still costs hull.
+- Gunner flies automatically, with scrolling scenery and a weaving ship-mounted turret. Players control only the weapon. Crossing the defense line still costs hull.
 - Gunner controls: tap, hold, or drag on touch screens; move the mouse to aim and click or hold to fire on computers. Both use the same Pointer Events path, direct reticle placement, and weapon cooldown; Gunner intentionally does not use keyboard reticle movement.
 - Gunner score: 100 per destroyed asteroid, rounded survival seconds × 5, and 100 per remaining hull point. This is provisional and is not a cross-role scoring standard.
-- Bomber follows an automatic flight course while pursuing asteroids travel upward. Touch/mouse positions an amber mine target behind the ship; Arrow keys/WASD moves the reticle at 225px/s. Space/Enter or **Drop mine** places mines at the target. Release touch to retain the aim and use the weapon button with the same finger, or aim and place simultaneously.
+- Bomber follows an automatic flight course while pursuing asteroids travel upward. Time mine releases with Space/Enter or **Drop mine**. Mines always release 34px directly behind the ship, independent of touch, mouse, or keyboard aiming; Asteroid Bomber has no aiming controls.
 - Up to 616px viewport width, Bomber keeps the full available canvas width and places Drop mine in a separate row immediately below it. The side rail starts only when the full 480px canvas, 90px rail, 10px gap, and page padding fit; wider touch devices use a compact rail.
 - Bomber mines arm after 0.25 seconds, last 5 seconds, and can be placed every 0.65 seconds. Contact detonates a mine and destroys asteroid centers inside its visible blast circle.
 - Bomber Natural 1 reduces the mine blast radius by `sqrt(0.5)`, so both the drawn target and collision target have exactly half their normal area. The trigger remains a close-contact fuse.
@@ -43,7 +43,7 @@ Open the local URL printed by Vite, including `/galaxy-grown-games/`. If network
 - Space Battle enemies cross the field and fire shots aimed at the ship's position when fired. Contact with a ship or shot removes one of 3 hull points, with 1.25 seconds of collision grace.
 - Space Battle / Pilot ends after 60 seconds, at zero hull, or when fuel is depleted. Its score is rounded survival seconds × 10, plus 100 per remaining hull point and 50 per fuel cell collected.
 - Space Battle / Pilot uses the shared keyboard/touch steering path. A Natural 1 applies the same overloaded-engine impairment: 60% of the selected difficulty's normal movement speed.
-- Space Battle / Bomber flies automatically. Touch/mouse or Arrow keys/WASD positions weapon targets. Space or **Fire missile** launches toward the cyan forward target; Enter/Shift or **Drop mine** places a mine at the amber aft target. Forward and aft targets share the chosen horizontal aim, with vertical aim clamped to each weapon’s hemisphere. Missiles maintain their launch direction and speed; mines retain the contact fuse and arming delay.
+- Space Battle / Bomber flies automatically. Touch/mouse or Arrow keys/WASD aims missiles ahead; Space or **Fire missile** launches from the nose toward the cyan target. Enter/Shift or **Drop mine** releases a mine 34px directly behind the ship, independent of missile aim. Missiles maintain their launch direction and speed; mines retain the contact fuse and arming delay.
 - Forward enemy ships enter from the top while pursuing ships enter from behind. Missiles and mines can destroy either when their paths overlap; ship collisions cost one of 3 hull points with 1.25 seconds of collision grace.
 - Space Battle / Bomber missiles have a 0.38-second cooldown. Mines arm after 0.2 seconds, last 4.5 seconds, and have a 0.85-second cooldown. Natural 1 affects the circular mine blast target: multiplying its radius by `sqrt(0.5)` gives the rendered target and collision target exactly half normal area. Missiles are unaffected.
 - Space Battle / Bomber score is 100 per destroyed ship, rounded survival seconds × 5, and 100 per remaining hull point. The run ends after 60 seconds or when hull reaches zero.
@@ -61,7 +61,7 @@ The build targets `/galaxy-grown-games/`. The check workflow runs tests and buil
 
 ### Validation status
 
-- Forty-three automated tests pass, covering the shared difficulty bands and lifecycle; Pilot touch/keyboard input and Asteroid movement/collisions; Gunner touch/mouse pointer input, cooldown, targeting, armor, impacts, scoring, and reporting; Asteroid Bomber simultaneous aim/action input, mine placement and detonation, exact half-area impairment, impacts, scoring, reporting, and the reserved sticky control rail across touch viewport widths; Life Support keyboard/touch routing, deterministic heart/overload cycles, integrity, difficulty, scoring, and reporting; Space Battle Pilot fuel, enemies, shots, collisions, all end conditions, impairment, tuning, scoring, and reporting; Space Battle Bomber independent missile/mine inputs, exact half-area target, enemy destruction, collisions, difficulty, scoring, and startup integration; and the retry-safe Pages job structure.
+- Forty-three automated tests pass, covering the shared difficulty bands and lifecycle; Pilot touch/keyboard input and Asteroid movement/collisions; Gunner touch/mouse pointer input, cooldown, targeting, armor, impacts, scoring, and reporting; Asteroid Bomber mine release input, mine placement and detonation, exact half-area impairment, impacts, scoring, reporting, and the reserved sticky control rail across touch viewport widths; Life Support keyboard/touch routing, deterministic heart/overload cycles, integrity, difficulty, scoring, and reporting; Space Battle Pilot fuel, enemies, shots, collisions, all end conditions, impairment, tuning, scoring, and reporting; Space Battle Bomber independent missile/mine inputs, exact half-area target, enemy destruction, collisions, difficulty, scoring, and startup integration; and the retry-safe Pages job structure.
 - TypeScript check and Vite production build pass.
 - Phaser produces a large-bundle advisory (~337 KB gzip); bundle optimization remains future work.
 - Connected-browser QA cannot reach the local Vite address from mobile ChatGPT Work sessions. Automated checks still run there, but real iPhone/iPad Safari behavior remains a manual playtest requirement; desktop mobile emulation must not be reported as real-device Safari QA.
@@ -127,16 +127,16 @@ Enemy pressure, 58px mine radius, weapon cadence, collision tolerance, and scori
 
 ### Proposed Asteroid Field bomber balance
 
-Harder checks send faster, more frequent pursuing asteroids with stronger inward drift. Bomber reticle speed and mine cadence stay consistent across difficulties, while a Natural 1 halves the mine target area independently of the selected difficulty.
+Harder checks send faster, more frequent pursuing asteroids with stronger inward drift. Bomber automatic course and mine cadence stay consistent across difficulties, while a Natural 1 halves the mine target area independently of the selected difficulty.
 
-| Difficulty | Asteroid speed (px/s) | Spawn interval (s) | Reticle speed (px/s) | Inward drift |
-| --- | ---: | ---: | ---: | ---: |
-| Very Easy | 115 | 1.12 | 225 | 0.28 |
-| Easy | 140 | 0.92 | 225 | 0.38 |
-| Medium | 170 | 0.74 | 225 | 0.48 |
-| Hard | 200 | 0.58 | 225 | 0.58 |
+| Difficulty | Asteroid speed (px/s) | Spawn interval (s) | Inward drift |
+| --- | ---: | ---: | ---: |
+| Very Easy | 115 | 1.12 | 0.28 |
+| Easy | 140 | 0.92 | 0.38 |
+| Medium | 170 | 0.74 | 0.48 |
+| Hard | 200 | 0.58 | 0.58 |
 
-Bomber hazard pressure, blast radius, mine cadence, scoring, collision tolerance, and the 1.25-second collision grace are provisional playtest values. Hold Space/Enter or Drop mine to place mines at the aft target. Mine lifetime dials, ready lights on the ship’s mine racks, and a cyan collision-grace ring provide feedback. All five playable modes share corner hardware and consistent HUD/playfield widths (Bomber includes its reserved control rail on wide screens). The mode still needs human playtesting on touch and desktop controls, especially simultaneous touch aiming and mine placement.
+Bomber hazard pressure, blast radius, mine cadence, scoring, collision tolerance, and the 1.25-second collision grace are provisional playtest values. Hold Space/Enter or Drop mine to drop mines directly behind the ship. Mine lifetime dials, ready lights on the ship’s mine racks, and a cyan collision-grace ring provide feedback. All five playable modes share corner hardware and consistent HUD/playfield widths (Bomber includes its reserved control rail on wide screens). The mode still needs human playtesting on touch and desktop controls, especially mine timing as the ship sweeps across the field.
 
 ### Proposed Asteroid Field Life Support balance
 
@@ -155,18 +155,18 @@ Life Support packet timing, five-point integrity pool, two-damage overload mista
 
 Automated regression coverage verifies safe escapes and near misses in all four bands with/without Natural 1, simultaneous collision protection, grace expiry, and later damaging hits. `npm test` passes 37 tests; `npm run build` passes with the existing Phaser bundle-size advisory. The connected preview browser returned `net::ERR_BLOCKED_BY_CLIENT` for the local Vite address; rendered appearance, console health, and real-device interactions are not verified for this refinement.
 
-- On iPhone/iPad Safari and desktop, aim while holding the mine action, let asteroids escape, and confirm only ship collisions reduce hull.
+- On iPhone/iPad Safari and desktop, hold the mine action while the ship flies automatically, let asteroids escape, and confirm only ship collisions reduce hull.
 - Check the protection ring after a hit, mine lifetime dials, and the smaller Natural-1 blast circle; confirm pause freezes their timing and explicit resume continues it.
 - Check all five playable modes in portrait/landscape: aligned HUD and canvas, readable scores/fuel, reachable Pause, and unobstructed mine/routing controls. Include widths around 616px for the Bomber rail transition.
 - Complete a run, inspect/copy the result report, and retry. Assess whether collision-only damage is now too forgiving before adjusting hazard pressure or score values.
 
 ### Automatic flight for weapon stations
 
-Bomber and Gunner players operate weapons; Pilot players steer. Scrolling scenery represents forward travel. Weapon-station ships weave predictably by `60 * sin(elapsed / 8)` pixels around center, without reacting to targeting input. The course, reticle speed, and remote mine placement are provisional playtest choices. Difficulty bands, weapon cooldowns, hazard pressure, natural-1 effects, hull rules, and GM reporting remain unchanged.
+Bomber and Gunner players operate weapons; Pilot players steer. Scrolling scenery represents forward travel. Weapon-station ships weave predictably by `120 * sin(elapsed * PI / 4)` pixels around center, without reacting to targeting input. The course now completes a full cycle in eight seconds (formerly about 50 seconds), and weapon-station stars pass at 110–200px/s with light streaks. The course and missile reticle speed are provisional playtest choices. Difficulty bands, weapon cooldowns, hazard pressure, natural-1 effects, hull rules, and GM reporting remain unchanged.
 
-- Asteroid Bomber shows an amber mine blast preview behind the ship. Mines appear at that target, arm after the existing delay, and detonate on contact.
-- Space Battle Bomber shows a cyan forward missile target and an amber aft mine preview. Each target uses the same horizontal aim; the chosen vertical aim is clamped forward or aft. The blast preview uses the exact same natural-1 radius as damage.
-- Gunner retains direct touch/mouse firing, armor, and defense-line mechanics; the weapon platform now visibly rides on the automatically flying ship.
+- Asteroid Bomber shows an amber mine blast preview fixed behind the ship. Mines release there, stay at their drop location as the ship moves on, arm after the existing delay, and detonate on contact. Players time releases; they cannot place mines remotely.
+- Space Battle Bomber shows a cyan forward missile target and an amber mine preview fixed behind the ship. Missile aim never changes the mine drop point. The blast preview uses the exact same natural-1 radius as damage.
+- Gunner retains direct touch/mouse firing, armor, and defense-line mechanics. Its enlarged armored ship has vented engine pods, twin rotating barrels, cooling bands, recoil, muzzle flashes and impact sparks. Extra detail uses bounded procedural drawing without new assets.
 - Pause freezes the course, targets, projectiles, and cooldowns. Resume clears held/queued actions while retaining the simulation’s target. Retry resets the flight and targets.
 
-Validation for this change uses GitHub Actions because this editing session has no terminal or browser runtime. Real-device iPhone/iPad Safari and rendered desktop QA remain unverified. Before merging, play both Bomber modes and Gunner: confirm the ship moves without input, aiming cannot steer it, targets are readable, both weapon buttons are reachable, a released touch retains aim, keyboard aiming works, pause/resume does not fire stale actions, and reports/retry work. Check portrait/landscape and Hard with Natural 1. Existing bundle-size warnings still require the tracked follow-up; this change does not approve ignoring them.
+Validation for this change uses GitHub Actions because this editing session has no terminal or browser runtime. Real-device iPhone/iPad Safari and rendered desktop QA remain unverified. Before merging, play both Bomber modes and Gunner: confirm the ship moves without input, aiming cannot steer it, targets are readable, both weapon buttons are reachable, Space Battle retains missile aim after touch release and keyboard missile aiming works, pause/resume does not fire stale actions, and reports/retry work. Check portrait/landscape and Hard with Natural 1. Existing bundle-size warnings still require the tracked follow-up; this change does not approve ignoring them.

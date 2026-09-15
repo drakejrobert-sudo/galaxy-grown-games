@@ -315,14 +315,18 @@ export interface BomberState {
 }
 
 /** A predictable flight course independent of targeting, difficulty, or impairment.
- * Scrolling scenery supplies forward travel; the slow weave makes autopilot visible.
- * Provisional playtest values: 60px lateral amplitude, 8-second sine scale.
+ * Scrolling scenery supplies forward travel; a broad sweep makes autopilot visible.
+ * Provisional playtest values: 120px amplitude and an 8-second full cycle.
  */
 export function automaticShipX(elapsed: number): number {
-  return WIDTH / 2 + Math.sin(elapsed / 8) * 60;
+  return WIDTH / 2 + Math.sin(elapsed * Math.PI / 4) * 120;
 }
 
 export const BOMBER_AIM_SPEED = 225;
+export const MINE_DROP_OFFSET = 34;
+export function mineDropPosition(ship: { x: number; y: number }) {
+  return { x: ship.x, y: ship.y + MINE_DROP_OFFSET };
+}
 function aimBomber(
   s: { aimX: number; aimY: number },
   input: BomberInput,
@@ -342,7 +346,7 @@ export function bomberBlastRadius(config: FlightConfig): number {
 
 export function createBomber(): BomberState {
   return {
-    x: WIDTH / 2, y: 105, aimX: WIDTH / 2, aimY: 300, elapsed: 0, hull: 3, impacts: 0, destroyed: 0,
+    x: WIDTH / 2, y: 105, aimX: WIDTH / 2, aimY: 105 + MINE_DROP_OFFSET, elapsed: 0, hull: 3, impacts: 0, destroyed: 0,
     minesPlaced: 0, invulnerable: 0, cooldown: 0, spawnIn: 0.8, asteroids: [], mines: [],
     explosions: [], finished: false, nextId: 1, impactFlash: 0,
   };
@@ -366,11 +370,12 @@ export function stepBomber(
   s.explosions = s.explosions.filter(explosion => explosion.remaining > 0);
 
   s.x = automaticShipX(s.elapsed);
-  aimBomber(s, input, dt, s.y + 34);
+  const drop = mineDropPosition(s);
+  s.aimX = drop.x; s.aimY = drop.y;
 
   if (input.placing && s.cooldown <= 0) {
     s.mines.push({
-      id: s.nextId++, x: s.aimX, y: s.aimY, blastRadius: bomberBlastRadius(config),
+      id: s.nextId++, ...mineDropPosition(s), blastRadius: bomberBlastRadius(config),
       armIn: BOMBER_MINE_ARM_TIME, expiresIn: BOMBER_MINE_LIFETIME,
     });
     s.minesPlaced++;
@@ -894,7 +899,7 @@ export function stepSpaceBattleBomber(
   }
   if (input.placing && s.mineCooldown <= 0) {
     s.mines.push({
-      id: s.nextId++, x: s.aimX, y: Math.max(s.y + 34, s.aimY), blastRadius: spaceBomberBlastRadius(config),
+      id: s.nextId++, ...mineDropPosition(s), blastRadius: spaceBomberBlastRadius(config),
       armIn: SPACE_BOMBER_MINE_ARM_TIME, expiresIn: SPACE_BOMBER_MINE_LIFETIME,
     });
     s.minesPlaced++;
