@@ -10,10 +10,10 @@ Run `npm ci` and `npm run build` with Node 22.12 or newer to reproduce the produ
 | --- | ---: | ---: | ---: |
 | Before: minified | 1,268.37 kB | — | 1,268.37 kB |
 | Before: gzip | 349.75 kB | — | 349.75 kB |
-| After: minified | 40.19 kB | 1,229.96 kB | 1,270.15 kB |
-| After: gzip | 12.17 kB | 338.70 kB | 350.87 kB |
+| After: minified | 40.29 kB | 1,229.96 kB | 1,270.25 kB |
+| After: gzip | 12.21 kB | 338.70 kB | 350.91 kB |
 
-The setup page now downloads **337.58 kB (96.5%) less gzip JavaScript** before a player starts a challenge. The total compressed JavaScript is 1.12 kB larger; Phaser has been deferred, not reduced. Vite still reports the deferred chunk above its 500 kB minified warning threshold. That warning remains enabled and is expected for this dependency.
+The setup page now downloads **337.54 kB (96.5%) less gzip JavaScript** before a player starts a challenge. The total compressed JavaScript is 1.16 kB larger; Phaser has been deferred, not reduced. Vite still reports the deferred chunk above its 500 kB minified warning threshold. That warning remains enabled and is expected for this dependency.
 
 A temporary Vite `generateBundle` inspection of `chunk.modules[*].renderedLength` found 8,276,043 bytes from `node_modules/phaser/` out of 8,311,222 rendered module bytes in the deferred chunk (**99.6% before minification**). The percentage describes Vite's module accounting, not compressed network bytes. The scene, rules, and input code are a small fraction of the deferred chunk.
 

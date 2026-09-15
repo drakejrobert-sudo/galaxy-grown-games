@@ -64,6 +64,8 @@ const spaceBomberInput = createSpaceBomberInput(canvas, fireAction, action);
 const lifeSupportInput = createLifeSupportInput(routeButtons);
 let game: Phaser.Game | null = null;
 let loading = false;
+let launchPending = false;
+let pauseOnReady = false;
 let config: FlightConfig = { total: 10, naturalOne: false };
 let role: Role = 'Pilot';
 let situation: Situation = 'Asteroid Field';
@@ -120,9 +122,13 @@ function setPaused(value: boolean) {
 get('pause').addEventListener('click', () => setPaused(!paused));
 get('resume').addEventListener('click', () => setPaused(false));
 window.addEventListener('keydown', e => { if (inFlight && e.code === 'Escape') { e.preventDefault(); setPaused(!paused); } });
-window.addEventListener('blur', () => { if (inFlight) setPaused(true); });
-document.addEventListener('visibilitychange', () => { if (document.hidden && inFlight) setPaused(true); });
+window.addEventListener('blur', () => { if (inFlight) setPaused(true); else if (launchPending) pauseOnReady = true; });
+document.addEventListener('visibilitychange', () => {
+  if (!document.hidden) return;
+  if (inFlight) setPaused(true); else if (launchPending) pauseOnReady = true;
+});
 function resetSetup() {
+  launchPending = false; pauseOnReady = false;
   inFlight = false; if (scene) scene.activeFlight = false; input.enable(false); gunnerInput.enable(false); bomberInput.enable(false); spaceBomberInput.enable(false); lifeSupportInput.enable(false); paused = false;
   get('pause-overlay').hidden = true; show('setup'); total.focus();
 }
@@ -135,6 +141,9 @@ function preparePlayLayout() {
   routeControls.hidden = role !== 'Life Support';
 }
 function launch() {
+  const startPaused = pauseOnReady || document.hidden;
+  launchPending = false;
+  pauseOnReady = false;
   scene!.begin(config, situation, role);
   lifeSupportInput.reset();
   input.enable(role === 'Pilot');
@@ -179,7 +188,7 @@ function launch() {
     : role === 'Gunner' ? 'Standard weapon cooling'
       : role === 'Bomber' ? 'Standard mine blast target' : 'Standard packet mix';
   get('flight-status').textContent = `${difficultyFor(config.total)} · Check ${config.total} · ${config.naturalOne ? `Natural 1: ${impairment}` : standard}`;
-  get('canvas').focus();
+  if (startPaused) setPaused(true); else get('canvas').focus();
 }
 function setLoading(value: boolean) {
   loading = value;
@@ -196,6 +205,7 @@ get('flight-form').addEventListener('submit', async e => {
   config = { total: parsed, naturalOne: natural.checked };
   situation = situationSelect.value === 'Space Battle' ? 'Space Battle' : 'Asteroid Field';
   role = roleSelect.value as Role;
+  launchPending = true;
   if (!game) {
     setLoading(true);
     try {
