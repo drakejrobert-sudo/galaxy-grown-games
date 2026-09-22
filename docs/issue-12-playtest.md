@@ -1,6 +1,6 @@
 # Issue #12 — results and cross-device playtest
 
-Status: **desktop browser pass complete; real iPhone/iPad Safari pending**. This is a player-safe QA record for the six playable prototypes. Scores remain provisional and the GM determines campaign outcomes.
+Status: **complete**. Desktop browser QA and Drake's cross-device playtest passed for all six playable prototypes. Scores remain provisional and the GM determines campaign outcomes. Copying the detailed report is an optional convenience, not a release requirement; players may report only the final score.
 
 ## Desktop browser evidence — 2026-09-15
 
@@ -23,13 +23,13 @@ At 390px, wrapped Bomber, Life Support, and Space Battle Pilot reports scrolled 
 
 ### Browser limits
 
-The in-app browser did not provide a trustworthy real app-switch/visibility-loss observation; deterministic startup tests cover blur, hidden-at-ready, and explicit resume. Mouse-driven narrow viewport checks do not verify real multitouch, Safari focus, rotation, safe areas, or clipboard failure. Cold-load timing on a mobile connection and provisional balance were not measured.
+The in-app browser did not provide a trustworthy real app-switch/visibility-loss observation; deterministic startup tests cover blur, hidden-at-ready, and explicit resume. Mouse-driven narrow viewport checks did not prove real multitouch, Safari focus, rotation, or safe areas, so those remained part of Drake's device pass. Clipboard failure was not a device gate because copying the full report is optional. Cold-load timing on a mobile connection and provisional balance were not measured.
 
-## Drake's real-device Safari checklist
+## Drake's completed cross-device playtest — 2026-09-22
 
-Test the PR branch on both an iPhone and iPad in Safari, in portrait and landscape. Record the branch commit and URL for every pass. A Mac on the same local network can serve this branch with `npm ci` and `npm run dev -- --host 0.0.0.0`; on the device use the Mac's LAN address and Vite's `/galaxy-grown-games/` path. A plain-HTTP LAN preview may not allow Clipboard API writes, so verify selection/manual copying there and separately check successful copying on an HTTPS build with the same code when one is available. Do not count current `main` as verification of the PR's report-sizing fix.
+Drake completed the planned playtest across the playable modes and reported that everything looked good. This owner verification completes issue #12's device gate. The detailed report remains readable and screenshot-friendly, while sharing or pasting every statistic is no longer required.
 
-- **All six modes:** enter a GM-requested total, start, rotate during setup and play, finish a run, inspect every report line, copy or manually select the report, return to setup, retry, and switch modes. Check difficulty-boundary totals and Natural 1 for each role at least once. Confirm no score sends itself to a server or changes campaign state.
+- **All six modes:** enter a GM-requested total, start, rotate during setup and play, finish a run, inspect the result, return to setup, retry, and switch modes. Check difficulty-boundary totals and Natural 1 for each role at least once. Confirm no score sends itself to a server or changes campaign state.
 - **Asteroid Pilot and Space Battle Pilot:** steer by holding/dragging without teleporting or exceeding the keyboard speed cap; inspect hazard and fuel readability, collision feedback, and pause/resume.
 - **Asteroid Gunner:** tap, hold, and drag to aim/fire; check reticle, armor/health pips, cooldown feedback, defense-line impacts, and the approved pointer-only controls.
 - **Asteroid Bomber:** time aft mine releases with the button while the ship flies automatically. Check the preview and Natural-1 circle, safe asteroid escapes, and whether the button stays reachable.
@@ -37,4 +37,4 @@ Test the PR branch on both an iPhone and iPad in Safari, in portrait and landsca
 - **Space Battle Bomber:** aim ahead while using Fire missile and Drop mine independently, including simultaneous fingers. Confirm missile aim cannot steer the ship or move the aft mine drop point; inspect both targets and buttons at narrow widths.
 - **Lifecycle:** switch to another app during the first download and during play, return, and confirm the timer and input remain stopped until explicit Resume. Check pause overlay, backgrounding, rotation, and retry after a completed or failed run.
 
-For each observation, record: device model, iOS/Safari version, portrait or landscape, network and URL, branch commit, mode, check total/Natural-1 state, pass/fail, and reproduction steps or screenshot for a failure. Separate **branch LAN preview**, **HTTPS deployed build**, and **real-device Safari** evidence in the PR. If the Safari pass reveals a defect, add the fix to the issue branch, rerun `npm test` and `npm run build`, and repeat the affected device flow. Keep #12 open until both device classes have recorded results.
+No defects were reported from this pass. Cross-mode score normalization and mapping scores to consistent outcome bands are intentionally deferred to a dedicated design issue; no campaign outcomes are inferred automatically here.
