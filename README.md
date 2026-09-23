@@ -3,7 +3,7 @@ A repository for hosting mini games for the galaxy grown campaign.
 
 ## First playable slice
 
-Asteroid Field / Pilot, Gunner, Bomber, and Life Support, plus Space Battle / Pilot and Bomber, are implemented as **prototypes awaiting balance and device QA**. Other situation/role combinations are visibly disabled. Players enter their GM-requested final skill-check total and a separate Natural 1 flag, play independently, and manually share their score. No campaign data or live multiplayer service is included.
+Asteroid Field / Pilot, Gunner, Bomber, and Life Support, plus Space Battle / Pilot and Bomber, are implemented as **prototypes awaiting score calibration**. Other situation/role combinations are visibly disabled. Players enter their GM-requested final skill-check total and a separate Natural 1 flag, play independently, and manually share their rating or score. No campaign data or live multiplayer service is included.
 
 Player link: [play.drakesfood.com](https://play.drakesfood.com/). This HTTPS shortlink redirects to the current GitHub Pages deployment and remains the link to share if the underlying hosting URL changes.
 
@@ -22,6 +22,8 @@ Open the local URL printed by Vite, including `/galaxy-grown-games/`. If network
 
 ### Rules and provisional balance
 
+Each finished run now shows a provisional **0–100 rating** and GM advisory band: 0–24 Setback, 25–49 Mixed, 50–74 Success, and 75–100 Exceptional. A hull, integrity, or fuel failure caps the band at Success while retaining the earned rating and raw points. The modified check and Natural 1 affect gameplay and appear in the report, but do not adjust the rating again. Raw points remain in the manual report. The GM alone determines campaign consequences. See [scoring calibration](docs/scoring-calibration.md) for the reproducible synthetic samples, mode-specific anchors, version, and real-playtest review still needed before thresholds are final.
+
 - Modified totals: <=5 Hard, 6–10 Medium, 11–15 Easy, >=16 Very Easy.
 - Natural 1 is an additional impairment, independent of the modified total.
 - Pilot engine impairment: **60% normal movement speed**.
@@ -31,7 +33,7 @@ Open the local URL printed by Vite, including `/galaxy-grown-games/`. If network
 - Gunner round: destroy incoming asteroids before they cross the defense line. Each impact costs one of 3 hull points. Armored asteroids take two hits and are introduced more often on harder difficulties.
 - Gunner flies automatically, with scrolling scenery and a weaving ship-mounted turret. Players control only the weapon. Crossing the defense line still costs hull.
 - Gunner controls: tap, hold, or drag on touch screens; move the mouse to aim and click or hold to fire on computers. Both use the same Pointer Events path, direct reticle placement, and weapon cooldown; Gunner intentionally does not use keyboard reticle movement.
-- Gunner score: 100 per destroyed asteroid, rounded survival seconds × 5, and 100 per remaining hull point. This is provisional and is not a cross-role scoring standard.
+- Gunner raw score: 100 per destroyed asteroid, rounded survival seconds × 5, and 100 per remaining hull point. Its points are converted to the common rating; raw totals are not directly comparable across modes.
 - Bomber follows an automatic flight course while pursuing asteroids travel upward. Time mine releases with Space/Enter or **Drop mine**. Mines always release 34px directly behind the ship, independent of touch, mouse, or keyboard aiming; Asteroid Bomber has no aiming controls.
 - Up to 616px viewport width, Bomber keeps the full available canvas width and places Drop mine in a separate row immediately below it. The side rail starts only when the full 480px canvas, 90px rail, 10px gap, and page padding fit; wider touch devices use a compact rail.
 - Bomber mines arm after 0.25 seconds, last 5 seconds, and can be placed every 0.65 seconds. Contact detonates a mine and destroys asteroid centers inside its visible blast circle.
@@ -50,7 +52,7 @@ Open the local URL printed by Vite, including `/galaxy-grown-games/`. If network
 - Space Battle / Bomber missiles have a 0.38-second cooldown. Mines arm after 0.2 seconds, last 4.5 seconds, and have a 0.85-second cooldown. Natural 1 affects the circular mine blast target: multiplying its radius by `sqrt(0.5)` gives the rendered target and collision target exactly half normal area. Missiles are unaffected.
 - Space Battle / Bomber score is 100 per destroyed ship, rounded survival seconds × 5, and 100 per remaining hull point. The run ends after 60 seconds or when hull reaches zero.
 - Pause or Escape stops the round. Switching away automatically pauses; resumption is explicit.
-- Final reports include the selected role, check total, difficulty, natural-1 impairment, role-specific statistics, hull, and score. Clipboard failure selects the report for manual copying. GM decides all outcomes.
+- Final reports include the selected role, check total, difficulty, natural-1 impairment, role-specific statistics, raw points, rating, and advisory band. Clipboard failure selects the report for manual copying. GM decides all outcomes.
 - All art is original code-drawn geometry. No commercial game assets or GM-only lore are included.
 
 ### Architecture
@@ -65,10 +67,10 @@ The canonical player-facing shortlink is `https://play.drakesfood.com/`; Drake's
 
 ### Validation status
 
-- Forty-nine automated tests pass, covering the shared difficulty bands and lifecycle; Pilot touch/keyboard input and Asteroid movement/collisions; Gunner touch/mouse pointer input, cooldown, targeting, armor, impacts, scoring, and reporting; Asteroid Bomber mine release input, mine placement and detonation, exact half-area impairment, impacts, scoring, reporting, and the reserved sticky control rail across touch viewport widths; Life Support keyboard/touch routing, deterministic heart/overload cycles, integrity, difficulty, scoring, and reporting; Space Battle Pilot fuel, enemies, shots, collisions, all end conditions, impairment, tuning, scoring, and reporting; Space Battle Bomber independent missile/mine inputs, exact half-area target, enemy destruction, collisions, difficulty, scoring, and startup integration; deferred loading, pause-on-away startup, failure recovery, and the retry-safe Pages job structure.
-- TypeScript check and Vite production build pass. The setup screen defers Phaser until Start challenge. On the issue #12 branch, initial JavaScript is 12.26 kB gzip; the deferred Phaser/game chunk is 338.70 kB gzip and still produces the documented Vite size advisory. See the [measured performance decision](docs/performance-decisions.md).
+- Fifty-three automated tests pass, covering the shared difficulty bands and lifecycle; Pilot touch/keyboard input and Asteroid movement/collisions; Gunner touch/mouse pointer input, cooldown, targeting, armor, impacts, scoring, and reporting; Asteroid Bomber mine release input, mine placement and detonation, exact half-area impairment, impacts, scoring, reporting, and the reserved sticky control rail across touch viewport widths; Life Support keyboard/touch routing, deterministic heart/overload cycles, integrity, difficulty, scoring, and reporting; Space Battle Pilot fuel, enemies, shots, collisions, all end conditions, impairment, tuning, scoring, and reporting; Space Battle Bomber independent missile/mine inputs, exact half-area target, enemy destruction, collisions, difficulty, scoring, and startup integration; common-rating thresholds, reproducible calibration, and failure caps; deferred loading, pause-on-away startup, failure recovery, and the retry-safe Pages job structure.
+- TypeScript check and Vite production build pass. The setup screen defers Phaser until Start challenge. In the issue #33 build, initial JavaScript is 12.80 kB gzip; the deferred Phaser/game chunk is 338.70 kB gzip and still produces the documented Vite size advisory. See the [measured performance decision](docs/performance-decisions.md).
 - A desktop in-app Chromium playtest reached results in all six playable modes, including narrow viewport checks at 390px and 320px. A fixed-height report box clipped wrapped lines; reports now grow to show their full text and reflow on resize. Drake subsequently completed the cross-device playtest and reported that all playable modes looked good. See the [issue #12 playtest record](docs/issue-12-playtest.md).
-- The detailed score report remains readable, screenshot-friendly, and optionally copyable. Players are not required to paste every statistic; they may report only the final score. Cross-mode scoring and outcome bands remain provisional and are tracked in [issue #33](https://github.com/drakejrobert-sudo/galaxy-grown-games/issues/33).
+- The detailed score report remains readable, screenshot-friendly, and optionally copyable. Players may report the final rating and band without pasting every statistic; raw points and details remain available for the GM. Cross-mode anchors and bands are provisional pending real-sample review in [issue #33](https://github.com/drakejrobert-sudo/galaxy-grown-games/issues/33).
 
 Asteroid Field / Pilot, Gunner, Bomber, and Life Support plus Space Battle / Pilot and Bomber are implemented on `main`. Shared setup, controls, manual reporting, and issue #12's cross-device acceptance evidence are complete.
 

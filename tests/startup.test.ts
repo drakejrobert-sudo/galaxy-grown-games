@@ -188,6 +188,10 @@ test('deferred first launch recovers from load failure, starts once, and retry r
   readyScene.onSpaceBomberStep(readyScene.spaceBomber);
   assert.equal(element('results').hidden, false);
   assert.match(element('summary').value, /Space Battle \/ Bomber/);
+  assert.match(element('summary').value, /Rating: \d+\/100 • Advisory band:/);
+  assert.equal(element('final-score').textContent, String(rules.rateScore('space-bomber', rules.spaceBattleBomberScoreFor(readyScene.spaceBomber), false).rating));
+  assert.match(element('rating-band').textContent, /Setback|Mixed|Success|Exceptional/);
+  assert.match(element('raw-points').textContent, /raw points/);
   assert.equal(element('summary').style.height, '260px');
   element('summary').scrollHeight = 310;
   windowListeners.get('resize')!();
