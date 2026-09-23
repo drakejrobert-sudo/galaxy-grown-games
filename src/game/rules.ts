@@ -2,6 +2,34 @@ export type Difficulty = 'Hard' | 'Medium' | 'Easy' | 'Very Easy';
 export type Role = 'Pilot' | 'Gunner' | 'Bomber' | 'Life Support';
 export type Situation = 'Asteroid Field' | 'Space Battle';
 export interface FlightConfig { total: number; naturalOne: boolean }
+export type ScoreMode = 'asteroid-pilot' | 'asteroid-gunner' | 'asteroid-bomber' |
+  'asteroid-life-support' | 'space-pilot' | 'space-bomber';
+export type ResultBand = 'Setback' | 'Mixed' | 'Success' | 'Exceptional';
+export const SCORING_VERSION = '0.2';
+/** Provisional pooled 10th/90th percentile simulation anchors; see docs/scoring-calibration.md. */
+export const SCORE_ANCHORS: Record<ScoreMode, { low: number; high: number }> = {
+  'asteroid-pilot': { low: 66, high: 700 },
+  'asteroid-gunner': { low: 25, high: 7200 },
+  'asteroid-bomber': { low: 71, high: 3060 },
+  'asteroid-life-support': { low: 150, high: 7800 },
+  'space-pilot': { low: 63, high: 332 },
+  'space-bomber': { low: 64, high: 5800 },
+};
+export interface RatedResult { rating: number; band: ResultBand; capped: boolean }
+/** Check total and Natural 1 already affect gameplay; neither is reapplied here. */
+export function rateScore(mode: ScoreMode, rawPoints: number, failed: boolean): RatedResult {
+  const { low, high } = SCORE_ANCHORS[mode];
+  if (!Number.isFinite(rawPoints) || high <= low) throw new Error('Invalid scoring input or anchors.');
+  const rating = Math.max(0, Math.min(100, Math.round((rawPoints - low) * 100 / (high - low))));
+  const earnedBand: ResultBand = rating < 25 ? 'Setback' : rating < 50 ? 'Mixed'
+    : rating < 75 ? 'Success' : 'Exceptional';
+  const capped = failed && earnedBand === 'Exceptional';
+  return { rating, band: capped ? 'Success' : earnedBand, capped };
+}
+export function ratingReportText(mode: ScoreMode, rawPoints: number, failed: boolean): string {
+  const { rating, band, capped } = rateScore(mode, rawPoints, failed);
+  return `Rating: ${rating}/100 • Advisory band: ${band}${capped ? ' (capped at Success after system failure)' : ''} • Provisional v${SCORING_VERSION}`;
+}
 export const WIDTH = 480;
 export const HEIGHT = 560;
 export const DURATION = 60;
@@ -89,8 +117,9 @@ export function resultText(config: FlightConfig, s: FlightState): string {
     `Check total: ${config.total} • Difficulty: ${difficultyFor(config.total)}`,
     `Natural 1: ${config.naturalOne ? 'Yes — overloaded engine (60% movement speed)' : 'No'}`,
     `Score: ${scoreFor(s)} • Time: ${s.elapsed.toFixed(1)}s • Hits: ${s.hits} • Hull: ${s.hull}/3`,
+    ratingReportText('asteroid-pilot', scoreFor(s), s.hull <= 0),
     s.hull > 0 ? 'Course complete' : 'Hull depleted',
-    'Prototype scoring v0.1 — GM determines campaign outcome.' ].join('\n');
+    'GM determines campaign outcome.' ].join('\n');
 }
 
 export interface GunnerTuning {
@@ -243,9 +272,10 @@ export function gunnerResultText(config: FlightConfig, s: GunnerState): string {
     `Check total: ${config.total} • Difficulty: ${difficultyFor(config.total)}`,
     `Natural 1: ${config.naturalOne ? 'Yes — overheated gun (half normal fire rate)' : 'No'}`,
     `Score: ${gunnerScoreFor(s)} • Time: ${s.elapsed.toFixed(1)}s • Destroyed: ${s.destroyed} • Shots: ${s.shots}`,
+    ratingReportText('asteroid-gunner', gunnerScoreFor(s), s.hull <= 0),
     `Hull: ${s.hull}/3 • Ship impacts: ${s.impacts}`,
     s.hull > 0 ? 'Field cleared' : 'Hull depleted',
-    'Prototype scoring v0.1 — GM determines campaign outcome.',
+    'GM determines campaign outcome.',
   ].join('\n');
 }
 
@@ -454,9 +484,10 @@ export function bomberResultText(config: FlightConfig, s: BomberState): string {
     `Check total: ${config.total} • Difficulty: ${difficultyFor(config.total)}`,
     `Natural 1: ${config.naturalOne ? 'Yes — mine blast target has half normal area' : 'No'}`,
     `Score: ${bomberScoreFor(s)} • Time: ${s.elapsed.toFixed(1)}s • Destroyed: ${s.destroyed} • Mines: ${s.minesPlaced}`,
+    ratingReportText('asteroid-bomber', bomberScoreFor(s), s.hull <= 0),
     `Hull: ${s.hull}/3 • Asteroid impacts: ${s.impacts}`,
     s.hull > 0 ? 'Field cleared' : 'Hull depleted',
-    'Prototype scoring v0.1 — GM determines campaign outcome.',
+    'GM determines campaign outcome.',
   ].join('\n');
 }
 
@@ -591,9 +622,10 @@ export function lifeSupportResultText(config: FlightConfig, s: LifeSupportState)
     `Check total: ${config.total} • Difficulty: ${difficultyFor(config.total)}`,
     `Natural 1: ${config.naturalOne ? 'Yes — one heart and two overloads per 12 packets' : 'No — two hearts and one overload per 12 packets'}`,
     `Score: ${lifeSupportScoreFor(s)} • Time: ${s.elapsed.toFixed(1)}s • Correct routes: ${s.routed} • Mistakes: ${s.mistakes}`,
+    ratingReportText('asteroid-life-support', lifeSupportScoreFor(s), s.integrity <= 0),
     `Integrity: ${s.integrity}/${LIFE_SUPPORT_MAX_INTEGRITY} • Hearts: ${s.heartsRouted} • Overloads cleared: ${s.overloadsRouted}`,
     s.integrity > 0 ? 'Systems stabilized' : 'Systems failed',
-    'Prototype scoring v0.1 — GM determines campaign outcome.',
+    'GM determines campaign outcome.',
   ].join('\n');
 }
 
@@ -780,9 +812,10 @@ export function spaceBattlePilotResultText(config: FlightConfig, s: SpaceBattleP
     `Check total: ${config.total} • Difficulty: ${difficultyFor(config.total)}`,
     `Natural 1: ${config.naturalOne ? 'Yes — overloaded engine (60% movement speed)' : 'No'}`,
     `Score: ${spaceBattlePilotScoreFor(s)} • Time: ${s.elapsed.toFixed(1)}s • Fuel collected: ${s.fuelCollected}`,
+    ratingReportText('space-pilot', spaceBattlePilotScoreFor(s), s.endReason === 'hull' || s.endReason === 'fuel' || s.hull <= 0 || s.fuel <= 0),
     `Fuel: ${s.fuel.toFixed(1)}s • Hits: ${s.hits} • Hull: ${s.hull}/3`,
     outcome,
-    'Prototype scoring v0.1 — GM determines campaign outcome.',
+    'GM determines campaign outcome.',
   ].join('\n');
 }
 
@@ -983,8 +1016,9 @@ export function spaceBattleBomberResultText(config: FlightConfig, s: SpaceBattle
     `Check total: ${config.total} • Difficulty: ${difficultyFor(config.total)}`,
     `Natural 1: ${config.naturalOne ? 'Yes — mine blast target has half normal area' : 'No'}`,
     `Score: ${spaceBattleBomberScoreFor(s)} • Time: ${s.elapsed.toFixed(1)}s • Destroyed: ${s.destroyed}`,
+    ratingReportText('space-bomber', spaceBattleBomberScoreFor(s), s.hull <= 0),
     `Missiles: ${s.missilesFired} • Mines: ${s.minesPlaced} • Hull: ${s.hull}/3 • Hits: ${s.hits}`,
     s.hull > 0 ? 'Bombing run complete' : 'Hull depleted',
-    'Prototype scoring v0.1 — GM determines campaign outcome.',
+    'GM determines campaign outcome.',
   ].join('\n');
 }

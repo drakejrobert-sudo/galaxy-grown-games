@@ -8,7 +8,7 @@ import {
   gunnerResultText, gunnerScoreFor, spaceBattlePilotResultText, spaceBattlePilotScoreFor,
   spaceBattleBomberResultText, spaceBattleBomberScoreFor,
   lifeSupportResultText, lifeSupportScoreFor, LIFE_SUPPORT_MAX_INTEGRITY,
-  DURATION, WIDTH, HEIGHT, type FlightConfig, type Role, type Situation,
+  rateScore, DURATION, WIDTH, HEIGHT, type FlightConfig, type Role, type Situation, type ScoreMode,
 } from './game/rules';
 
 const app = document.querySelector<HTMLDivElement>('#app')!;
@@ -40,7 +40,8 @@ app.innerHTML = `
   <p id="play-help" class="help center">Avoid asteroids · Arrow keys / WASD · Hold and drag to steer</p>
 </section>
 <section id="results" class="panel results" hidden>
-  <p class="eyebrow">FLIGHT REPORT</p><h1 id="outcome"></h1><div class="final-score"><strong id="final-score"></strong><span>POINTS</span></div>
+  <p class="eyebrow">FLIGHT REPORT</p><h1 id="outcome"></h1><div class="final-score"><strong id="final-score"></strong><span>RATING / 100</span></div>
+  <p id="rating-band" class="rating-band"></p><p id="raw-points" class="raw-points"></p>
   <textarea id="summary" readonly aria-label="Flight result summary" rows="6"></textarea>
   <p class="help">Share this report with your GM. They decide what happens next.</p>
   <div class="actions"><button id="copy" class="primary" type="button">Copy score report</button><button id="again" type="button">Back to setup</button></div><p id="copy-status" role="status"></p>
@@ -78,11 +79,18 @@ function sizeSummary() {
   const summary = get<HTMLTextAreaElement>('summary');
   if (get('results').hidden) return;
   summary.style.height = 'auto';
-  summary.style.height = `${summary.scrollHeight}px`;
+  const border = Math.max(0, (summary.offsetHeight || 0) - (summary.clientHeight || 0));
+  summary.style.height = `${summary.scrollHeight + border}px`;
 }
 function fillSummary(text: string) {
   get<HTMLTextAreaElement>('summary').value = text;
   sizeSummary();
+}
+function showRatedResult(mode: ScoreMode, points: number, failed: boolean) {
+  const { rating, band, capped } = rateScore(mode, points, failed);
+  get('final-score').textContent = String(rating);
+  get('rating-band').textContent = `${band}${capped ? ' · capped after system failure' : ''}`;
+  get('raw-points').textContent = `${points} raw points · Provisional GM advisory`;
 }
 window.addEventListener('resize', sizeSummary);
 function refreshSetup() {
@@ -259,7 +267,7 @@ scene.onFlightStep = s => {
   if (s.finished) {
     inFlight = false; input.enable(false); gunnerInput.enable(false); bomberInput.enable(false); spaceBomberInput.enable(false); lifeSupportInput.enable(false); show('results');
     get('outcome').textContent = s.hull > 0 ? 'Course complete.' : 'Hull depleted.';
-    get('final-score').textContent = String(scoreFor(s));
+    showRatedResult('asteroid-pilot', scoreFor(s), s.hull <= 0);
     fillSummary(resultText(config, s));
     get('copy-status').textContent = ''; get('copy').focus();
   }
@@ -271,7 +279,7 @@ scene.onGunnerStep = s => {
   if (s.finished) {
     inFlight = false; input.enable(false); gunnerInput.enable(false); bomberInput.enable(false); spaceBomberInput.enable(false); lifeSupportInput.enable(false); show('results');
     get('outcome').textContent = s.hull > 0 ? 'Field cleared.' : 'Hull depleted.';
-    get('final-score').textContent = String(gunnerScoreFor(s));
+    showRatedResult('asteroid-gunner', gunnerScoreFor(s), s.hull <= 0);
     fillSummary(gunnerResultText(config, s));
     get('copy-status').textContent = ''; get('copy').focus();
   }
@@ -283,7 +291,7 @@ scene.onBomberStep = s => {
   if (s.finished) {
     inFlight = false; input.enable(false); gunnerInput.enable(false); bomberInput.enable(false); spaceBomberInput.enable(false); lifeSupportInput.enable(false); show('results');
     get('outcome').textContent = s.hull > 0 ? 'Field cleared.' : 'Hull depleted.';
-    get('final-score').textContent = String(bomberScoreFor(s));
+    showRatedResult('asteroid-bomber', bomberScoreFor(s), s.hull <= 0);
     fillSummary(bomberResultText(config, s));
     get('copy-status').textContent = ''; get('copy').focus();
   }
@@ -297,7 +305,7 @@ scene.onLifeSupportStep = s => {
   if (s.finished) {
     inFlight = false; input.enable(false); gunnerInput.enable(false); bomberInput.enable(false); spaceBomberInput.enable(false); lifeSupportInput.enable(false); show('results');
     get('outcome').textContent = s.integrity > 0 ? 'Systems stabilized.' : 'Systems failed.';
-    get('final-score').textContent = String(lifeSupportScoreFor(s));
+    showRatedResult('asteroid-life-support', lifeSupportScoreFor(s), s.integrity <= 0);
     fillSummary(lifeSupportResultText(config, s));
     get('copy-status').textContent = ''; get('copy').focus();
   }
@@ -310,7 +318,7 @@ scene.onSpacePilotStep = s => {
   if (s.finished) {
     inFlight = false; input.enable(false); gunnerInput.enable(false); bomberInput.enable(false); spaceBomberInput.enable(false); lifeSupportInput.enable(false); show('results');
     get('outcome').textContent = s.endReason === 'time' ? 'Battle run complete.' : s.endReason === 'fuel' ? 'Fuel depleted.' : 'Hull depleted.';
-    get('final-score').textContent = String(spaceBattlePilotScoreFor(s));
+    showRatedResult('space-pilot', spaceBattlePilotScoreFor(s), s.endReason === 'hull' || s.endReason === 'fuel' || s.hull <= 0 || s.fuel <= 0);
     fillSummary(spaceBattlePilotResultText(config, s));
     get('copy-status').textContent = ''; get('copy').focus();
   }
@@ -322,7 +330,7 @@ scene.onSpaceBomberStep = s => {
   if (s.finished) {
     inFlight = false; input.enable(false); gunnerInput.enable(false); bomberInput.enable(false); spaceBomberInput.enable(false); lifeSupportInput.enable(false); show('results');
     get('outcome').textContent = s.hull > 0 ? 'Bombing run complete.' : 'Hull depleted.';
-    get('final-score').textContent = String(spaceBattleBomberScoreFor(s));
+    showRatedResult('space-bomber', spaceBattleBomberScoreFor(s), s.hull <= 0);
     fillSummary(spaceBattleBomberResultText(config, s));
     get('copy-status').textContent = ''; get('copy').focus();
   }

@@ -14,7 +14,52 @@ import {
   BOMBER_BLAST_RADIUS, BOMBER_TUNING, GUNNER_DEFENSE_LINE, GUNNER_TUNING,
   LIFE_SUPPORT_MAX_INTEGRITY, LIFE_SUPPORT_SWITCH_Y, LIFE_SUPPORT_TUNING,
   PILOT_RADIUS, SIDE_WARNING_SECONDS, WIDTH,
+  SCORE_ANCHORS, SCORING_VERSION, rateScore, type ScoreMode,
 } from '../src/game/rules.ts';
+const scoreModes = Object.keys(SCORE_ANCHORS) as ScoreMode[];
+test('all six modes share exact rating thresholds, clamping, and failure cap', () => {
+  assert.equal(scoreModes.length, 6);
+  for (const mode of scoreModes) {
+    const { low, high } = SCORE_ANCHORS[mode];
+    const raw = (rating: number) => low + (high - low) * rating / 100;
+    for (const [rating, band] of [[0,'Setback'],[24,'Setback'],[25,'Mixed'],[49,'Mixed'],
+      [50,'Success'],[74,'Success'],[75,'Exceptional'],[100,'Exceptional']] as const) {
+      assert.deepEqual(rateScore(mode, raw(rating), false), { rating, band, capped: false }, `${mode} at ${rating}`);
+    }
+    assert.equal(rateScore(mode, low - 1000, false).rating, 0);
+    assert.equal(rateScore(mode, high + 1000, false).rating, 100);
+    assert.deepEqual(rateScore(mode, raw(75), true), { rating: 75, band: 'Success', capped: true });
+    assert.deepEqual(rateScore(mode, raw(50), true), { rating: 50, band: 'Success', capped: false });
+  }
+  assert.throws(() => rateScore('asteroid-pilot', Number.NaN, false));
+  assert.equal(SCORING_VERSION, '0.2');
+});
+test('the common rating cannot reapply check total or Natural 1', () => {
+  const raw = 500;
+  const rating = rateScore('asteroid-pilot', raw, false);
+  for (const config of [{total: -3, naturalOne: true}, {total: 16, naturalOne: false}]) {
+    const s = createFlight(); s.elapsed = 20; s.hull = 3;
+    assert.equal(scoreFor(s), raw);
+    assert.match(resultText(config, s), new RegExp(`Rating: ${rating.rating}/100`));
+  }
+});
+test('all six failure reports retain points and explain a capped advisory band', () => {
+  const config = { total: 5, naturalOne: true };
+  const pilot = createFlight(); pilot.elapsed = 60; pilot.hull = 0;
+  const gunner = createGunner(); gunner.destroyed = 100; gunner.hull = 0;
+  const bomber = createBomber(); bomber.destroyed = 60; bomber.hull = 0;
+  const life = createLifeSupport(); life.routed = 100; life.integrity = 0;
+  const spacePilot = createSpaceBattlePilot(); spacePilot.fuelCollected = 20; spacePilot.fuel = 0; spacePilot.endReason = 'fuel';
+  const spaceBomber = createSpaceBattleBomber(); spaceBomber.destroyed = 100; spaceBomber.hull = 0;
+  for (const report of [resultText(config, pilot), gunnerResultText(config, gunner),
+    bomberResultText(config, bomber), lifeSupportResultText(config, life),
+    spaceBattlePilotResultText(config, spacePilot), spaceBattleBomberResultText(config, spaceBomber)]) {
+    assert.match(report, /Score: \d+/);
+    assert.match(report, /Rating: \d+\/100 • Advisory band: Success \(capped at Success after system failure\)/);
+    assert.match(report, /Natural 1: Yes/);
+    assert.match(report, /GM determines campaign outcome/);
+  }
+});
 test('modified total bands include negatives and values over 20', () => {
   for (const [value, expected] of [[-4,'Hard'],[0,'Hard'],[1,'Hard'],[5,'Hard'],[6,'Medium'],[10,'Medium'],[11,'Easy'],[15,'Easy'],[16,'Very Easy'],[27,'Very Easy']] as const) assert.equal(difficultyFor(value), expected);
   for (const invalid of ['', ' ', '2.5', 'word', '1e2', 'Infinity']) assert.equal(parseTotal(invalid), null);
