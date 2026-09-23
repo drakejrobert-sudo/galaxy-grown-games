@@ -5,15 +5,15 @@ export interface FlightConfig { total: number; naturalOne: boolean }
 export type ScoreMode = 'asteroid-pilot' | 'asteroid-gunner' | 'asteroid-bomber' |
   'asteroid-life-support' | 'space-pilot' | 'space-bomber';
 export type ResultBand = 'Setback' | 'Mixed' | 'Success' | 'Exceptional';
-export const SCORING_VERSION = '0.2';
-/** Provisional pooled 10th/90th percentile simulation anchors; see docs/scoring-calibration.md. */
+export const SCORING_VERSION = '0.3';
+/** Provisional mode anchors. Space Battle values include owner playtest adjustments; see docs/scoring-calibration.md. */
 export const SCORE_ANCHORS: Record<ScoreMode, { low: number; high: number }> = {
   'asteroid-pilot': { low: 66, high: 700 },
   'asteroid-gunner': { low: 25, high: 7200 },
   'asteroid-bomber': { low: 71, high: 3060 },
   'asteroid-life-support': { low: 150, high: 7800 },
-  'space-pilot': { low: 63, high: 332 },
-  'space-bomber': { low: 64, high: 5800 },
+  'space-pilot': { low: 63, high: 1000 },
+  'space-bomber': { low: 64, high: 3300 },
 };
 export interface RatedResult { rating: number; band: ResultBand; capped: boolean }
 /** Check total and Natural 1 already affect gameplay; neither is reapplied here. */
