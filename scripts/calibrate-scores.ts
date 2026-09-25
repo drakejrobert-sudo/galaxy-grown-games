@@ -6,12 +6,13 @@ import {
   createLifeSupport, stepLifeSupport, lifeSupportScoreFor,
   createSpaceBattlePilot, stepSpaceBattlePilot, spaceBattlePilotScoreFor,
   createSpaceBattleBomber, stepSpaceBattleBomber, spaceBattleBomberScoreFor,
+  createSpaceLifeSupport, stepSpaceLifeSupport, spaceLifeScoreFor,
   type FlightConfig, type ScoreMode, type LifeSupportRoute,
 } from '../src/game/rules.ts';
 
 type Profile = 'passive' | 'routine' | 'engaged';
 const modes: ScoreMode[] = ['asteroid-pilot', 'asteroid-gunner', 'asteroid-bomber',
-  'asteroid-life-support', 'space-pilot', 'space-bomber'];
+  'asteroid-life-support', 'space-pilot', 'space-bomber', 'space-life-support'];
 const totals = [5, 10, 15, 16]; // One representative total for each established difficulty band.
 const profiles: Profile[] = ['passive', 'routine', 'engaged'];
 const step = 0.05;
@@ -83,6 +84,19 @@ function run(mode: ScoreMode, config: FlightConfig, profile: Profile, seed: numb
       stepSpaceBattlePilot(s, config, direction(s, target), step, random);
     }
     return spaceBattlePilotScoreFor(s);
+  }
+  if (mode === 'space-life-support') {
+    const s = createSpaceLifeSupport();
+    while (!s.finished) {
+      const fire = profile === 'engaged' ? [...s.fires].sort((a, b) => a.remaining - b.remaining)[0] : undefined;
+      const targetX = fire?.x ?? (profile === 'routine' ? WIDTH / 2 + Math.sin(s.elapsed * 1.4) * 155 : s.x);
+      const x = profile === 'passive' ? 0 : Math.abs(targetX - s.x) < 12 ? 0 : targetX > s.x ? 1 : -1;
+      const jump = profile !== 'passive' && s.grounded &&
+        (profile === 'engaged' ? !!fire && (fire.y < s.y || fire.kind === 'ordinary') : Math.floor(s.elapsed * 1.4) % 2 === 0);
+      const repair = profile !== 'passive' && s.fires.some(f => f.kind === 'electrical' && f.y === s.y && Math.abs(f.x - s.x) <= 35);
+      stepSpaceLifeSupport(s, config, { x, jump, repair }, step, random);
+    }
+    return spaceLifeScoreFor(s);
   }
   const s = createSpaceBattleBomber();
   while (!s.finished) {

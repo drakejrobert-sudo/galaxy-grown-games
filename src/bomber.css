@@ -102,6 +102,31 @@
   box-shadow: 0 0 0 2px #79e1ce33;
 }
 
+.platform-controls {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+  max-width: 480px;
+  margin: 10px auto 0;
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+.platform-controls button {
+  min-width: 0;
+  padding: 10px 4px;
+  font-weight: 700;
+  touch-action: none;
+  user-select: none;
+}
+
+#jump { border-color: #79e1ce; }
+#repair { border-color: #89dfff; }
+
+@media (max-width: 390px) {
+  .platform-controls { gap: 5px; }
+  .platform-controls button { font-size: 12px; }
+}
+
 @media (max-width: 390px) {
   .route-controls button {
     grid-template-columns: 1fr;

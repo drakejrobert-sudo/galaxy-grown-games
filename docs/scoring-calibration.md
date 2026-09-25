@@ -1,4 +1,4 @@
-# Provisional common scoring — v0.3
+# Provisional common scoring — v0.4
 
 Issue #33 adds a **0–100 advisory rating** to each completed run. Raw points and role-specific statistics remain intact. The rating uses a fixed low/high pair for each playable mode:
 
@@ -39,6 +39,18 @@ Drake reported that a Space Battle / Pilot run with roughly 300–500 raw points
 
 The four other modes retain their v0.2 anchors in v0.3. These two changes are provisional owner-guided calibration, not new simulation percentiles. Adding a new mode requires its own documented samples and fixed anchor pair. Recalibrating an existing mode requires a new rating version and a review of how old and new reports compare.
 
+## Space Battle / Life Support addition — v0.4
+
+The new platformer adds a seventh mode without changing the six existing rating anchors, raw-score rules, or advisory bands. Its provisional raw score is 100 per ordinary fire stomp, 150 per electrical repair, rounded survival seconds × 5, and 100 per remaining integrity. Integrity failure caps only the advisory band at Success.
+
+The same seeded calibration script ran 288 Space Battle / Life Support simulations across four difficulty bands, with and without Natural 1, using passive, routine, and engaged movement/repair scripts. These scripts are coarse navigation approximations, not human players. They produced:
+
+| Mode | Runs | Observed min | Low (10th) | Median | High (90th) | Observed max |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| Space Battle / Life Support | 288 | 95 | 130 | 400 | 1,350 | 2,150 |
+
+The fixed **130–1,350** anchor is a playtest starting point. Check completed and failed real runs, especially whether the high anchor makes modest repairs rate too highly. Earlier v0.2 and v0.3 reports retain their historical meaning; the v0.4 label marks the addition of this mode.
+
 ## Real playtest review before final thresholds
 
-Record at least several completed and failed runs per mode across the four difficulties, including Natural 1, using only mode, modified total, Natural 1 flag, raw score, rating, end reason, and whether the GM thought the band described the performance. No player identities or campaign details are needed. Compare real score distributions and GM judgments with the synthetic references and v0.3 anchors. Adjust anchors or bands only in a separately reviewed versioned change; the current values remain provisional until Drake accepts them after broader playtesting.
+Record at least several completed and failed runs per mode across the four difficulties, including Natural 1, using only mode, modified total, Natural 1 flag, raw score, rating, end reason, and whether the GM thought the band described the performance. No player identities or campaign details are needed. Compare real score distributions and GM judgments with the synthetic references and v0.4 anchors. Adjust anchors or bands only in a separately reviewed versioned change; the current values remain provisional until Drake accepts them after broader playtesting.

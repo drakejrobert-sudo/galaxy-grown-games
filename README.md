@@ -3,7 +3,7 @@ A repository for hosting mini games for the galaxy grown campaign.
 
 ## First playable slice
 
-Asteroid Field / Pilot, Gunner, Bomber, and Life Support, plus Space Battle / Pilot and Bomber, are implemented as **prototypes awaiting score calibration**. Other situation/role combinations are visibly disabled. Players enter their GM-requested final skill-check total and a separate Natural 1 flag, play independently, and manually share their rating or score. No campaign data or live multiplayer service is included.
+Asteroid Field / Pilot, Gunner, Bomber, and Life Support, plus Space Battle / Pilot, Bomber, and Life Support, are implemented as **prototypes awaiting score calibration**. Other situation/role combinations are visibly disabled. Players enter their GM-requested final skill-check total and a separate Natural 1 flag, play independently, and manually share their rating or score. No campaign data or live multiplayer service is included.
 
 Player link: [play.drakesfood.com](https://play.drakesfood.com/). This HTTPS shortlink redirects to the current GitHub Pages deployment and remains the link to share if the underlying hosting URL changes.
 
@@ -51,6 +51,17 @@ Each finished run now shows a provisional **0–100 rating** and GM advisory ban
 - Forward enemy ships enter from the top while pursuing ships enter from behind. Missiles and mines can destroy either when their paths overlap; ship collisions cost one of 3 hull points with 1.25 seconds of collision grace.
 - Space Battle / Bomber missiles have a 0.38-second cooldown. Mines arm after 0.2 seconds, last 4.5 seconds, and have a 0.85-second cooldown. Natural 1 affects the circular mine blast target: multiplying its radius by `sqrt(0.5)` gives the rendered target and collision target exactly half normal area. Missiles are unaffected.
 - Space Battle / Bomber score is 100 per destroyed ship, rounded survival seconds × 5, and 100 per remaining hull point. The run ends after 60 seconds or when hull reaches zero.
+- Space Battle / Life Support is a fixed-screen ship-interior platformer. Move with Left/Right or A/D; jump with Up/W/Space. Touch players use separate Left, Right, Jump, and Repair buttons, including simultaneous movement and action. Land on an ordinary orange fire from above to stomp it out. Stand within 35px of a blue electrical panel on the same platform and press E/Enter or Repair to fix it.
+- Uncontained fires cost one of five system-integrity points when their timer expires. Heart pickups restore one integrity, up to five; touching an overload icon costs one, with 1.25 seconds of contact grace. Icon opportunities occur every five seconds: a full 12-opportunity cycle has two hearts and one overload normally, or one heart and two overloads on Natural 1. Other opportunities spawn no icon. The run ends at 60 seconds or zero integrity.
+- Space Battle / Life Support raw score is 100 per ordinary fire stomped, 150 per electrical repair, rounded survival seconds × 5, and 100 per remaining integrity point. Fire spawn interval and lifetime vary by difficulty; all values are provisional playtest tuning.
+
+| Space Battle / Life Support difficulty | Fire spawn interval (s) | Time to contain each fire (s) |
+| --- | ---: | ---: |
+| Very Easy | 5.2 | 11 |
+| Easy | 4.5 | 10 |
+| Medium | 3.8 | 9 |
+| Hard | 3.2 | 8 |
+
 - Pause or Escape stops the round. Switching away automatically pauses; resumption is explicit.
 - Final reports include the selected role, check total, difficulty, natural-1 impairment, role-specific statistics, raw points, rating, and advisory band. Clipboard failure selects the report for manual copying. GM decides all outcomes.
 - All art is original code-drawn geometry. No commercial game assets or GM-only lore are included.
@@ -67,12 +78,12 @@ The canonical player-facing shortlink is `https://play.drakesfood.com/`; Drake's
 
 ### Validation status
 
-- Fifty-five automated tests pass, covering the shared difficulty bands and lifecycle; Pilot touch/keyboard input and Asteroid movement/collisions; Gunner touch/mouse pointer input, cooldown, targeting, armor, impacts, scoring, and reporting; Asteroid Bomber mine release input, mine placement and detonation, exact half-area impairment, impacts, scoring, reporting, and the reserved sticky control rail across touch viewport widths; Life Support keyboard/touch routing, deterministic heart/overload cycles, integrity, difficulty, scoring, and reporting; Space Battle Pilot fuel, enemies, shots, collisions, all end conditions, impairment, tuning, scoring, and reporting; Space Battle Bomber independent missile/mine inputs, exact half-area target, enemy destruction, collisions, difficulty, scoring, and startup integration; common-rating thresholds, reproducible calibration, and failure caps; deferred loading, pause-on-away startup, failure recovery, and the retry-safe Pages job structure.
-- TypeScript check and Vite production build pass. The setup screen defers Phaser until Start challenge. In the v0.3 build, initial JavaScript is 12.81 kB gzip; the deferred Phaser/game chunk is 338.70 kB gzip and still produces the documented Vite size advisory. See the [measured performance decision](docs/performance-decisions.md).
-- A desktop in-app Chromium playtest reached results in all six playable modes, including narrow viewport checks at 390px and 320px. A fixed-height report box clipped wrapped lines; reports now grow to show their full text and reflow on resize. Drake subsequently completed the cross-device playtest and reported that all playable modes looked good. See the [issue #12 playtest record](docs/issue-12-playtest.md).
+- Automated tests cover all seven modes, including Space Battle / Life Support platforming, repair actions, icon mix, integrity, scoring, startup, pause, and retry. Run `npm test` for the current count.
+- TypeScript check and Vite production build pass. The setup screen defers Phaser until Start challenge. The existing Vite large-chunk advisory remains; see the [measured performance decision](docs/performance-decisions.md).
+- A prior desktop in-app Chromium playtest reached results in the original six playable modes, including narrow viewport checks at 390px and 320px. A fixed-height report box clipped wrapped lines; reports now grow to show their full text and reflow on resize. Drake subsequently completed the cross-device playtest and reported that those six modes looked good. See the [issue #12 playtest record](docs/issue-12-playtest.md).
 - The detailed score report remains readable, screenshot-friendly, and optionally copyable. Players may report the final rating and band without pasting every statistic; raw points and details remain available for the GM. Cross-mode anchors and bands are provisional pending further real-sample review after [issue #33](https://github.com/drakejrobert-sudo/galaxy-grown-games/issues/33).
 
-Asteroid Field / Pilot, Gunner, Bomber, and Life Support plus Space Battle / Pilot and Bomber are implemented on `main`. Shared setup, controls, manual reporting, and issue #12's cross-device acceptance evidence are complete.
+Asteroid Field / Pilot, Gunner, Bomber, and Life Support plus Space Battle / Pilot and Bomber are on `main`; Space Battle / Life Support is proposed in the issue #10 pull request. Shared setup, controls, manual reporting, and issue #12's cross-device acceptance evidence apply to the original six modes. The new platformer still needs touch playtesting on real iPhone/iPad Safari.
 
 ### Development context and review
 

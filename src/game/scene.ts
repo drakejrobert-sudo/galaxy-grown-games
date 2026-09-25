@@ -8,6 +8,8 @@ import {
   type LifeSupportState, type SpaceBattleBomberInput, type SpaceBattleBomberState,
   type SpaceBattlePilotState, type EnemyShip, type EnemyShot, type FuelCell, type SpaceBomberEnemy,
   SPACE_BOMBER_MINE_COOLDOWN, SPACE_BOMBER_MINE_LIFETIME, SPACE_BOMBER_MISSILE_COOLDOWN,
+  createSpaceLifeSupport, stepSpaceLifeSupport, SPACE_LIFE_PLATFORMS,
+  type SpaceLifeInput, type SpaceLifeState,
 } from './rules';
 
 export class FlightScene extends Phaser.Scene {
@@ -17,6 +19,7 @@ export class FlightScene extends Phaser.Scene {
   lifeSupport = createLifeSupport();
   spacePilot = createSpaceBattlePilot();
   spaceBomber = createSpaceBattleBomber();
+  spaceLife = createSpaceLifeSupport();
   activeFlight = false;
   role: Role = 'Pilot';
   situation: Situation = 'Asteroid Field';
@@ -27,12 +30,14 @@ export class FlightScene extends Phaser.Scene {
   readBomberInput: () => BomberInput = () => ({ x: 0, y: 0, placing: false });
   readLifeSupportInput: () => LifeSupportInput = () => ({ route: 'Shields' });
   readSpaceBomberInput: () => SpaceBattleBomberInput = () => ({ x: 0, y: 0, firing: false, placing: false });
+  readSpaceLifeInput: () => SpaceLifeInput = () => ({ x: 0, jump: false, repair: false });
   onFlightStep: (state: FlightState) => void = () => {};
   onGunnerStep: (state: GunnerState) => void = () => {};
   onBomberStep: (state: BomberState) => void = () => {};
   onLifeSupportStep: (state: LifeSupportState) => void = () => {};
   onSpacePilotStep: (state: SpaceBattlePilotState) => void = () => {};
   onSpaceBomberStep: (state: SpaceBattleBomberState) => void = () => {};
+  onSpaceLifeStep: (state: SpaceLifeState) => void = () => {};
   onReady: () => void = () => {};
 
   create() {
@@ -51,6 +56,7 @@ export class FlightScene extends Phaser.Scene {
     this.lifeSupport = createLifeSupport();
     this.spacePilot = createSpaceBattlePilot();
     this.spaceBomber = createSpaceBattleBomber();
+    this.spaceLife = createSpaceLifeSupport();
     this.activeFlight = true;
   }
 
@@ -58,7 +64,11 @@ export class FlightScene extends Phaser.Scene {
     if (!this.graphics) return;
     if (this.activeFlight) {
       if (this.situation === 'Space Battle') {
-        if (this.role === 'Bomber') {
+        if (this.role === 'Life Support') {
+          stepSpaceLifeSupport(this.spaceLife, this.config, this.readSpaceLifeInput(), delta / 1000);
+          if (this.spaceLife.finished) this.activeFlight = false;
+          this.onSpaceLifeStep(this.spaceLife);
+        } else if (this.role === 'Bomber') {
           stepSpaceBattleBomber(this.spaceBomber, this.config,
             this.readSpaceBomberInput(), delta / 1000);
           if (this.spaceBomber.finished) this.activeFlight = false;
@@ -93,13 +103,14 @@ export class FlightScene extends Phaser.Scene {
     const g = this.graphics;
     g.clear();
     const elapsed = this.situation === 'Space Battle'
-      ? this.role === 'Bomber' ? this.spaceBomber.elapsed : this.spacePilot.elapsed
+      ? this.role === 'Life Support' ? this.spaceLife.elapsed : this.role === 'Bomber' ? this.spaceBomber.elapsed : this.spacePilot.elapsed
       : this.role === 'Pilot' ? this.flight.elapsed
         : this.role === 'Gunner' ? this.gunner.elapsed
           : this.role === 'Bomber' ? this.bomber.elapsed : this.lifeSupport.elapsed;
     this.paintBackground(g, elapsed);
     if (this.situation === 'Space Battle') {
-      if (this.role === 'Bomber') this.paintSpaceBattleBomberMode(g);
+      if (this.role === 'Life Support') this.paintSpaceLifeMode(g);
+      else if (this.role === 'Bomber') this.paintSpaceBattleBomberMode(g);
       else this.paintSpaceBattlePilotMode(g);
     }
     else if (this.role === 'Pilot') this.paintPilotMode(g);
@@ -596,6 +607,53 @@ export class FlightScene extends Phaser.Scene {
       g.fillCircle(x, y, 11 * scale); g.fillStyle(0x14253b); g.fillCircle(x, y, 5 * scale);
       g.lineStyle(3 * scale, color); g.lineBetween(x - 15 * scale, y, x + 15 * scale, y);
       g.lineBetween(x, y - 15 * scale, x, y + 15 * scale);
+    }
+  }
+
+  private paintSpaceLifeMode(g: Phaser.GameObjects.Graphics) {
+    const s = this.spaceLife;
+    // A compact ship interior, with the full route visible on a phone-sized canvas.
+    g.fillStyle(0x101a2b); g.fillRect(10, 10, WIDTH - 20, HEIGHT - 20);
+    for (let x = 30; x < WIDTH; x += 72) {
+      g.lineStyle(1, 0x41516b, 0.35); g.lineBetween(x, 22, x, HEIGHT - 22);
+      g.fillStyle(0x7896ab, 0.35); g.fillCircle(x + 4, 32, 2); g.fillCircle(x + 4, HEIGHT - 32, 2);
+    }
+    for (const platform of SPACE_LIFE_PLATFORMS) {
+      g.fillStyle(0x263951); g.fillRoundedRect(platform.x1, platform.y, platform.x2 - platform.x1, 12, 3);
+      g.fillStyle(0x79e1ce, 0.65); g.fillRect(platform.x1 + 2, platform.y, platform.x2 - platform.x1 - 4, 2);
+      g.lineStyle(2, 0x425974, 0.65);
+      for (let x = platform.x1 + 15; x < platform.x2 - 5; x += 35) g.lineBetween(x, platform.y + 7, x + 8, platform.y + 7);
+    }
+    for (const fire of s.fires) {
+      const color = fire.kind === 'electrical' ? 0x89dfff : 0xffa35e;
+      const pulse = 0.75 + Math.sin(s.elapsed * 13 + fire.id) * 0.18;
+      g.fillStyle(color, 0.12); g.fillCircle(fire.x, fire.y - 14, 25);
+      if (fire.kind === 'ordinary') {
+        g.fillStyle(0xff6c52, pulse); g.fillTriangle(fire.x - 13, fire.y, fire.x + 13, fire.y, fire.x - 2, fire.y - 30);
+        g.fillStyle(0xffd879, pulse); g.fillTriangle(fire.x - 6, fire.y, fire.x + 7, fire.y, fire.x + 3, fire.y - 20);
+      } else {
+        g.fillStyle(0x28445a); g.lineStyle(2, color, pulse);
+        g.fillRoundedRect(fire.x - 14, fire.y - 27, 28, 27, 4);
+        g.strokeRoundedRect(fire.x - 14, fire.y - 27, 28, 27, 4);
+        g.lineStyle(3, 0xe4faff, pulse);
+        g.lineBetween(fire.x - 4, fire.y - 23, fire.x + 5, fire.y - 16);
+        g.lineBetween(fire.x + 5, fire.y - 16, fire.x - 3, fire.y - 8);
+      }
+      g.lineStyle(2, color, Math.max(0.2, fire.remaining / SPACE_LIFE_PLATFORMS.length / 3));
+      g.lineBetween(fire.x - 14, fire.y + 5, fire.x + 14, fire.y + 5);
+    }
+    for (const icon of s.icons) {
+      const color = icon.kind === 'heart' ? 0x79e1ce : 0xff8f6b;
+      g.fillStyle(color, 0.16); g.fillCircle(icon.x, icon.y, 20);
+      this.paintLifeSupportSymbol(g, { kind: icon.kind, target: 'Shields' }, icon.x, icon.y, 0.72);
+    }
+    g.fillStyle(0x9cbfe1); g.lineStyle(2, 0xe8f8ff);
+    g.fillRoundedRect(s.x - 11, s.y - 27, 22, 27, 7); g.strokeRoundedRect(s.x - 11, s.y - 27, 22, 27, 7);
+    g.fillStyle(0x253750); g.fillRoundedRect(s.x - 8, s.y - 23, 16, 10, 5);
+    g.fillStyle(0x79e1ce); g.fillCircle(s.x, s.y - 18, 2);
+    if (s.invulnerable > 0) {
+      g.lineStyle(2, 0x8feaff, 0.55 + Math.sin(s.elapsed * 18) * 0.2);
+      g.strokeCircle(s.x, s.y - 14, 21);
     }
   }
 

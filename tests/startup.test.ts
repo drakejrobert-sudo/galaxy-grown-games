@@ -55,7 +55,7 @@ test('deferred first launch recovers from load failure, starts once, and retry r
   }
   const scenes = load('../src/game/scene.ts', { phaser, './rules': rules });
   let inputEnabled = false, gunnerInputEnabled = false, bomberInputEnabled = false;
-  let spaceBomberInputEnabled = false, lifeSupportInputEnabled = false;
+  let spaceBomberInputEnabled = false, lifeSupportInputEnabled = false, spaceLifeInputEnabled = false;
   let runtimeImports = 0;
   let runtimeShouldFail = true;
   let copyShouldFail = false;
@@ -72,6 +72,7 @@ test('deferred first launch recovers from load failure, starts once, and retry r
       createBomberInput: () => ({ read: () => ({ x: 1, y: 0, placing: true }), enable: (v: boolean) => bomberInputEnabled = v }),
       createSpaceBomberInput: () => ({ read: () => ({ x: 1, y: 0, firing: true, placing: true }), enable: (v: boolean) => spaceBomberInputEnabled = v }),
       createLifeSupportInput: () => ({ read: () => ({ route: 'Shields' }), enable: (v: boolean) => lifeSupportInputEnabled = v, reset() {} }),
+      createSpaceLifeInput: () => ({ read: () => ({ x: 0, jump: false, repair: true }), enable: (v: boolean) => spaceLifeInputEnabled = v }),
     },
   }, {
     document: { querySelector: () => element('app'), getElementById: element, addEventListener() {} },
@@ -154,7 +155,7 @@ test('deferred first launch recovers from load failure, starts once, and retry r
   element('situation').listeners.get('change')();
   assert.equal(element('role-gunner').disabled, true);
   assert.equal(element('role-bomber').disabled, false);
-  assert.equal(element('role-life-support').disabled, true);
+  assert.equal(element('role-life-support').disabled, false);
   assert.equal(element('role').value, 'Pilot');
   await submit();
   assert.equal(gameCount, 1); assert.equal(readyScene.situation, 'Space Battle');
@@ -202,6 +203,29 @@ test('deferred first launch recovers from load failure, starts once, and retry r
   await element('copy').listeners.get('click')();
   assert.equal(element('summary').selected, true);
   assert.match(element('copy-status').textContent, /Copy it manually/);
+  element('again').listeners.get('click')();
+  element('role').value = 'Life Support'; await submit();
+  assert.equal(spaceLifeInputEnabled, true);
+  assert.equal(element('platform-controls').hidden, false);
+  assert.equal(element('route-controls').hidden, true);
+  assert.equal(element('health-label').textContent, 'INTEGRITY');
+  readyScene.spaceLife.fireIn = readyScene.spaceLife.iconIn = 100;
+  readyScene.spaceLife.fires = [{ id: 1, x: 150, y: 520, kind: 'electrical', remaining: 8 }];
+  readyScene.update(0, 16);
+  assert.equal(readyScene.spaceLife.electricalRepaired, 1);
+  element('pause').listeners.get('click')();
+  const pausedSpaceLife = JSON.stringify(readyScene.spaceLife);
+  readyScene.update(0, 50);
+  assert.equal(JSON.stringify(readyScene.spaceLife), pausedSpaceLife);
+  assert.equal(spaceLifeInputEnabled, false);
+  element('resume').listeners.get('click')();
+  assert.equal(spaceLifeInputEnabled, true);
+  readyScene.spaceLife.integrity = 0;
+  readyScene.spaceLife.finished = true;
+  readyScene.onSpaceLifeStep(readyScene.spaceLife);
+  assert.equal(spaceLifeInputEnabled, false);
+  assert.match(element('summary').value, /Space Battle \/ Life Support/);
+  assert.match(element('summary').value, /Electrical repairs: 1/);
 });
 
 test('a deferred launch stays paused after switching away until explicit resume', async () => {
@@ -254,7 +278,7 @@ test('a deferred launch stays paused after switching away until explicit resume'
       './game/input': {
         createInput: () => ({ read: () => ({ x: 0, y: 0 }), enable: (value: boolean) => inputEnabled = value }),
         createGunnerInput: idleInput, createBomberInput: idleInput,
-        createSpaceBomberInput: idleInput, createLifeSupportInput: idleInput,
+        createSpaceBomberInput: idleInput, createLifeSupportInput: idleInput, createSpaceLifeInput: idleInput,
       },
     }, {
       document: { querySelector: () => element('app'), getElementById: element,

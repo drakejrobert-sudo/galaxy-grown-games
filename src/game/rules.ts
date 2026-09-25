@@ -3,9 +3,9 @@ export type Role = 'Pilot' | 'Gunner' | 'Bomber' | 'Life Support';
 export type Situation = 'Asteroid Field' | 'Space Battle';
 export interface FlightConfig { total: number; naturalOne: boolean }
 export type ScoreMode = 'asteroid-pilot' | 'asteroid-gunner' | 'asteroid-bomber' |
-  'asteroid-life-support' | 'space-pilot' | 'space-bomber';
+  'asteroid-life-support' | 'space-pilot' | 'space-bomber' | 'space-life-support';
 export type ResultBand = 'Setback' | 'Mixed' | 'Success' | 'Exceptional';
-export const SCORING_VERSION = '0.3';
+export const SCORING_VERSION = '0.4';
 /** Provisional mode anchors. Space Battle values include owner playtest adjustments; see docs/scoring-calibration.md. */
 export const SCORE_ANCHORS: Record<ScoreMode, { low: number; high: number }> = {
   'asteroid-pilot': { low: 66, high: 700 },
@@ -14,6 +14,7 @@ export const SCORE_ANCHORS: Record<ScoreMode, { low: number; high: number }> = {
   'asteroid-life-support': { low: 150, high: 7800 },
   'space-pilot': { low: 63, high: 1000 },
   'space-bomber': { low: 64, high: 3300 },
+  'space-life-support': { low: 130, high: 1350 },
 };
 export interface RatedResult { rating: number; band: ResultBand; capped: boolean }
 /** Check total and Natural 1 already affect gameplay; neither is reapplied here. */
@@ -1019,6 +1020,135 @@ export function spaceBattleBomberResultText(config: FlightConfig, s: SpaceBattle
     ratingReportText('space-bomber', spaceBattleBomberScoreFor(s), s.hull <= 0),
     `Missiles: ${s.missilesFired} • Mines: ${s.minesPlaced} • Hull: ${s.hull}/3 • Hits: ${s.hits}`,
     s.hull > 0 ? 'Bombing run complete' : 'Hull depleted',
+    'GM determines campaign outcome.',
+  ].join('\n');
+}
+
+// Space Battle / Life Support uses a fixed ship interior. All values are provisional playtest tuning.
+export const SPACE_LIFE_PLATFORMS = [
+  { x1: 0, x2: WIDTH, y: 520 },
+  { x1: 38, x2: 254, y: 410 },
+  { x1: 226, x2: 442, y: 300 },
+  { x1: 38, x2: 254, y: 190 },
+] as const;
+export const SPACE_LIFE_MAX_INTEGRITY = 5;
+export const SPACE_LIFE_TUNING: Record<Difficulty, { spawnEvery: number; fireLifetime: number }> = {
+  'Very Easy': { spawnEvery: 5.2, fireLifetime: 11 },
+  Easy: { spawnEvery: 4.5, fireLifetime: 10 },
+  Medium: { spawnEvery: 3.8, fireLifetime: 9 },
+  Hard: { spawnEvery: 3.2, fireLifetime: 8 },
+};
+export type SpaceLifeInput = { x: number; jump: boolean; repair: boolean };
+export type SpaceLifeFire = { id: number; x: number; y: number; kind: 'ordinary' | 'electrical'; remaining: number };
+export type SpaceLifeIcon = { id: number; x: number; y: number; kind: 'heart' | 'overload'; remaining: number };
+export interface SpaceLifeState {
+  x: number; y: number; vy: number; grounded: boolean; elapsed: number; integrity: number;
+  ordinaryCleared: number; electricalRepaired: number; overloadHits: number; heartsCollected: number;
+  firesExpired: number; fireIn: number; iconIn: number; iconIndex: number; nextId: number;
+  fires: SpaceLifeFire[]; icons: SpaceLifeIcon[]; invulnerable: number; finished: boolean;
+}
+const SPACE_LIFE_FIRE_SITES = [
+  { x: 85, y: 520 }, { x: 395, y: 520 },
+  { x: 95, y: 410 }, { x: 205, y: 410 },
+  { x: 275, y: 300 }, { x: 385, y: 300 },
+  { x: 95, y: 190 }, { x: 205, y: 190 },
+];
+export function createSpaceLifeSupport(): SpaceLifeState {
+  return { x: 150, y: 520, vy: 0, grounded: true, elapsed: 0, integrity: SPACE_LIFE_MAX_INTEGRITY,
+    ordinaryCleared: 0, electricalRepaired: 0, overloadHits: 0, heartsCollected: 0,
+    firesExpired: 0, fireIn: 1.5, iconIn: 0.8, iconIndex: 0, nextId: 1,
+    fires: [], icons: [], invulnerable: 0, finished: false };
+}
+export function stepSpaceLifeSupport(
+  s: SpaceLifeState, config: FlightConfig, input: SpaceLifeInput, dt: number,
+  random: () => number = Math.random,
+): void {
+  if (s.finished) return;
+  dt = Math.min(Math.max(dt, 0), 0.05, DURATION - s.elapsed);
+  const tuning = SPACE_LIFE_TUNING[difficultyFor(config.total)];
+  s.elapsed += dt;
+  s.invulnerable = Math.max(0, s.invulnerable - dt);
+  s.x = Math.max(16, Math.min(WIDTH - 16, s.x + Math.max(-1, Math.min(1, input.x)) * 220 * dt));
+  if (input.jump && s.grounded) { s.vy = -540; s.grounded = false; }
+  const previousY = s.y;
+  s.vy += 1080 * dt;
+  const nextY = s.y + s.vy * dt;
+  s.grounded = false;
+  s.y = nextY;
+  if (s.vy >= 0) {
+    for (const platform of SPACE_LIFE_PLATFORMS) {
+      if (previousY <= platform.y && nextY >= platform.y && s.x >= platform.x1 + 10 && s.x <= platform.x2 - 10) {
+        if (!s.grounded || platform.y < s.y) { s.y = platform.y; s.vy = 0; s.grounded = true; }
+      }
+    }
+  }
+
+  // A stomp must descend onto an ordinary flame; touching its side cannot clear it.
+  for (const fire of s.fires) {
+    if (fire.kind === 'ordinary' && previousY <= fire.y - 8 && nextY >= fire.y - 8 &&
+      nextY > previousY && Math.abs(s.x - fire.x) <= 19) {
+      fire.remaining = 0; s.ordinaryCleared++;
+    }
+  }
+  if (input.repair && s.grounded) {
+    const panel = s.fires.find(fire => fire.kind === 'electrical' &&
+      fire.y === s.y && Math.abs(fire.x - s.x) <= 35);
+    if (panel) { panel.remaining = 0; s.electricalRepaired++; }
+  }
+  s.fires = s.fires.filter(fire => fire.remaining > 0);
+
+  s.fireIn -= dt;
+  while (s.fireIn <= 0) {
+    const first = Math.floor(random() * SPACE_LIFE_FIRE_SITES.length);
+    const site = Array.from({ length: SPACE_LIFE_FIRE_SITES.length }, (_, i) => SPACE_LIFE_FIRE_SITES[(first + i) % SPACE_LIFE_FIRE_SITES.length])
+      .find(candidate => !s.fires.some(fire => fire.x === candidate.x && fire.y === candidate.y));
+    if (site) s.fires.push({ id: s.nextId++, ...site,
+      kind: random() < 0.4 ? 'electrical' : 'ordinary', remaining: tuning.fireLifetime });
+    s.fireIn += tuning.spawnEvery;
+  }
+  for (const fire of s.fires) {
+    fire.remaining -= dt;
+    if (fire.remaining <= 0) { s.firesExpired++; s.integrity = Math.max(0, s.integrity - 1); }
+  }
+  s.fires = s.fires.filter(fire => fire.remaining > 0);
+  if (s.integrity <= 0) { s.finished = true; return; }
+
+  s.iconIn -= dt;
+  while (s.iconIn <= 0) {
+    const kind = lifeSupportPacketKind(s.iconIndex++, config.naturalOne);
+    if (kind !== 'power') {
+      const site = SPACE_LIFE_FIRE_SITES[Math.floor(random() * SPACE_LIFE_FIRE_SITES.length)];
+      s.icons.push({ id: s.nextId++, x: site.x, y: site.y - 19, kind, remaining: 8 });
+    }
+    s.iconIn += 5;
+  }
+  for (const icon of s.icons) {
+    icon.remaining -= dt;
+    if (Math.abs(s.x - icon.x) <= 19 && Math.abs(s.y - icon.y) <= 28) {
+      if (icon.kind === 'heart') {
+        s.heartsCollected++; s.integrity = Math.min(SPACE_LIFE_MAX_INTEGRITY, s.integrity + 1);
+      } else if (s.invulnerable <= 0) {
+        s.overloadHits++; s.integrity = Math.max(0, s.integrity - 1); s.invulnerable = 1.25;
+      }
+      icon.remaining = 0;
+    }
+  }
+  s.icons = s.icons.filter(icon => icon.remaining > 0);
+  s.finished = s.integrity <= 0 || s.elapsed >= DURATION;
+}
+export function spaceLifeScoreFor(s: SpaceLifeState): number {
+  return s.ordinaryCleared * 100 + s.electricalRepaired * 150 + Math.round(s.elapsed) * 5 + s.integrity * 100;
+}
+export function spaceLifeResultText(config: FlightConfig, s: SpaceLifeState): string {
+  const points = spaceLifeScoreFor(s);
+  return [
+    'Galaxy Grown — Space Battle / Life Support',
+    `Check total: ${config.total} • Difficulty: ${difficultyFor(config.total)}`,
+    `Natural 1: ${config.naturalOne ? 'Yes — one heart and two overload icons per 12 opportunities' : 'No — two hearts and one overload icon per 12 opportunities'}`,
+    `Score: ${points} • Time: ${s.elapsed.toFixed(1)}s • Fires stomped: ${s.ordinaryCleared} • Electrical repairs: ${s.electricalRepaired}`,
+    ratingReportText('space-life-support', points, s.integrity <= 0),
+    `Integrity: ${s.integrity}/${SPACE_LIFE_MAX_INTEGRITY} • Uncontained fires: ${s.firesExpired} • Hearts: ${s.heartsCollected} • Overload hits: ${s.overloadHits}`,
+    s.integrity > 0 ? 'Systems stabilized' : 'Systems failed',
     'GM determines campaign outcome.',
   ].join('\n');
 }
