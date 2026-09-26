@@ -25,7 +25,7 @@ test('seeded calibration reproduces the historical v0.2 reference anchors', () =
     assert.equal(Number(count), 288, mode);
     if (mode === 'space-life-support') {
       assert.deepEqual(SCORE_ANCHORS[mode], { low: 130, high: 1350 });
-      assert.deepEqual(SCORE_ANCHORS[mode], { low: Number(low), high: Number(high) });
+      assert.deepEqual({ low: Number(low), high: Number(high) }, { low: 128, high: 1350 });
     } else {
       assert.deepEqual(simulatedAnchorsV02[mode as ScoreMode], { low: Number(low), high: Number(high) });
       if (mode !== 'space-pilot' && mode !== 'space-bomber') {

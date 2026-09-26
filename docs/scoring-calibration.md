@@ -41,15 +41,15 @@ The four other modes retain their v0.2 anchors in v0.3. These two changes are pr
 
 ## Space Battle / Life Support addition — v0.4
 
-The new platformer adds a seventh mode without changing the six existing rating anchors, raw-score rules, or advisory bands. Its provisional raw score is 100 per ordinary fire stomp, 150 per electrical repair, rounded survival seconds × 5, and 100 per remaining integrity. Integrity failure caps only the advisory band at Success.
+The new platformer adds a seventh mode without changing the six existing rating anchors, raw-score rules, or advisory bands. Its provisional raw score is 100 per ordinary fire stomp, 150 per electrical repair, survival seconds × 5 rounded to the nearest point, and 100 per remaining integrity. Integrity failure caps only the advisory band at Success.
 
 The same seeded calibration script ran 288 Space Battle / Life Support simulations across four difficulty bands, with and without Natural 1, using passive, routine, and engaged movement/repair scripts. These scripts are coarse navigation approximations, not human players. They produced:
 
 | Mode | Runs | Observed min | Low (10th) | Median | High (90th) | Observed max |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: |
-| Space Battle / Life Support | 288 | 95 | 130 | 400 | 1,350 | 2,150 |
+| Space Battle / Life Support | 288 | 97 | 128 | 398 | 1,350 | 2,150 |
 
-The fixed **130–1,350** anchor is a playtest starting point. Check completed and failed real runs, especially whether the high anchor makes modest repairs rate too highly. Earlier v0.2 and v0.3 reports retain their historical meaning; the v0.4 label marks the addition of this mode.
+The fixed **130–1,350** anchor is a playtest starting point. The corrected fractional-second scoring changes the synthetic 10th percentile to 128; the provisional fixed anchor remains 130. Check completed and failed real runs, especially whether the high anchor makes modest repairs rate too highly. Earlier v0.2 and v0.3 reports retain their historical meaning; the v0.4 label marks the addition of this mode.
 
 ## Real playtest review before final thresholds
 

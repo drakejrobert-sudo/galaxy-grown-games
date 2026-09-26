@@ -1137,7 +1137,7 @@ export function stepSpaceLifeSupport(
   s.finished = s.integrity <= 0 || s.elapsed >= DURATION;
 }
 export function spaceLifeScoreFor(s: SpaceLifeState): number {
-  return s.ordinaryCleared * 100 + s.electricalRepaired * 150 + Math.round(s.elapsed) * 5 + s.integrity * 100;
+  return s.ordinaryCleared * 100 + s.electricalRepaired * 150 + Math.round(s.elapsed * 5) + s.integrity * 100;
 }
 export function spaceLifeResultText(config: FlightConfig, s: SpaceLifeState): string {
   const points = spaceLifeScoreFor(s);

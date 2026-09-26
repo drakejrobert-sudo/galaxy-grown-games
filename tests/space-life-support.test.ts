@@ -107,7 +107,10 @@ test('difficulty only changes fire pressure; scoring and report retain the GM bo
   }
   const s = quiet(); s.elapsed = 20; s.integrity = 2; s.ordinaryCleared = 3; s.electricalRepaired = 2;
   assert.equal(spaceLifeScoreFor(s), 900);
+  s.elapsed = 10.4;
+  assert.equal(spaceLifeScoreFor(s), 852);
   const report = spaceLifeResultText({ total: -2, naturalOne: true }, s);
+  assert.match(report, /Score: 852 • Time: 10\.4s/);
   assert.match(report, /Space Battle \/ Life Support/);
   assert.match(report, /Difficulty: Hard/);
   assert.match(report, /one heart and two overload/);
