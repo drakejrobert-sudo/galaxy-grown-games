@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url';
 import { SCORE_ANCHORS, type ScoreMode } from '../src/game/rules.ts';
 
 // Historical synthetic references remain fixed when owner playtests adjust live anchors.
-const simulatedAnchorsV02: Record<ScoreMode, { low: number; high: number }> = {
+const simulatedAnchorsV02: Partial<Record<ScoreMode, { low: number; high: number }>> = {
   'asteroid-pilot': { low: 66, high: 700 },
   'asteroid-gunner': { low: 25, high: 7200 },
   'asteroid-bomber': { low: 71, high: 3060 },
@@ -19,13 +19,18 @@ test('seeded calibration reproduces the historical v0.2 reference anchors', () =
     cwd: fileURLToPath(new URL('..', import.meta.url)), encoding: 'utf8',
   });
   const rows = output.trim().split('\n');
-  assert.equal(rows.length, 6);
+  assert.equal(rows.length, 7);
   for (const row of rows) {
     const [mode, count, , low, , high] = row.split('\t');
     assert.equal(Number(count), 288, mode);
-    assert.deepEqual(simulatedAnchorsV02[mode as ScoreMode], { low: Number(low), high: Number(high) });
-    if (mode !== 'space-pilot' && mode !== 'space-bomber') {
-      assert.deepEqual(SCORE_ANCHORS[mode as ScoreMode], simulatedAnchorsV02[mode as ScoreMode]);
+    if (mode === 'space-life-support') {
+      assert.deepEqual(SCORE_ANCHORS[mode], { low: 130, high: 1350 });
+      assert.deepEqual({ low: Number(low), high: Number(high) }, { low: 128, high: 1350 });
+    } else {
+      assert.deepEqual(simulatedAnchorsV02[mode as ScoreMode], { low: Number(low), high: Number(high) });
+      if (mode !== 'space-pilot' && mode !== 'space-bomber') {
+        assert.deepEqual(SCORE_ANCHORS[mode as ScoreMode], simulatedAnchorsV02[mode as ScoreMode]);
+      }
     }
   }
 });

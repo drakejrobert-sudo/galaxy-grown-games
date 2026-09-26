@@ -1,4 +1,4 @@
-import type { LifeSupportRoute } from './rules';
+import type { LifeSupportRoute, SpaceLifeInput } from './rules';
 
 export function createInput(surface: HTMLElement) {
   const keys = new Set<string>();
@@ -77,6 +77,47 @@ export function createGunnerInput(surface: HTMLElement) {
         aimY: aim?.y,
         firing,
       };
+    },
+  };
+}
+
+export function createSpaceLifeInput(buttons: Record<'left' | 'right' | 'jump' | 'repair', HTMLElement>) {
+  const keys = new Set<string>();
+  const pointers = new Map<number, keyof typeof buttons>();
+  let jumpQueued = false, repairQueued = false, enabled = false;
+  const clear = () => { keys.clear(); pointers.clear(); jumpQueued = false; repairQueued = false; };
+  const controls = new Set(['ArrowLeft', 'ArrowRight', 'KeyA', 'KeyD', 'ArrowUp', 'KeyW', 'Space', 'KeyE', 'Enter']);
+  window.addEventListener('keydown', e => {
+    if (!enabled || !controls.has(e.code)) return;
+    e.preventDefault();
+    if (!keys.has(e.code)) {
+      if (['ArrowUp', 'KeyW', 'Space'].includes(e.code)) jumpQueued = true;
+      if (['KeyE', 'Enter'].includes(e.code)) repairQueued = true;
+    }
+    keys.add(e.code);
+  });
+  window.addEventListener('keyup', e => keys.delete(e.code));
+  window.addEventListener('blur', clear);
+  for (const [action, button] of Object.entries(buttons) as [keyof typeof buttons, HTMLElement][]) {
+    button.addEventListener('pointerdown', e => {
+      if (!enabled) return;
+      e.preventDefault(); pointers.set(e.pointerId, action); button.setPointerCapture?.(e.pointerId);
+      if (action === 'jump') jumpQueued = true;
+      if (action === 'repair') repairQueued = true;
+    });
+    for (const event of ['pointerup', 'pointercancel', 'lostpointercapture']) button.addEventListener(event, ((e: PointerEvent) => {
+      if (pointers.get(e.pointerId) === action) pointers.delete(e.pointerId);
+    }) as EventListener);
+  }
+  return {
+    enable(value: boolean) { enabled = value; clear(); },
+    read(): SpaceLifeInput {
+      const held = (action: keyof typeof buttons) => [...pointers.values()].includes(action);
+      const x = Number(held('right') || keys.has('ArrowRight') || keys.has('KeyD'))
+        - Number(held('left') || keys.has('ArrowLeft') || keys.has('KeyA'));
+      const input = { x, jump: jumpQueued, repair: repairQueued };
+      jumpQueued = false; repairQueued = false;
+      return input;
     },
   };
 }
