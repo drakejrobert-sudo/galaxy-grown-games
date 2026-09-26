@@ -83,7 +83,7 @@ The canonical player-facing shortlink is `https://play.drakesfood.com/`; Drake's
 - A prior desktop in-app Chromium playtest reached results in the original six playable modes, including narrow viewport checks at 390px and 320px. A fixed-height report box clipped wrapped lines; reports now grow to show their full text and reflow on resize. Drake subsequently completed the cross-device playtest and reported that those six modes looked good. See the [issue #12 playtest record](docs/issue-12-playtest.md).
 - The detailed score report remains readable, screenshot-friendly, and optionally copyable. Players may report the final rating and band without pasting every statistic; raw points and details remain available for the GM. Cross-mode anchors and bands are provisional pending further real-sample review after [issue #33](https://github.com/drakejrobert-sudo/galaxy-grown-games/issues/33).
 
-Asteroid Field / Pilot, Gunner, Bomber, and Life Support plus Space Battle / Pilot and Bomber are on `main`; Space Battle / Life Support is proposed in the issue #10 pull request. Shared setup, controls, manual reporting, and issue #12's cross-device acceptance evidence apply to the original six modes. The new platformer still needs touch playtesting on real iPhone/iPad Safari.
+All seven playable prototypes, including Space Battle / Life Support, are on `main`. Shared setup, controls, manual reporting, and issue #12's cross-device acceptance evidence apply to the original six modes. The new platformer still needs its own real iPhone/iPad Safari playtest before [issue #10](https://github.com/drakejrobert-sudo/galaxy-grown-games/issues/10) can close; see the [issue #10 playtest record](docs/issue-10-playtest.md).
 
 ### Development context and review
 
