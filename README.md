@@ -7,6 +7,12 @@ Asteroid Field / Pilot, Gunner, Bomber, and Life Support, plus Space Battle / Pi
 
 Player link: [play.drakesfood.com](https://play.drakesfood.com/). This HTTPS shortlink redirects to the current GitHub Pages deployment and remains the link to share if the underlying hosting URL changes.
 
+### Remaining designs and final acceptance
+
+[Issue #11](https://github.com/drakejrobert-sudo/galaxy-grown-games/issues/11) tracks the five remaining designs, starting with the [Space Battle Gunner design](docs/space-battle-gunner-design.md) and its separate [implementation issue #38](https://github.com/drakejrobert-sudo/galaxy-grown-games/issues/38). Gunner's core turret-defense activity, keyboard/touch/mouse controls, and half-fire-rate Natural 1 are approved; detailed tuning remains provisional. Boarding Party will compare offensive and defensive concepts before Drake approves a framing and each role's activity/impairment. These modes remain unavailable until implemented.
+
+[Final owner validation #39](https://github.com/drakejrobert-sudo/galaxy-grown-games/issues/39) tracks all 12 situation/role combinations. Each requires Drake's explicit approval of gameplay, all difficulty bands and Natural 1, score/rating balance, real iPhone/iPad Safari, and applicable desktop controls before being marked final. Earlier prototype playtests support that review but do not automatically complete it. Issues #3 and #10 retain their outstanding acceptance work.
+
 ### Run locally
 
 Requires Node 22.12+.
