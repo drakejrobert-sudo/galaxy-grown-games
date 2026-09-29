@@ -2,8 +2,9 @@ import type Phaser from 'phaser';
 import './style.css';
 import './bomber.css';
 import type { FlightScene } from './game/scene';
-import { createBomberInput, createGunnerInput, createInput, createLifeSupportInput, createSpaceBomberInput, createSpaceLifeInput } from './game/input';
+import { createBomberInput, createGunnerInput, createInput, createLifeSupportInput, createSpaceBomberInput, createSpaceLifeInput, createSpaceGunnerInput } from './game/input';
 import {
+  spaceGunnerResultText, spaceGunnerScoreFor,
   bomberResultText, bomberScoreFor, difficultyFor, parseTotal, resultText, scoreFor,
   gunnerResultText, gunnerScoreFor, spaceBattlePilotResultText, spaceBattlePilotScoreFor,
   spaceBattleBomberResultText, spaceBattleBomberScoreFor,
@@ -63,6 +64,8 @@ const platformControls = get('platform-controls');
 const routeButtons = [get<HTMLButtonElement>('route-thrusters'), get<HTMLButtonElement>('route-shields'), get<HTMLButtonElement>('route-guns')];
 const input = createInput(canvas);
 const gunnerInput = createGunnerInput(canvas);
+const spaceGunnerInput = createSpaceGunnerInput(canvas, fireAction);
+const spaceGunnerHelp = 'Ship flies automatically. Touch/mouse aims; touch aim never fires. Hold Fire to shoot. Mouse primary click also fires. Arrow keys / WASD aims; Space / Enter fires.';
 const bomberInput = createBomberInput(canvas, action);
 const spaceBomberInput = createSpaceBomberInput(canvas, fireAction, action);
 const lifeSupportInput = createLifeSupportInput(routeButtons);
@@ -104,10 +107,9 @@ function refreshSetup() {
   const gunnerOption = get<HTMLOptionElement>('role-gunner');
   const bomberOption = get<HTMLOptionElement>('role-bomber');
   const lifeSupportOption = get<HTMLOptionElement>('role-life-support');
-  gunnerOption.disabled = selectedSituation === 'Space Battle';
+  gunnerOption.disabled = false;
   bomberOption.disabled = false;
   lifeSupportOption.disabled = false;
-  if (selectedSituation === 'Space Battle' && roleSelect.value === 'Gunner') roleSelect.value = 'Pilot';
   const selectedRole = roleSelect.value as Role;
   get('impairment').textContent = selectedRole === 'Pilot'
     ? natural.checked ? 'Overloaded engine · 60% movement speed (playtest)' : 'Standard engine'
@@ -121,7 +123,7 @@ function refreshSetup() {
   get('controls-help').textContent = selectedRole === 'Pilot'
     ? 'Arrow keys / WASD to steer. On touch screens, hold and drag in the flight area. The ship follows at its movement speed.'
     : selectedRole === 'Gunner'
-      ? 'Ship flies automatically. Touch: tap, hold, or drag to aim and fire. Mouse: move to aim, then click or hold to fire.'
+      ? selectedSituation === 'Space Battle' ? spaceGunnerHelp : 'Ship flies automatically. Touch: tap, hold, or drag to aim and fire. Mouse: move to aim, then click or hold to fire.'
       : selectedRole === 'Bomber'
         ? selectedSituation === 'Space Battle'
           ? 'Ship flies automatically. Touch, mouse, or Arrow keys / WASD aims missiles ahead; Space or Fire missile launches from the nose. Enter, Shift, or Drop mine releases a mine directly behind the ship.'
@@ -138,6 +140,7 @@ function setPaused(value: boolean) {
   if (!inFlight) return;
   paused = value; scene!.activeFlight = !value;
   input.enable(!value && role === 'Pilot');
+  spaceGunnerInput.enable(!value && situation === 'Space Battle' && role === 'Gunner');
   gunnerInput.enable(!value && situation === 'Asteroid Field' && role === 'Gunner');
   bomberInput.enable(!value && situation === 'Asteroid Field' && role === 'Bomber');
   spaceBomberInput.enable(!value && situation === 'Space Battle' && role === 'Bomber');
@@ -157,15 +160,18 @@ document.addEventListener('visibilitychange', () => {
 });
 function resetSetup() {
   launchPending = false; pauseOnReady = false;
-  inFlight = false; if (scene) scene.activeFlight = false; input.enable(false); gunnerInput.enable(false); bomberInput.enable(false); spaceBomberInput.enable(false); lifeSupportInput.enable(false); spaceLifeInput.enable(false); paused = false;
+  inFlight = false; if (scene) scene.activeFlight = false; input.enable(false); gunnerInput.enable(false); spaceGunnerInput.enable(false); bomberInput.enable(false); spaceBomberInput.enable(false); lifeSupportInput.enable(false); spaceLifeInput.enable(false); paused = false;
   get('pause-overlay').hidden = true; show('setup'); total.focus();
 }
 get('abandon').addEventListener('click', resetSetup); get('again').addEventListener('click', resetSetup);
 function preparePlayLayout() {
   get('play').setAttribute('data-role', role);
+  get('play').setAttribute('data-situation', situation);
   action.hidden = role !== 'Bomber';
-  fireAction.hidden = role !== 'Bomber' || situation !== 'Space Battle';
-  actionRail.hidden = role !== 'Bomber';
+  const spaceGunner = situation === 'Space Battle' && role === 'Gunner';
+  fireAction.hidden = !spaceGunner && (role !== 'Bomber' || situation !== 'Space Battle');
+  fireAction.textContent = spaceGunner ? 'Fire' : 'Fire missile';
+  actionRail.hidden = role !== 'Bomber' && !spaceGunner;
   routeControls.hidden = role !== 'Life Support' || situation !== 'Asteroid Field';
   platformControls.hidden = role !== 'Life Support' || situation !== 'Space Battle';
 }
@@ -176,6 +182,7 @@ function launch() {
   scene!.begin(config, situation, role);
   lifeSupportInput.reset();
   input.enable(role === 'Pilot');
+  spaceGunnerInput.enable(situation === 'Space Battle' && role === 'Gunner');
   gunnerInput.enable(situation === 'Asteroid Field' && role === 'Gunner');
   bomberInput.enable(situation === 'Asteroid Field' && role === 'Bomber');
   spaceBomberInput.enable(situation === 'Space Battle' && role === 'Bomber');
@@ -189,7 +196,7 @@ function launch() {
     ? situation === 'Space Battle' ? `${SPACE_LIFE_MAX_INTEGRITY} / ${SPACE_LIFE_MAX_INTEGRITY}` : `${LIFE_SUPPORT_MAX_INTEGRITY} / ${LIFE_SUPPORT_MAX_INTEGRITY}` : '3 / 3';
   get('mode-label').textContent = `${situation.toUpperCase()} / ${role.toUpperCase()}`;
   get('mode-heading').textContent = situation === 'Space Battle'
-    ? role === 'Bomber' ? 'Break the enemy formation.' : role === 'Life Support' ? 'Contain the damage below deck.' : 'Collect fuel. Evade enemy fire.'
+    ? role === 'Gunner' ? 'Defend the line. Intercept enemy fire.' : role === 'Bomber' ? 'Break the enemy formation.' : role === 'Life Support' ? 'Contain the damage below deck.' : 'Collect fuel. Evade enemy fire.'
     : role === 'Pilot' ? 'Keep your hull intact.'
       : role === 'Gunner' ? 'Clear the path ahead.'
         : role === 'Bomber' ? 'Lay mines in their path.' : 'Route power to the right system.';
@@ -198,7 +205,7 @@ function launch() {
       ? 'Collect fuel cells · Evade ships and fire · Arrow keys / WASD or hold and drag'
       : 'Avoid asteroids · Arrow keys / WASD · Hold and drag to steer'
     : role === 'Gunner'
-      ? 'Automatic flight · Touch to aim/fire · Mouse to aim, click to fire'
+      ? situation === 'Space Battle' ? spaceGunnerHelp : 'Automatic flight · Touch to aim/fire · Mouse to aim, click to fire'
       : role === 'Bomber'
         ? situation === 'Space Battle'
           ? 'Automatic flight · Aim missiles ahead: touch, mouse, arrows/WASD · Space: fire · Enter/Shift: drop mine behind ship'
@@ -207,7 +214,7 @@ function launch() {
           ? 'Stomp orange fires from above · Stand near blue panels and press Repair · Hearts heal · Avoid overloads'
           : 'Match packet symbols · Left/Right or A/D · 1/2/3 · Tap a system';
   canvas.setAttribute('aria-label', situation === 'Space Battle'
-    ? role === 'Bomber'
+    ? role === 'Gunner' ? `Space battle gunner station. ${spaceGunnerHelp}` : role === 'Bomber'
       ? 'Space battle bomber station. Ship flies automatically. Aim missiles ahead with touch, mouse, arrow keys or WASD. Space fires from the nose; Enter or Shift drops mines directly behind the ship. Touch uses two weapon buttons.'
       : role === 'Life Support'
         ? 'Space battle life support. Move left or right and jump between platforms. Stomp orange fires from above; repair blue electrical panels while standing nearby. Touch controls are below the playfield.'
@@ -249,6 +256,7 @@ get('flight-form').addEventListener('submit', async e => {
         scene = new FlightScene('flight');
         scene.readInput = input.read;
         scene.readGunnerInput = gunnerInput.read;
+        scene.readSpaceGunnerInput = spaceGunnerInput.read;
         scene.readBomberInput = bomberInput.read;
         scene.readSpaceBomberInput = spaceBomberInput.read;
         scene.readLifeSupportInput = lifeSupportInput.read;
@@ -277,12 +285,26 @@ get('flight-form').addEventListener('submit', async e => {
   } else { preparePlayLayout(); show('play'); game.scale.refresh(); launch(); }
 });
 function attachSceneCallbacks(scene: FlightScene) {
+scene.onSpaceGunnerStep = s => {
+  get('time').textContent = `${Math.ceil(DURATION - s.elapsed)}s`;
+  get('hull').textContent = `${s.hull} / 3`;
+  get('score').textContent = String(spaceGunnerScoreFor(s));
+  if (s.finished) {
+    inFlight = false; input.enable(false); gunnerInput.enable(false); spaceGunnerInput.enable(false);
+    bomberInput.enable(false); spaceBomberInput.enable(false); lifeSupportInput.enable(false); spaceLifeInput.enable(false);
+    show('results');
+    get('outcome').textContent = s.endReason === 'hull' ? 'Hull depleted.' : 'Defense complete.';
+    showRatedResult('space-gunner', spaceGunnerScoreFor(s), s.hull <= 0);
+    fillSummary(spaceGunnerResultText(config, s));
+    get('copy-status').textContent = ''; get('copy').focus();
+  }
+};
 scene.onFlightStep = s => {
   get('time').textContent = `${Math.ceil(DURATION - s.elapsed)}s`;
   get('hull').textContent = `${s.hull} / 3`;
   get('score').textContent = String(scoreFor(s));
   if (s.finished) {
-    inFlight = false; input.enable(false); gunnerInput.enable(false); bomberInput.enable(false); spaceBomberInput.enable(false); lifeSupportInput.enable(false); show('results');
+    inFlight = false; input.enable(false); gunnerInput.enable(false); spaceGunnerInput.enable(false); bomberInput.enable(false); spaceBomberInput.enable(false); lifeSupportInput.enable(false); show('results');
     get('outcome').textContent = s.hull > 0 ? 'Course complete.' : 'Hull depleted.';
     showRatedResult('asteroid-pilot', scoreFor(s), s.hull <= 0);
     fillSummary(resultText(config, s));
@@ -294,7 +316,7 @@ scene.onGunnerStep = s => {
   get('hull').textContent = `${s.hull} / 3`;
   get('score').textContent = String(gunnerScoreFor(s));
   if (s.finished) {
-    inFlight = false; input.enable(false); gunnerInput.enable(false); bomberInput.enable(false); spaceBomberInput.enable(false); lifeSupportInput.enable(false); show('results');
+    inFlight = false; input.enable(false); gunnerInput.enable(false); spaceGunnerInput.enable(false); bomberInput.enable(false); spaceBomberInput.enable(false); lifeSupportInput.enable(false); show('results');
     get('outcome').textContent = s.hull > 0 ? 'Field cleared.' : 'Hull depleted.';
     showRatedResult('asteroid-gunner', gunnerScoreFor(s), s.hull <= 0);
     fillSummary(gunnerResultText(config, s));
@@ -306,7 +328,7 @@ scene.onBomberStep = s => {
   get('hull').textContent = `${s.hull} / 3`;
   get('score').textContent = String(bomberScoreFor(s));
   if (s.finished) {
-    inFlight = false; input.enable(false); gunnerInput.enable(false); bomberInput.enable(false); spaceBomberInput.enable(false); lifeSupportInput.enable(false); show('results');
+    inFlight = false; input.enable(false); gunnerInput.enable(false); spaceGunnerInput.enable(false); bomberInput.enable(false); spaceBomberInput.enable(false); lifeSupportInput.enable(false); show('results');
     get('outcome').textContent = s.hull > 0 ? 'Field cleared.' : 'Hull depleted.';
     showRatedResult('asteroid-bomber', bomberScoreFor(s), s.hull <= 0);
     fillSummary(bomberResultText(config, s));
@@ -320,7 +342,7 @@ scene.onLifeSupportStep = s => {
   const routes = ['Thrusters', 'Shields', 'Guns'];
   routeButtons.forEach((button, index) => button.setAttribute('aria-pressed', String(routes[index] === s.selectedRoute)));
   if (s.finished) {
-    inFlight = false; input.enable(false); gunnerInput.enable(false); bomberInput.enable(false); spaceBomberInput.enable(false); lifeSupportInput.enable(false); show('results');
+    inFlight = false; input.enable(false); gunnerInput.enable(false); spaceGunnerInput.enable(false); bomberInput.enable(false); spaceBomberInput.enable(false); lifeSupportInput.enable(false); show('results');
     get('outcome').textContent = s.integrity > 0 ? 'Systems stabilized.' : 'Systems failed.';
     showRatedResult('asteroid-life-support', lifeSupportScoreFor(s), s.integrity <= 0);
     fillSummary(lifeSupportResultText(config, s));
@@ -333,7 +355,7 @@ scene.onSpacePilotStep = s => {
   get('fuel').textContent = `${s.fuel.toFixed(1)}s`;
   get('score').textContent = String(spaceBattlePilotScoreFor(s));
   if (s.finished) {
-    inFlight = false; input.enable(false); gunnerInput.enable(false); bomberInput.enable(false); spaceBomberInput.enable(false); lifeSupportInput.enable(false); show('results');
+    inFlight = false; input.enable(false); gunnerInput.enable(false); spaceGunnerInput.enable(false); bomberInput.enable(false); spaceBomberInput.enable(false); lifeSupportInput.enable(false); show('results');
     get('outcome').textContent = s.endReason === 'time' ? 'Battle run complete.' : s.endReason === 'fuel' ? 'Fuel depleted.' : 'Hull depleted.';
     showRatedResult('space-pilot', spaceBattlePilotScoreFor(s), s.endReason === 'hull' || s.endReason === 'fuel' || s.hull <= 0 || s.fuel <= 0);
     fillSummary(spaceBattlePilotResultText(config, s));
@@ -345,7 +367,7 @@ scene.onSpaceBomberStep = s => {
   get('hull').textContent = `${s.hull} / 3`;
   get('score').textContent = String(spaceBattleBomberScoreFor(s));
   if (s.finished) {
-    inFlight = false; input.enable(false); gunnerInput.enable(false); bomberInput.enable(false); spaceBomberInput.enable(false); lifeSupportInput.enable(false); show('results');
+    inFlight = false; input.enable(false); gunnerInput.enable(false); spaceGunnerInput.enable(false); bomberInput.enable(false); spaceBomberInput.enable(false); lifeSupportInput.enable(false); show('results');
     get('outcome').textContent = s.hull > 0 ? 'Bombing run complete.' : 'Hull depleted.';
     showRatedResult('space-bomber', spaceBattleBomberScoreFor(s), s.hull <= 0);
     fillSummary(spaceBattleBomberResultText(config, s));
@@ -358,7 +380,7 @@ scene.onSpaceLifeStep = s => {
   get('score').textContent = String(spaceLifeScoreFor(s));
   if (s.finished) {
     inFlight = false;
-    input.enable(false); gunnerInput.enable(false); bomberInput.enable(false); spaceBomberInput.enable(false);
+    input.enable(false); gunnerInput.enable(false); spaceGunnerInput.enable(false); bomberInput.enable(false); spaceBomberInput.enable(false);
     lifeSupportInput.enable(false); spaceLifeInput.enable(false); show('results');
     get('outcome').textContent = s.integrity > 0 ? 'Systems stabilized.' : 'Systems failed.';
     showRatedResult('space-life-support', spaceLifeScoreFor(s), s.integrity <= 0);

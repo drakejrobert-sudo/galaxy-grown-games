@@ -15,11 +15,12 @@ import {
   BOMBER_BLAST_RADIUS, BOMBER_TUNING, GUNNER_DEFENSE_LINE, GUNNER_TUNING,
   LIFE_SUPPORT_MAX_INTEGRITY, LIFE_SUPPORT_SWITCH_Y, LIFE_SUPPORT_TUNING,
   PILOT_RADIUS, SIDE_WARNING_SECONDS, WIDTH,
+  createSpaceGunner, spaceGunnerResultText,
   SCORE_ANCHORS, SCORING_VERSION, rateScore, type ScoreMode,
 } from '../src/game/rules.ts';
 const scoreModes = Object.keys(SCORE_ANCHORS) as ScoreMode[];
-test('all seven modes share exact rating thresholds, clamping, and failure cap', () => {
-  assert.equal(scoreModes.length, 7);
+test('all eight modes share exact rating thresholds, clamping, and failure cap', () => {
+  assert.equal(scoreModes.length, 8);
   for (const mode of scoreModes) {
     const { low, high } = SCORE_ANCHORS[mode];
     const raw = (rating: number) => low + (high - low) * rating / 100;
@@ -33,7 +34,7 @@ test('all seven modes share exact rating thresholds, clamping, and failure cap',
     assert.deepEqual(rateScore(mode, raw(50), true), { rating: 50, band: 'Success', capped: false });
   }
   assert.throws(() => rateScore('asteroid-pilot', Number.NaN, false));
-  assert.equal(SCORING_VERSION, '0.4');
+  assert.equal(SCORING_VERSION, '0.5');
 });
 test('owner playtest recalibration makes modest Space Battle Pilot scores Mixed', () => {
   assert.deepEqual(SCORE_ANCHORS['space-pilot'], { low: 63, high: 1000 });
@@ -52,7 +53,7 @@ test('owner Space Battle Bomber sample moves from Mixed to Success without chang
   assert.deepEqual(rateScore('space-bomber', 1200, true), { rating: 35, band: 'Mixed', capped: false });
   const report = spaceBattleBomberResultText({ total: 15, naturalOne: false }, s);
   assert.match(report, /Score: 1832/);
-  assert.match(report, /Rating: 55\/100 • Advisory band: Success • Provisional v0\.4/);
+  assert.match(report, /Rating: 55\/100 • Advisory band: Success • Provisional v0\.5/);
   assert.match(report, /Hull depleted/);
   assert.deepEqual(rateScore('space-bomber', 3300, true), { rating: 100, band: 'Success', capped: true });
 });
@@ -65,7 +66,7 @@ test('the common rating cannot reapply check total or Natural 1', () => {
     assert.match(resultText(config, s), new RegExp(`Rating: ${rating.rating}/100`));
   }
 });
-test('all seven failure reports retain points and explain a capped advisory band', () => {
+test('all eight failure reports retain points and explain a capped advisory band', () => {
   const config = { total: 5, naturalOne: true };
   const pilot = createFlight(); pilot.elapsed = 60; pilot.hull = 0;
   const gunner = createGunner(); gunner.destroyed = 100; gunner.hull = 0;
@@ -74,10 +75,11 @@ test('all seven failure reports retain points and explain a capped advisory band
   const spacePilot = createSpaceBattlePilot(); spacePilot.fuelCollected = 20; spacePilot.fuel = 0; spacePilot.endReason = 'fuel';
   const spaceBomber = createSpaceBattleBomber(); spaceBomber.destroyed = 100; spaceBomber.hull = 0;
   const spaceLife = createSpaceLifeSupport(); spaceLife.ordinaryCleared = 20; spaceLife.integrity = 0;
+  const spaceGunner = createSpaceGunner(); spaceGunner.destroyed = 100; spaceGunner.hull = 0; spaceGunner.endReason = 'hull';
   for (const report of [resultText(config, pilot), gunnerResultText(config, gunner),
     bomberResultText(config, bomber), lifeSupportResultText(config, life),
     spaceBattlePilotResultText(config, spacePilot), spaceBattleBomberResultText(config, spaceBomber),
-    spaceLifeResultText(config, spaceLife)]) {
+    spaceLifeResultText(config, spaceLife), spaceGunnerResultText(config, spaceGunner)]) {
     assert.match(report, /Score: \d+/);
     assert.match(report, /Rating: \d+\/100 • Advisory band: Success \(capped at Success after system failure\)/);
     assert.match(report, /Natural 1: Yes/);

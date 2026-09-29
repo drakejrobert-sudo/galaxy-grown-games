@@ -38,3 +38,15 @@ test('bomber breakpoint budgets both columns without a canvas-width cliff', () =
     assert.equal(canvasWidth(breakpoint), canvasWidth(breakpoint + 1));
   }
 });
+
+
+test('Space Battle Gunner reserves Fire outside the canvas with the full-width phone layout', () => {
+  const css = readFileSync(new URL('../src/bomber.css', import.meta.url), 'utf8');
+  const shell = readFileSync(new URL('../src/style.css', import.meta.url), 'utf8');
+  const selector = '#play[data-role="Gunner"][data-situation="Space Battle"]';
+  assert.ok(shell.includes(`${selector} { max-width: 580px; }`));
+  assert.ok(shell.includes(`${selector} .flight-stage{grid-template-columns:minmax(0,480px) 90px}`));
+  const narrow = css.slice(css.indexOf('@media (max-width: 632px) {'));
+  for (const part of ['.flight-stage', '.action-rail', '.action']) assert.ok(narrow.includes(`${selector} ${part}`));
+  assert.ok(shell.slice(shell.lastIndexOf('@media (max-width: 632px)')).includes(`${selector} { max-width: 480px; }`));
+});

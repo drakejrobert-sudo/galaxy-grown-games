@@ -3,9 +3,9 @@ export type Role = 'Pilot' | 'Gunner' | 'Bomber' | 'Life Support';
 export type Situation = 'Asteroid Field' | 'Space Battle';
 export interface FlightConfig { total: number; naturalOne: boolean }
 export type ScoreMode = 'asteroid-pilot' | 'asteroid-gunner' | 'asteroid-bomber' |
-  'asteroid-life-support' | 'space-pilot' | 'space-bomber' | 'space-life-support';
+  'asteroid-life-support' | 'space-pilot' | 'space-bomber' | 'space-life-support' | 'space-gunner';
 export type ResultBand = 'Setback' | 'Mixed' | 'Success' | 'Exceptional';
-export const SCORING_VERSION = '0.4';
+export const SCORING_VERSION = '0.5';
 /** Provisional mode anchors. Space Battle values include owner playtest adjustments; see docs/scoring-calibration.md. */
 export const SCORE_ANCHORS: Record<ScoreMode, { low: number; high: number }> = {
   'asteroid-pilot': { low: 66, high: 700 },
@@ -15,6 +15,7 @@ export const SCORE_ANCHORS: Record<ScoreMode, { low: number; high: number }> = {
   'space-pilot': { low: 63, high: 1000 },
   'space-bomber': { low: 64, high: 3300 },
   'space-life-support': { low: 130, high: 1350 },
+  'space-gunner': { low: 37, high: 5000 },
 };
 export interface RatedResult { rating: number; band: ResultBand; capped: boolean }
 /** Check total and Natural 1 already affect gameplay; neither is reapplied here. */
@@ -1149,6 +1150,124 @@ export function spaceLifeResultText(config: FlightConfig, s: SpaceLifeState): st
     ratingReportText('space-life-support', points, s.integrity <= 0),
     `Integrity: ${s.integrity}/${SPACE_LIFE_MAX_INTEGRITY} • Uncontained fires: ${s.firesExpired} • Hearts: ${s.heartsCollected} • Overload hits: ${s.overloadHits}`,
     s.integrity > 0 ? 'Systems stabilized' : 'Systems failed',
+    'GM determines campaign outcome.',
+  ].join('\n');
+}
+
+// Space Battle Gunner values are provisional; Asteroid Gunner has separate tuning.
+export const SPACE_GUNNER_DEFENSE_LINE = 492;
+export const SPACE_GUNNER_AIM_SPEED = 225;
+export const SPACE_GUNNER_TUNING: Record<Difficulty, {
+  speed: number; spawnEvery: number; projectileSpeed: number; armoredChance: number; fireEvery: number;
+}> = {
+  Hard: { speed: 100, spawnEvery: 1.10, projectileSpeed: 210, armoredChance: 0.25, fireEvery: 0.42 },
+  Medium: { speed: 85, spawnEvery: 1.35, projectileSpeed: 180, armoredChance: 0.15, fireEvery: 0.36 },
+  Easy: { speed: 70, spawnEvery: 1.65, projectileSpeed: 150, armoredChance: 0.10, fireEvery: 0.32 },
+  'Very Easy': { speed: 55, spawnEvery: 2, projectileSpeed: 120, armoredChance: 0, fireEvery: 0.28 },
+};
+export interface SpaceGunnerInput extends GunnerInput { x: number; y: number }
+export interface SpaceGunnerAttacker {
+  id: number; x: number; y: number; radius: number; speed: number;
+  hp: number; maxHp: number; fired: boolean;
+}
+export interface SpaceGunnerProjectile {
+  id: number; x: number; y: number; radius: number; speed: number;
+}
+export interface SpaceGunnerState {
+  crosshairX: number; crosshairY: number; elapsed: number; hull: number;
+  destroyed: number; intercepted: number; shots: number; impacts: number; breached: number;
+  cooldown: number; spawnIn: number; grace: number; nextId: number;
+  attackers: SpaceGunnerAttacker[]; projectiles: SpaceGunnerProjectile[];
+  beamTime: number; beamX: number; beamY: number; impactFlash: number;
+  finished: boolean; endReason: 'time' | 'hull' | null;
+}
+export function createSpaceGunner(): SpaceGunnerState {
+  return { crosshairX: 240, crosshairY: 280, elapsed: 0, hull: 3,
+    destroyed: 0, intercepted: 0, shots: 0, impacts: 0, breached: 0,
+    cooldown: 0, spawnIn: 0.7, grace: 0, nextId: 1, attackers: [], projectiles: [],
+    beamTime: 0, beamX: 240, beamY: 280, impactFlash: 0, finished: false, endReason: null };
+}
+export function spaceGunnerFireEvery(config: FlightConfig): number {
+  return SPACE_GUNNER_TUNING[difficultyFor(config.total)].fireEvery * (config.naturalOne ? OVERHEAT_MULTIPLIER : 1);
+}
+export function stepSpaceGunner(s: SpaceGunnerState, config: FlightConfig,
+  input: SpaceGunnerInput, dt: number, random: () => number = Math.random): void {
+  if (s.finished) return;
+  dt = Math.min(Math.max(dt, 0), 0.05, DURATION - s.elapsed);
+  const tuning = SPACE_GUNNER_TUNING[difficultyFor(config.total)];
+  s.elapsed += dt;
+  s.cooldown = s.cooldown > 0 ? s.cooldown - dt : 0;
+  s.grace = Math.max(0, s.grace - dt);
+  s.beamTime = Math.max(0, s.beamTime - dt);
+  s.impactFlash = Math.max(0, s.impactFlash - dt);
+  if (input.aimX !== undefined && input.aimY !== undefined) {
+    s.crosshairX = input.aimX; s.crosshairY = input.aimY;
+  } else {
+    const length = Math.max(1, Math.hypot(input.x, input.y));
+    s.crosshairX += input.x / length * SPACE_GUNNER_AIM_SPEED * dt;
+    s.crosshairY += input.y / length * SPACE_GUNNER_AIM_SPEED * dt;
+  }
+  s.crosshairX = Math.max(12, Math.min(468, s.crosshairX));
+  s.crosshairY = Math.max(18, Math.min(484, s.crosshairY));
+  if (input.firing && s.cooldown <= 0) {
+    s.shots++; s.cooldown += spaceGunnerFireEvery(config);
+    s.beamTime = 0.09; s.beamX = s.crosshairX; s.beamY = s.crosshairY;
+    const candidates = [
+      ...s.projectiles.map(entity => ({ entity, projectile: true })),
+      ...s.attackers.map(entity => ({ entity, projectile: false })),
+    ].map(candidate => ({ ...candidate,
+      distance: Math.hypot(candidate.entity.x - s.crosshairX, candidate.entity.y - s.crosshairY),
+    })).filter(candidate => candidate.distance <= candidate.entity.radius + 7)
+      .sort((a, b) => a.distance - b.distance || Number(b.projectile) - Number(a.projectile) || a.entity.id - b.entity.id);
+    const target = candidates[0];
+    if (target?.projectile) {
+      s.projectiles = s.projectiles.filter(p => p.id !== target.entity.id); s.intercepted++;
+    } else if (target) {
+      const attacker = target.entity as SpaceGunnerAttacker;
+      if (--attacker.hp <= 0) { s.attackers = s.attackers.filter(a => a.id !== attacker.id); s.destroyed++; }
+    }
+  }
+  s.cooldown = Math.max(0, s.cooldown);
+  // Existing projectiles move this step; freshly emitted projectiles move next step.
+  const existingProjectiles = [...s.projectiles];
+  s.spawnIn -= dt;
+  while (s.spawnIn <= 0) {
+    const x = 20 + random() * 440;
+    const hp = random() < tuning.armoredChance ? 2 : 1;
+    s.attackers.push({ id: s.nextId++, x, y: -24, radius: 20, speed: tuning.speed, hp, maxHp: hp, fired: false });
+    s.spawnIn += tuning.spawnEvery;
+  }
+  for (const a of s.attackers) {
+    a.y += a.speed * dt;
+    if (!a.fired && a.y >= 180) {
+      a.fired = true;
+      s.projectiles.push({ id: s.nextId++, x: a.x, y: a.y + 26, radius: 10, speed: tuning.projectileSpeed });
+    }
+  }
+  for (const p of existingProjectiles) p.y += p.speed * dt;
+  const crossing = (e: { y: number; radius: number }) => e.y + e.radius >= SPACE_GUNNER_DEFENSE_LINE;
+  const breaches = s.attackers.filter(crossing).length + s.projectiles.filter(crossing).length;
+  s.attackers = s.attackers.filter(a => !crossing(a));
+  s.projectiles = s.projectiles.filter(p => !crossing(p));
+  s.breached += breaches;
+  if (breaches && s.grace <= 0) {
+    s.hull = Math.max(0, s.hull - 1); s.impacts++; s.grace = 1.25; s.impactFlash = 0.18;
+  }
+  s.finished = s.hull <= 0 || s.elapsed >= DURATION;
+  if (s.finished) s.endReason = s.hull <= 0 ? 'hull' : 'time';
+}
+export function spaceGunnerScoreFor(s: SpaceGunnerState): number {
+  return s.destroyed * 100 + s.intercepted * 25 + Math.round(s.elapsed * 5) + s.hull * 100;
+}
+export function spaceGunnerResultText(config: FlightConfig, s: SpaceGunnerState): string {
+  return [ 'Galaxy Grown — Space Battle / Gunner',
+    `Check total: ${config.total} • Difficulty: ${difficultyFor(config.total)}`,
+    `Natural 1: ${config.naturalOne ? 'Yes — overheated gun (half normal fire rate)' : 'No'}`,
+    `Score: ${spaceGunnerScoreFor(s)} • Time: ${s.elapsed.toFixed(1)}s • Attackers destroyed: ${s.destroyed}`,
+    `Projectiles intercepted: ${s.intercepted} • Shots fired: ${s.shots}`,
+    ratingReportText('space-gunner', spaceGunnerScoreFor(s), s.hull <= 0),
+    `Hull: ${s.hull}/3 • Damaging hits: ${s.impacts} • Breached threats: ${s.breached}`,
+    s.endReason === 'hull' ? 'Hull depleted' : 'Defense complete',
     'GM determines campaign outcome.',
   ].join('\n');
 }

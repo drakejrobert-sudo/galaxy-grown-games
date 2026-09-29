@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import {
+  createSpaceGunner, stepSpaceGunner, SPACE_GUNNER_DEFENSE_LINE, type SpaceGunnerInput, type SpaceGunnerState,
   createBomber, createFlight, createGunner, createLifeSupport, createSpaceBattleBomber, createSpaceBattlePilot, stepBomber,
   stepFlight, stepGunner, stepLifeSupport, stepSpaceBattleBomber, stepSpaceBattlePilot, WIDTH, HEIGHT,
   mineDropPosition, automaticShipX, bomberBlastRadius, spaceBomberBlastRadius, BOMBER_MINE_COOLDOWN, BOMBER_MINE_LIFETIME, GUNNER_DEFENSE_LINE, type Asteroid, type FlightConfig, type FlightState,
@@ -15,6 +16,7 @@ import {
 export class FlightScene extends Phaser.Scene {
   flight = createFlight();
   gunner = createGunner();
+  spaceGunner = createSpaceGunner();
   bomber = createBomber();
   lifeSupport = createLifeSupport();
   spacePilot = createSpaceBattlePilot();
@@ -26,12 +28,14 @@ export class FlightScene extends Phaser.Scene {
   config: FlightConfig = { total: 10, naturalOne: false };
   private graphics!: Phaser.GameObjects.Graphics;
   readInput: (x: number, y: number) => { x: number; y: number } = () => ({ x: 0, y: 0 });
+  readSpaceGunnerInput: () => SpaceGunnerInput = () => ({ x: 0, y: 0, firing: false });
   readGunnerInput: () => GunnerInput = () => ({ firing: false });
   readBomberInput: () => BomberInput = () => ({ x: 0, y: 0, placing: false });
   readLifeSupportInput: () => LifeSupportInput = () => ({ route: 'Shields' });
   readSpaceBomberInput: () => SpaceBattleBomberInput = () => ({ x: 0, y: 0, firing: false, placing: false });
   readSpaceLifeInput: () => SpaceLifeInput = () => ({ x: 0, jump: false, repair: false });
   onFlightStep: (state: FlightState) => void = () => {};
+  onSpaceGunnerStep: (state: SpaceGunnerState) => void = () => {};
   onGunnerStep: (state: GunnerState) => void = () => {};
   onBomberStep: (state: BomberState) => void = () => {};
   onLifeSupportStep: (state: LifeSupportState) => void = () => {};
@@ -52,6 +56,7 @@ export class FlightScene extends Phaser.Scene {
     this.role = role;
     this.flight = createFlight();
     this.gunner = createGunner();
+    this.spaceGunner = createSpaceGunner();
     this.bomber = createBomber();
     this.lifeSupport = createLifeSupport();
     this.spacePilot = createSpaceBattlePilot();
@@ -68,6 +73,10 @@ export class FlightScene extends Phaser.Scene {
           stepSpaceLifeSupport(this.spaceLife, this.config, this.readSpaceLifeInput(), delta / 1000);
           if (this.spaceLife.finished) this.activeFlight = false;
           this.onSpaceLifeStep(this.spaceLife);
+        } else if (this.role === 'Gunner') {
+          stepSpaceGunner(this.spaceGunner, this.config, this.readSpaceGunnerInput(), delta / 1000);
+          if (this.spaceGunner.finished) this.activeFlight = false;
+          this.onSpaceGunnerStep(this.spaceGunner);
         } else if (this.role === 'Bomber') {
           stepSpaceBattleBomber(this.spaceBomber, this.config,
             this.readSpaceBomberInput(), delta / 1000);
@@ -103,13 +112,14 @@ export class FlightScene extends Phaser.Scene {
     const g = this.graphics;
     g.clear();
     const elapsed = this.situation === 'Space Battle'
-      ? this.role === 'Life Support' ? this.spaceLife.elapsed : this.role === 'Bomber' ? this.spaceBomber.elapsed : this.spacePilot.elapsed
+      ? this.role === 'Life Support' ? this.spaceLife.elapsed : this.role === 'Bomber' ? this.spaceBomber.elapsed : this.role === 'Gunner' ? this.spaceGunner.elapsed : this.spacePilot.elapsed
       : this.role === 'Pilot' ? this.flight.elapsed
         : this.role === 'Gunner' ? this.gunner.elapsed
           : this.role === 'Bomber' ? this.bomber.elapsed : this.lifeSupport.elapsed;
     this.paintBackground(g, elapsed);
     if (this.situation === 'Space Battle') {
       if (this.role === 'Life Support') this.paintSpaceLifeMode(g);
+      else if (this.role === 'Gunner') this.paintSpaceGunnerMode(g);
       else if (this.role === 'Bomber') this.paintSpaceBattleBomberMode(g);
       else this.paintSpaceBattlePilotMode(g);
     }
@@ -410,6 +420,46 @@ export class FlightScene extends Phaser.Scene {
         for (let hp = 0; hp < asteroid.hp; hp++) g.fillCircle(asteroid.x - 4 + hp * 8, asteroid.y - asteroid.radius - 7, 2.5);
       }
     }
+    this.paintGunnerTurret(g, s);
+  }
+
+  private paintSpaceGunnerMode(g: Phaser.GameObjects.Graphics) {
+    const s = this.spaceGunner;
+    g.fillStyle(s.impactFlash ? 0xff715b : 0x79e1ce, s.impactFlash ? 0.2 : 0.08);
+    g.fillRect(9, SPACE_GUNNER_DEFENSE_LINE, WIDTH - 18, HEIGHT - SPACE_GUNNER_DEFENSE_LINE - 9);
+    g.lineStyle(s.grace > 0 ? 4 : 2, s.grace > 0 ? 0x79d9ff : 0x79e1ce, 0.85);
+    g.lineBetween(10, SPACE_GUNNER_DEFENSE_LINE, WIDTH - 10, SPACE_GUNNER_DEFENSE_LINE);
+    for (const a of s.attackers) {
+      const armored = a.maxHp > 1;
+      g.lineStyle(2, armored ? 0xffca83 : 0xff829c);
+      g.fillStyle(armored ? 0x665044 : 0x493950);
+      g.fillTriangle(a.x, a.y + 20, a.x - 18, a.y - 16, a.x + 18, a.y - 16);
+      g.strokeTriangle(a.x, a.y + 20, a.x - 18, a.y - 16, a.x + 18, a.y - 16);
+      if (armored) {
+        g.fillStyle(0xa67a54); g.fillRect(a.x - 20, a.y - 9, 40, 9);
+        for (let hp = 0; hp < a.hp; hp++) { g.fillStyle(0xffca83); g.fillCircle(a.x - 4 + hp * 8, a.y - 27, 3); }
+      }
+      g.fillStyle(0x9fb9ee); g.fillTriangle(a.x, a.y + 4, a.x - 5, a.y - 7, a.x + 5, a.y - 7);
+      if (!a.fired && a.y >= 140) {
+        g.lineStyle(2, 0xffca83, 0.85); g.strokeCircle(a.x, a.y + 22, 7);
+        g.lineBetween(a.x, a.y + 32, a.x, a.y + 50);
+      }
+    }
+    for (const p of s.projectiles) {
+      g.lineStyle(3, 0xff829c, 0.5); g.lineBetween(p.x, p.y - 25, p.x, p.y - 8);
+      g.fillStyle(0xff637d); g.lineStyle(2, 0xffe5d1);
+      g.beginPath(); g.moveTo(p.x, p.y + 10); g.lineTo(p.x - 9, p.y);
+      g.lineTo(p.x, p.y - 10); g.lineTo(p.x + 9, p.y); g.closePath();
+      g.fillPath(); g.strokePath();
+      g.fillStyle(0xffffff); g.fillCircle(p.x, p.y, 2);
+    }
+    if (s.grace > 0) {
+      g.lineStyle(3, 0x79d9ff, 0.7); g.strokeCircle(automaticShipX(s.elapsed), HEIGHT - 44, 40);
+    }
+    this.paintGunnerTurret(g, s);
+  }
+
+  private paintGunnerTurret(g: Phaser.GameObjects.Graphics, s: GunnerState | SpaceGunnerState) {
     const turretX = automaticShipX(s.elapsed), turretY = HEIGHT - 44;
     // A larger armored weapon deck, exposed engines and service lights.
     g.save(); g.translateCanvas(turretX, turretY); g.scaleCanvas(1.65, 1.25);

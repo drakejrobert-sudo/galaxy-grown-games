@@ -3,13 +3,13 @@ A repository for hosting mini games for the galaxy grown campaign.
 
 ## First playable slice
 
-Asteroid Field / Pilot, Gunner, Bomber, and Life Support, plus Space Battle / Pilot, Bomber, and Life Support, are implemented as **prototypes awaiting score calibration**. Other situation/role combinations are visibly disabled. Players enter their GM-requested final skill-check total and a separate Natural 1 flag, play independently, and manually share their rating or score. No campaign data or live multiplayer service is included.
+Asteroid Field / Pilot, Gunner, Bomber, and Life Support, plus Space Battle / Pilot, Gunner, Bomber, and Life Support, are implemented as **prototypes awaiting score calibration**. Other situation/role combinations are visibly disabled. Players enter their GM-requested final skill-check total and a separate Natural 1 flag, play independently, and manually share their rating or score. No campaign data or live multiplayer service is included.
 
 Player link: [play.drakesfood.com](https://play.drakesfood.com/). This HTTPS shortlink redirects to the current GitHub Pages deployment and remains the link to share if the underlying hosting URL changes.
 
 ### Remaining designs and final acceptance
 
-[Issue #11](https://github.com/drakejrobert-sudo/galaxy-grown-games/issues/11) tracks the five remaining designs, starting with the [Space Battle Gunner design](docs/space-battle-gunner-design.md) and its separate [implementation issue #38](https://github.com/drakejrobert-sudo/galaxy-grown-games/issues/38). Gunner's core turret-defense activity, keyboard/touch/mouse controls, and half-fire-rate Natural 1 are approved; detailed tuning remains provisional. Boarding Party will compare offensive and defensive concepts before Drake approves a framing and each role's activity/impairment. These modes remain unavailable until implemented.
+[Issue #11](https://github.com/drakejrobert-sudo/galaxy-grown-games/issues/11) tracks remaining Boarding Party designs and the completed handoff for the [Space Battle Gunner design](docs/space-battle-gunner-design.md) and its separate [implementation issue #38](https://github.com/drakejrobert-sudo/galaxy-grown-games/issues/38). Gunner's core turret-defense activity, keyboard/touch/mouse controls, and half-fire-rate Natural 1 are approved; detailed tuning remains provisional. Boarding Party will compare offensive and defensive concepts before Drake approves a framing and each role's activity/impairment. Boarding Party remains unavailable. Space Battle Gunner is implemented here, with final device and gameplay acceptance pending.
 
 [Final owner validation #39](https://github.com/drakejrobert-sudo/galaxy-grown-games/issues/39) tracks all 12 situation/role combinations. Each requires Drake's explicit approval of gameplay, all difficulty bands and Natural 1, score/rating balance, real iPhone/iPad Safari, and applicable desktop controls before being marked final. Earlier prototype playtests support that review but do not automatically complete it. Issues #3 and #10 retain their outstanding acceptance work.
 
@@ -68,6 +68,10 @@ Each finished run now shows a provisional **0–100 rating** and GM advisory ban
 | Medium | 3.8 | 9 |
 | Hard | 3.2 | 8 |
 
+- Space Battle / Gunner defends a visible line from attacking ships and their projectiles. Ships fly automatically; Arrow keys/WASD aims at a normalized 225 logical px/s, while touch/mouse aims directly. Touch aiming never fires; tap/hold the separate **Fire** button, including with a second finger. Mouse primary click/hold or Space/Enter also fires. All sources share the same cooldown; released aim is retained, and pause clears held/queued actions.
+- Each attacker fires one telegraphed projectile. Armored attackers take two hits; projectiles take one. A turret shot hits the closest target within its tolerance, preferring projectiles then lower entity IDs on exact ties. Destroying the source leaves an already launched projectile intact. Breaches lose at most one hull per step, with 1.25 seconds of protection; runs end at three hull lost or 60 seconds. Natural 1 doubles only the selected band's cooldown.
+- Space Battle / Gunner raw points are 100 per attacker destroyed, 25 per projectile intercepted, `round(elapsed seconds × 5)`, and 100 per remaining hull. Its provisional v0.5 rating anchors are 37–5,000 from 288 synthetic runs; older modes retain their anchors. The Fire rail stacks below the full canvas through 632px, allowing for desktop scrollbars at the transition. All tuning and real-device acceptance remain provisional.
+
 - Pause or Escape stops the round. Switching away automatically pauses; resumption is explicit.
 - Final reports include the selected role, check total, difficulty, natural-1 impairment, role-specific statistics, raw points, rating, and advisory band. Clipboard failure selects the report for manual copying. GM decides all outcomes.
 - All art is original code-drawn geometry. No commercial game assets or GM-only lore are included.
@@ -84,12 +88,12 @@ The canonical player-facing shortlink is `https://play.drakesfood.com/`; Drake's
 
 ### Validation status
 
-- Automated tests cover all seven modes, including Space Battle / Life Support platforming, repair actions, icon mix, integrity, scoring, startup, pause, and retry. Run `npm test` for the current count.
+- Automated tests cover all eight modes, including Space Battle / Life Support platforming, repair actions, icon mix, integrity, scoring, startup, pause, and retry. Run `npm test` for the current count.
 - TypeScript check and Vite production build pass. The setup screen defers Phaser until Start challenge. The existing Vite large-chunk advisory remains; see the [measured performance decision](docs/performance-decisions.md).
 - A prior desktop in-app Chromium playtest reached results in the original six playable modes, including narrow viewport checks at 390px and 320px. A fixed-height report box clipped wrapped lines; reports now grow to show their full text and reflow on resize. Drake subsequently completed the cross-device playtest and reported that those six modes looked good. See the [issue #12 playtest record](docs/issue-12-playtest.md).
 - The detailed score report remains readable, screenshot-friendly, and optionally copyable. Players may report the final rating and band without pasting every statistic; raw points and details remain available for the GM. Cross-mode anchors and bands are provisional pending further real-sample review after [issue #33](https://github.com/drakejrobert-sudo/galaxy-grown-games/issues/33).
 
-All seven playable prototypes, including Space Battle / Life Support, are on `main`. Shared setup, controls, manual reporting, and issue #12's cross-device acceptance evidence apply to the original six modes. The new platformer still needs its own real iPhone/iPad Safari playtest before [issue #10](https://github.com/drakejrobert-sudo/galaxy-grown-games/issues/10) can close; see the [issue #10 playtest record](docs/issue-10-playtest.md).
+There are eight playable prototypes. Space Battle Gunner adds turret defense to the seven previously implemented modes; its acceptance record is [issue #38 playtesting](docs/issue-38-playtest.md). Shared setup, controls, manual reporting, and issue #12's cross-device acceptance evidence apply to the original six modes. The new platformer still needs its own real iPhone/iPad Safari playtest before [issue #10](https://github.com/drakejrobert-sudo/galaxy-grown-games/issues/10) can close; see the [issue #10 playtest record](docs/issue-10-playtest.md).
 
 ### Development context and review
 
