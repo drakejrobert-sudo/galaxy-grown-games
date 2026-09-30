@@ -95,6 +95,10 @@ The canonical player-facing shortlink is `https://play.drakesfood.com/`; Drake's
 
 There are eight playable prototypes. Space Battle Gunner adds turret defense to the seven previously implemented modes; its acceptance record is [issue #38 playtesting](docs/issue-38-playtest.md). Shared setup, controls, manual reporting, and issue #12's cross-device acceptance evidence apply to the original six modes. The new platformer still needs its own real iPhone/iPad Safari playtest before [issue #10](https://github.com/drakejrobert-sudo/galaxy-grown-games/issues/10) can close; see the [issue #10 playtest record](docs/issue-10-playtest.md).
 
+### Arcade polish review
+
+[Issue #42 review and first-pass evidence](docs/issue-42-review.md) audits all eight modes and records the Space Battle Gunner/Life Support visual enhancements, desktop timing samples, and pending real-device acceptance. Graphics changes preserve logical dimensions, controls, mechanics, and provisional scoring.
+
 ### Development context and review
 
 Read [AGENTS.md](AGENTS.md) for the required branch → pull request → Drake review workflow. Agents never merge or deploy autonomously. See [campaign context](docs/campaign-context.md) for the player-safe setting and role direction, and [ChatGPT project setup](docs/chatgpt-project-setup.md) for reusable project instructions.
