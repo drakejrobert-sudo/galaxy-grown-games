@@ -273,3 +273,78 @@ export function createLifeSupportInput(routeButtons: readonly HTMLElement[]) {
     read() { return { route: routes[selected] }; },
   };
 }
+
+/** Space Battle touch aims only; firing sources have independent held/queued ownership. */
+export function createSpaceGunnerInput(surface: HTMLElement, fireAction: HTMLElement) {
+  let enabled = false;
+  let aimPointer: number | null = null;
+  let aim: { x: number; y: number } | null = null;
+  const keys = new Set<string>();
+  const held = new Set<number>();
+  const queued = new Set<number>();
+  let keyboardQueued = false;
+  const movement = ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'KeyW', 'KeyA', 'KeyS', 'KeyD'];
+  const firing = ['Space', 'Enter'];
+  const clear = () => {
+    aimPointer = null; aim = null; keys.clear(); held.clear(); queued.clear(); keyboardQueued = false;
+  };
+  const setAim = (e: PointerEvent) => {
+    const box = surface.querySelector('canvas')?.getBoundingClientRect();
+    if (box && box.width && box.height) aim = {
+      x: (e.clientX - box.left) / box.width * 480,
+      y: (e.clientY - box.top) / box.height * 560,
+    };
+  };
+  surface.addEventListener('pointerdown', e => {
+    if (!enabled || (e.pointerType === 'mouse' && e.button !== 0) || aimPointer !== null) return;
+    e.preventDefault(); aimPointer = e.pointerId;
+    surface.setPointerCapture?.(e.pointerId); setAim(e);
+    if (e.pointerType === 'mouse') { held.add(e.pointerId); queued.add(e.pointerId); }
+  });
+  surface.addEventListener('pointermove', e => {
+    if (!enabled || (e.pointerType !== 'mouse' && e.pointerId !== aimPointer)) return;
+    e.preventDefault(); setAim(e);
+  });
+  fireAction.addEventListener('pointerdown', e => {
+    if (!enabled || (e.pointerType === 'mouse' && e.button !== 0)) return;
+    e.preventDefault(); held.add(e.pointerId); queued.add(e.pointerId);
+    fireAction.setPointerCapture?.(e.pointerId);
+  });
+  for (const element of [surface, fireAction]) {
+    element.addEventListener('pointerup', e => {
+      if (e.pointerId === aimPointer) aimPointer = null;
+      held.delete(e.pointerId); // Keep an ordinary quick tap until the next read.
+    });
+    const cancel = (e: PointerEvent) => {
+      if (e.pointerId === aimPointer) aimPointer = null;
+      // A capture-loss event after normal release must not erase the released tap.
+      if (held.delete(e.pointerId)) queued.delete(e.pointerId);
+    };
+    element.addEventListener('lostpointercapture', cancel);
+    element.addEventListener('pointercancel', e => {
+      cancel(e); queued.delete(e.pointerId);
+    });
+  }
+  window.addEventListener('keydown', e => {
+    if (!enabled || ![...movement, ...firing].includes(e.code)) return;
+    e.preventDefault();
+    if (movement.includes(e.code) && !keys.has(e.code)) aim = null;
+    if (firing.includes(e.code) && !keys.has(e.code)) keyboardQueued = true;
+    keys.add(e.code);
+  });
+  window.addEventListener('keyup', e => keys.delete(e.code));
+  window.addEventListener('blur', clear);
+  return {
+    enable(value: boolean) { enabled = value; clear(); },
+    read() {
+      const result = {
+        x: Number(keys.has('ArrowRight') || keys.has('KeyD')) - Number(keys.has('ArrowLeft') || keys.has('KeyA')),
+        y: Number(keys.has('ArrowDown') || keys.has('KeyS')) - Number(keys.has('ArrowUp') || keys.has('KeyW')),
+        aimX: aim?.x, aimY: aim?.y,
+        firing: keyboardQueued || queued.size > 0 || held.size > 0 || firing.some(key => keys.has(key)),
+      };
+      keyboardQueued = false; queued.clear();
+      return result;
+    },
+  };
+}

@@ -1,5 +1,6 @@
 /** Repeatable, deliberately synthetic score samples. Run: node --import tsx scripts/calibrate-scores.ts */
 import {
+  createSpaceGunner, stepSpaceGunner, spaceGunnerScoreFor, SPACE_GUNNER_DEFENSE_LINE,
   DURATION, HEIGHT, WIDTH, createFlight, stepFlight, scoreFor,
   createGunner, stepGunner, gunnerScoreFor,
   createBomber, stepBomber, bomberScoreFor,
@@ -12,7 +13,7 @@ import {
 
 type Profile = 'passive' | 'routine' | 'engaged';
 const modes: ScoreMode[] = ['asteroid-pilot', 'asteroid-gunner', 'asteroid-bomber',
-  'asteroid-life-support', 'space-pilot', 'space-bomber', 'space-life-support'];
+  'asteroid-life-support', 'space-pilot', 'space-bomber', 'space-life-support', 'space-gunner'];
 const totals = [5, 10, 15, 16]; // One representative total for each established difficulty band.
 const profiles: Profile[] = ['passive', 'routine', 'engaged'];
 const step = 0.05;
@@ -41,6 +42,20 @@ function pilotDirection(s: { x: number; y: number }, hazards: { x: number; y: nu
 }
 function run(mode: ScoreMode, config: FlightConfig, profile: Profile, seed: number): number {
   const random = seeded(seed);
+  if (mode === 'space-gunner') {
+    const s = createSpaceGunner();
+    while (!s.finished) {
+      const target = profile === 'routine'
+        ? [...s.attackers].filter(a => a.y > 168).sort((a, b) => b.y - a.y || a.id - b.id)[0]
+        : profile === 'engaged'
+          ? [...s.attackers, ...s.projectiles].sort((a, b) =>
+            (SPACE_GUNNER_DEFENSE_LINE - a.y - a.radius) / a.speed -
+            (SPACE_GUNNER_DEFENSE_LINE - b.y - b.radius) / b.speed || a.id - b.id)[0]
+          : undefined;
+      stepSpaceGunner(s, config, { x: 0, y: 0, aimX: target?.x, aimY: target?.y, firing: !!target }, step, random);
+    }
+    return spaceGunnerScoreFor(s);
+  }
   if (mode === 'asteroid-pilot') {
     const s = createFlight();
     while (!s.finished) stepFlight(s, config, pilotDirection(s, s.asteroids, profile, s.elapsed), step, random);

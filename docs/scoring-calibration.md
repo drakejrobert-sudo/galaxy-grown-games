@@ -1,4 +1,4 @@
-# Provisional common scoring — v0.4
+# Provisional common scoring — v0.5
 
 Issue #33 adds a **0–100 advisory rating** to each completed run. Raw points and role-specific statistics remain intact. The rating uses a fixed low/high pair for each playable mode:
 
@@ -51,6 +51,18 @@ The same seeded calibration script ran 288 Space Battle / Life Support simulatio
 
 The fixed **130–1,350** anchor is a playtest starting point. The corrected fractional-second scoring changes the synthetic 10th percentile to 128; the provisional fixed anchor remains 130. Check completed and failed real runs, especially whether the high anchor makes modest repairs rate too highly. Earlier v0.2 and v0.3 reports retain their historical meaning; the v0.4 label marks the addition of this mode.
 
+## Space Battle / Gunner addition — v0.5
+
+The eighth mode adds turret defense without changing any existing mode's fixed anchors, raw-score rules, or advisory bands. Points are 100 per attacker destroyed, 25 per projectile intercepted, `round(elapsed seconds × 5)`, and 100 per remaining hull. Armor damage and breaches award nothing; hull failure caps only the advisory band.
+
+The design's 288 seeded simulations use the existing seeds, 50 ms steps, four bands, and both Natural 1 states. Passive never fires. Routine targets the lowest attacker below y = 168. Engaged targets the threat with the shortest time to its bottom edge crossing the defense line. Active profiles aim directly and hold fire when a target exists; target ties use the lowest entity ID. They do not model keyboard aiming or human performance.
+
+| Mode | Runs | Observed min | Low (10th) | Median | High (90th) | Observed max |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| Space Battle / Gunner | 288 | 36 | 37 | 2,038 | 5,000 | 6,000 |
+
+The fixed **37–5,000** pair exactly uses those observed percentiles. The seven older calibration rows and live anchors remain unchanged; historical v0.2–v0.4 reports retain their meaning. Natural 1 doubles the selected cooldown; simulation retains fractional cooldown overshoot while firing so timestep rounding does not distort its sustained rate. A quick attempt during cooldown is discarded, never banked. Final tuning requires Drake's completed/failed real-run judgments and device checks under #39.
+
 ## Real playtest review before final thresholds
 
-Record at least several completed and failed runs per mode across the four difficulties, including Natural 1, using only mode, modified total, Natural 1 flag, raw score, rating, end reason, and whether the GM thought the band described the performance. No player identities or campaign details are needed. Compare real score distributions and GM judgments with the synthetic references and v0.4 anchors. Adjust anchors or bands only in a separately reviewed versioned change; the current values remain provisional until Drake accepts them after broader playtesting.
+Record at least several completed and failed runs per mode across the four difficulties, including Natural 1, using only mode, modified total, Natural 1 flag, raw score, rating, end reason, and whether the GM thought the band described the performance. No player identities or campaign details are needed. Compare real score distributions and GM judgments with the synthetic references and current fixed anchors. Adjust anchors or bands only in a separately reviewed versioned change; the current values remain provisional until Drake accepts them after broader playtesting.

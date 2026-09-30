@@ -1,8 +1,8 @@
 # Space Battle / Gunner — design handoff
 
-Design tracker: [#11](https://github.com/drakejrobert-sudo/galaxy-grown-games/issues/11). Status: **core activity, controls, and Natural 1 approved by Drake on 2026-09-27; implementation pending**. The detailed rules below are the reviewable implementation design. All numeric tuning and rating anchors require final owner playtesting; design approval is not final game acceptance.
+Design tracker: [#11](https://github.com/drakejrobert-sudo/galaxy-grown-games/issues/11). Status: **core activity, controls, and Natural 1 approved by Drake on 2026-09-27; implemented in the #38 feature branch; review and final acceptance pending**. The detailed rules below are the reviewable implementation design. All numeric tuning and rating anchors require final owner playtesting; design approval is not final game acceptance.
 
-Implementation: [#38](https://github.com/drakejrobert-sudo/galaxy-grown-games/issues/38), after review/merge of this design. Final owner acceptance: [#39](https://github.com/drakejrobert-sudo/galaxy-grown-games/issues/39), covering gameplay, balance, ratings, and real iPhone/iPad Safari plus desktop controls for all 12 combinations. Earlier prototype playtests are evidence, not automatic final signoff. Existing #3 and #10 acceptance work remains open and linked there.
+Implementation and playtest record: [issue #38 playtesting](issue-38-playtest.md). Implementation tracker: [#38](https://github.com/drakejrobert-sudo/galaxy-grown-games/issues/38), after review/merge of this design. Final owner acceptance: [#39](https://github.com/drakejrobert-sudo/galaxy-grown-games/issues/39), covering gameplay, balance, ratings, and real iPhone/iPad Safari plus desktop controls for all 12 combinations. Earlier prototype playtests are evidence, not automatic final signoff. Existing #3 and #10 acceptance work remains open and linked there.
 
 ## Approved direction and boundaries
 

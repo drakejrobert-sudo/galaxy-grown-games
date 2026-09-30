@@ -20,3 +20,9 @@
   .hud { padding: 12px 10px; }
   .hud strong { font-size: 20px; }
 }
+
+#play[data-role="Gunner"][data-situation="Space Battle"] { max-width: 580px; }
+#play[data-role="Gunner"][data-situation="Space Battle"] .flight-stage{grid-template-columns:minmax(0,480px) 90px}
+@media (max-width: 632px) {
+  #play[data-role="Gunner"][data-situation="Space Battle"] { max-width: 480px; }
+}

@@ -29,7 +29,7 @@ test('deferred first launch recovers from load failure, starts once, and retry r
     scale = { refresh: () => {
       const selectedRole = element('role').value;
       assert.equal(element('play').attributes.get('data-role'), selectedRole);
-      assert.equal(element('action-rail').hidden, selectedRole !== 'Bomber');
+      assert.equal(element('action-rail').hidden, selectedRole !== 'Bomber' && !(selectedRole === 'Gunner' && element('situation').value === 'Space Battle'));
       scaleRefreshRailStates.push(element('action-rail').hidden);
     } };
     constructor(config: any) {
@@ -54,6 +54,7 @@ test('deferred first launch recovers from load failure, starts once, and retry r
     return exports as any;
   }
   const scenes = load('../src/game/scene.ts', { phaser, './rules': rules });
+  let spaceGunnerInputEnabled = false;
   let inputEnabled = false, gunnerInputEnabled = false, bomberInputEnabled = false;
   let spaceBomberInputEnabled = false, lifeSupportInputEnabled = false, spaceLifeInputEnabled = false;
   let runtimeImports = 0;
@@ -68,6 +69,7 @@ test('deferred first launch recovers from load failure, starts once, and retry r
     },
     './game/rules': rules, './game/input': {
       createInput: () => ({ read: () => ({ x: 1, y: 0 }), enable: (v: boolean) => inputEnabled = v }),
+      createSpaceGunnerInput: () => ({ read: () => ({ x: 1, y: 0, firing: true }), enable: (v: boolean) => spaceGunnerInputEnabled = v }),
       createGunnerInput: () => ({ read: () => ({ firing: false }), enable: (v: boolean) => gunnerInputEnabled = v }),
       createBomberInput: () => ({ read: () => ({ x: 1, y: 0, placing: true }), enable: (v: boolean) => bomberInputEnabled = v }),
       createSpaceBomberInput: () => ({ read: () => ({ x: 1, y: 0, firing: true, placing: true }), enable: (v: boolean) => spaceBomberInputEnabled = v }),
@@ -153,10 +155,39 @@ test('deferred first launch recovers from load failure, starts once, and retry r
   element('abandon').listeners.get('click')();
   element('situation').value = 'Space Battle'; element('role').value = 'Gunner';
   element('situation').listeners.get('change')();
-  assert.equal(element('role-gunner').disabled, true);
+  assert.equal(element('role-gunner').disabled, false);
   assert.equal(element('role-bomber').disabled, false);
   assert.equal(element('role-life-support').disabled, false);
-  assert.equal(element('role').value, 'Pilot');
+  assert.equal(element('role').value, 'Gunner');
+  assert.match(element('controls-help').textContent, /touch aim never fires/);
+  await submit();
+  assert.equal(spaceGunnerInputEnabled, true); assert.equal(gunnerInputEnabled, false);
+  assert.equal(element('fire-action').textContent, 'Fire'); assert.equal(element('action').hidden, true);
+  assert.equal(element('action-rail').hidden, false); assert.equal(scaleRefreshRailStates.at(-1), false);
+  assert.equal(element('fuel-wrap').hidden, true);
+  readyScene.spaceGunner.spawnIn = 100;
+  readyScene.update(0, 50); assert.equal(readyScene.spaceGunner.shots, 1);
+  element('pause').listeners.get('click')();
+  const frozenGunner = JSON.stringify(readyScene.spaceGunner);
+  readyScene.update(0, 50); assert.equal(JSON.stringify(readyScene.spaceGunner), frozenGunner);
+  assert.equal(spaceGunnerInputEnabled, false);
+  element('resume').listeners.get('click')(); assert.equal(spaceGunnerInputEnabled, true);
+  windowListeners.get('blur')!(); assert.equal(spaceGunnerInputEnabled, false);
+  element('resume').listeners.get('click')();
+  readyScene.spaceGunner.hull = 0; readyScene.spaceGunner.finished = true; readyScene.spaceGunner.endReason = 'hull';
+  readyScene.onSpaceGunnerStep(readyScene.spaceGunner);
+  assert.equal(spaceGunnerInputEnabled, false); assert.equal(element('results').hidden, false);
+  assert.match(element('summary').value, /Space Battle \/ Gunner/);
+  assert.match(element('summary').value, /Projectiles intercepted: 0/);
+  assert.match(element('summary').value, /Hull depleted/);
+  element('again').listeners.get('click')(); await submit();
+  assert.equal(readyScene.spaceGunner.shots, 0); assert.equal(readyScene.spaceGunner.hull, 3);
+  readyScene.spaceGunner.elapsed = 60; readyScene.spaceGunner.finished = true; readyScene.spaceGunner.endReason = 'time';
+  readyScene.onSpaceGunnerStep(readyScene.spaceGunner);
+  assert.equal(element('outcome').textContent, 'Defense complete.');
+  assert.match(element('summary').value, /Time: 60.0s/);
+  assert.equal(spaceGunnerInputEnabled, false);
+  element('abandon').listeners.get('click')(); element('role').value = 'Pilot';
   await submit();
   assert.equal(gameCount, 1); assert.equal(readyScene.situation, 'Space Battle');
   assert.equal(inputEnabled, true); assert.equal(gunnerInputEnabled, false);
@@ -229,13 +260,14 @@ test('deferred first launch recovers from load failure, starts once, and retry r
 });
 
 test('a deferred launch stays paused after switching away until explicit resume', async () => {
-  function startup() {
+  function startup(spaceGunner = false) {
     const elements = new Map<string, any>();
     const windowListeners = new Map<string, Function>();
     const documentListeners = new Map<string, Function>();
     let hidden = false;
     let failImport = false;
     let inputEnabled = false;
+    let spaceGunnerInputEnabled = false;
     let scene: any;
     const graphics: any = new Proxy({}, { get: () => () => graphics });
     function element(id: string): any {
@@ -277,7 +309,7 @@ test('a deferred launch stays paused after switching away until explicit resume'
       },
       './game/input': {
         createInput: () => ({ read: () => ({ x: 0, y: 0 }), enable: (value: boolean) => inputEnabled = value }),
-        createGunnerInput: idleInput, createBomberInput: idleInput,
+        createSpaceGunnerInput: () => ({ read: () => ({ x: 0, y: 0, firing: false }), enable: (v: boolean) => spaceGunnerInputEnabled = v }), createGunnerInput: idleInput, createBomberInput: idleInput,
         createSpaceBomberInput: idleInput, createLifeSupportInput: idleInput, createSpaceLifeInput: idleInput,
       },
     }, {
@@ -288,18 +320,18 @@ test('a deferred launch stays paused after switching away until explicit resume'
       window: { addEventListener: (type: string, listener: Function) => windowListeners.set(type, listener) },
       navigator: {},
     });
-    element('total').value = '17'; element('role').value = 'Pilot'; element('situation').value = 'Asteroid Field';
+    element('total').value = '17'; element('role').value = spaceGunner ? 'Gunner' : 'Pilot'; element('situation').value = spaceGunner ? 'Space Battle' : 'Asteroid Field';
     return {
       element, windowListeners, documentListeners, get scene() { return scene; },
-      get inputEnabled() { return inputEnabled; },
+      get inputEnabled() { return spaceGunner ? spaceGunnerInputEnabled : inputEnabled; },
       setHidden(value: boolean) { hidden = value; },
       setFailImport(value: boolean) { failImport = value; },
       submit: () => element('flight-form').listeners.get('submit')({ preventDefault() {} }),
     };
   }
 
-  for (const awayDuring of ['import', 'boot', 'visibility', 'hidden-at-ready']) {
-    const page = startup();
+  for (const spaceGunner of [false, true]) for (const awayDuring of ['import', 'boot', 'visibility', 'hidden-at-ready']) {
+    const page = startup(spaceGunner);
     const submission = page.submit();
     if (awayDuring === 'import') page.windowListeners.get('blur')!();
     await submission;
@@ -317,13 +349,13 @@ test('a deferred launch stays paused after switching away until explicit resume'
     assert.equal(page.inputEnabled, false, awayDuring);
     assert.equal(page.element('pause-overlay').hidden, false, awayDuring);
     page.scene.update(0, 16);
-    assert.equal(page.scene.flight.elapsed, 0, awayDuring);
+    assert.equal((spaceGunner ? page.scene.spaceGunner : page.scene.flight).elapsed, 0, awayDuring);
     page.setHidden(false);
     page.element('resume').listeners.get('click')();
     assert.equal(page.scene.activeFlight, true, awayDuring);
     assert.equal(page.inputEnabled, true, awayDuring);
     page.scene.update(0, 16);
-    assert.ok(page.scene.flight.elapsed > 0, awayDuring);
+    assert.ok((spaceGunner ? page.scene.spaceGunner : page.scene.flight).elapsed > 0, awayDuring);
   }
 
   const foreground = startup();

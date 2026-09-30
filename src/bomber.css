@@ -44,7 +44,8 @@
 .action-fire:active { background: #328994; }
 
 @media (max-width: 480px), (any-pointer: coarse) {
-  #play[data-role="Bomber"] .flight-stage {
+  #play[data-role="Bomber"] .flight-stage,
+  #play[data-role="Gunner"][data-situation="Space Battle"] .flight-stage {
     grid-template-columns: minmax(0, 480px) 76px;
   }
 
@@ -135,4 +136,26 @@
 
   .route-controls button span,
   .route-controls button small { display: none; }
+}
+
+/* Gunner budgets 16px for a desktop scrollbar as well as the 616px rail layout. */
+@media (max-width: 632px) {
+  #play[data-role="Gunner"][data-situation="Space Battle"] .flight-stage {
+    grid-template-columns: minmax(0, 480px);
+  }
+
+  #play[data-role="Gunner"][data-situation="Space Battle"] .action-rail {
+    flex-direction: row;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+
+  #play[data-role="Gunner"][data-situation="Space Battle"] .action {
+    position: static;
+    width: 140px;
+    min-height: 56px;
+    border-radius: 14px;
+    box-shadow: none;
+  }
 }
