@@ -81,18 +81,17 @@ export function createGunnerInput(surface: HTMLElement) {
   };
 }
 
-export function createSpaceLifeInput(buttons: Record<'left' | 'right' | 'jump' | 'repair', HTMLElement>) {
+export function createSpaceLifeInput(buttons: Record<'left' | 'right' | 'jump', HTMLElement>) {
   const keys = new Set<string>();
   const pointers = new Map<number, keyof typeof buttons>();
-  let jumpQueued = false, repairQueued = false, enabled = false;
-  const clear = () => { keys.clear(); pointers.clear(); jumpQueued = false; repairQueued = false; };
-  const controls = new Set(['ArrowLeft', 'ArrowRight', 'KeyA', 'KeyD', 'ArrowUp', 'KeyW', 'Space', 'KeyE', 'Enter']);
+  let jumpQueued = false, enabled = false;
+  const clear = () => { keys.clear(); pointers.clear(); jumpQueued = false; };
+  const controls = new Set(['ArrowLeft', 'ArrowRight', 'KeyA', 'KeyD', 'ArrowUp', 'KeyW', 'Space']);
   window.addEventListener('keydown', e => {
     if (!enabled || !controls.has(e.code)) return;
     e.preventDefault();
     if (!keys.has(e.code)) {
       if (['ArrowUp', 'KeyW', 'Space'].includes(e.code)) jumpQueued = true;
-      if (['KeyE', 'Enter'].includes(e.code)) repairQueued = true;
     }
     keys.add(e.code);
   });
@@ -103,7 +102,6 @@ export function createSpaceLifeInput(buttons: Record<'left' | 'right' | 'jump' |
       if (!enabled) return;
       e.preventDefault(); pointers.set(e.pointerId, action); button.setPointerCapture?.(e.pointerId);
       if (action === 'jump') jumpQueued = true;
-      if (action === 'repair') repairQueued = true;
     });
     for (const event of ['pointerup', 'pointercancel', 'lostpointercapture']) button.addEventListener(event, ((e: PointerEvent) => {
       if (pointers.get(e.pointerId) === action) pointers.delete(e.pointerId);
@@ -115,8 +113,8 @@ export function createSpaceLifeInput(buttons: Record<'left' | 'right' | 'jump' |
       const held = (action: keyof typeof buttons) => [...pointers.values()].includes(action);
       const x = Number(held('right') || keys.has('ArrowRight') || keys.has('KeyD'))
         - Number(held('left') || keys.has('ArrowLeft') || keys.has('KeyA'));
-      const input = { x, jump: jumpQueued, repair: repairQueued };
-      jumpQueued = false; repairQueued = false;
+      const input = { x, jump: jumpQueued };
+      jumpQueued = false;
       return input;
     },
   };
@@ -159,84 +157,37 @@ export function createBomberInput(_surface: HTMLElement, action: HTMLElement) {
   };
 }
 
-export function createSpaceBomberInput(surface: HTMLElement, fireAction: HTMLElement, mineAction: HTMLElement) {
+/** Mine-only pursuit: every press is a single attempt, never held or banked. */
+export function createSpaceBomberInput(action: HTMLElement) {
   const keys = new Set<string>();
-  let touch: { x: number; y: number } | null = null;
-  let movementPointer: number | null = null;
-  let firePointer: number | null = null;
-  let minePointer: number | null = null;
-  let queuedFire = false;
-  let queuedMine = false;
-  let enabled = false;
-  const movement = ['ArrowLeft','ArrowRight','ArrowUp','ArrowDown','KeyW','KeyA','KeyS','KeyD'];
-  const fireKeys = ['Space'];
-  const mineKeys = ['Enter', 'ShiftLeft', 'ShiftRight'];
-  const clear = () => {
-    keys.clear(); touch = null; movementPointer = null; firePointer = null; minePointer = null;
-    queuedFire = false; queuedMine = false;
-  };
-  const setTouch = (e: PointerEvent) => {
-    const box = surface.querySelector('canvas')?.getBoundingClientRect();
-    if (box) touch = {
-      x: (e.clientX - box.left) / box.width * 480,
-      y: (e.clientY - box.top) / box.height * 560,
-    };
-  };
-  const down = (e: KeyboardEvent) => {
-    if (!enabled || (!movement.includes(e.code) && !fireKeys.includes(e.code) && !mineKeys.includes(e.code))) return;
+  const held = new Set<number>();
+  const queued = new Set<number>();
+  let keyboardQueued = false, enabled = false;
+  const clear = () => { keys.clear(); held.clear(); queued.clear(); keyboardQueued = false; };
+  window.addEventListener('keydown', e => {
+    if (!enabled || !['Space', 'Enter'].includes(e.code)) return;
     e.preventDefault();
-    if (movement.includes(e.code)) touch = null;
-    if (fireKeys.includes(e.code) && !keys.has(e.code)) queuedFire = true;
-    if (mineKeys.includes(e.code) && !keys.has(e.code)) queuedMine = true;
+    if (!e.repeat && !keys.has(e.code)) keyboardQueued = true;
     keys.add(e.code);
-  };
-  const up = (e: KeyboardEvent) => keys.delete(e.code);
-  surface.addEventListener('pointerdown', e => {
-    if (!enabled || movementPointer !== null) return;
-    e.preventDefault(); movementPointer = e.pointerId; surface.setPointerCapture(movementPointer); setTouch(e);
   });
-  surface.addEventListener('pointermove', e => {
-    if (enabled && (e.pointerId === movementPointer || (e.pointerType === 'mouse' && movementPointer === null))) { e.preventDefault(); setTouch(e); }
-  });
-  const releaseMovement = (e: PointerEvent) => {
-    if (e.pointerId === movementPointer) { movementPointer = null; }
-  };
-  for (const event of ['pointerup', 'pointercancel', 'lostpointercapture']) {
-    surface.addEventListener(event, releaseMovement as EventListener);
-  }
-  const bindAction = (element: HTMLElement, kind: 'fire' | 'mine') => {
-    element.addEventListener('pointerdown', e => {
-      if (!enabled || (kind === 'fire' ? firePointer : minePointer) !== null) return;
-      e.preventDefault();
-      if (kind === 'fire') { firePointer = e.pointerId; queuedFire = true; }
-      else { minePointer = e.pointerId; queuedMine = true; }
-      element.setPointerCapture?.(e.pointerId);
-    });
-    const release = (e: PointerEvent) => {
-      if (kind === 'fire' && e.pointerId === firePointer) firePointer = null;
-      if (kind === 'mine' && e.pointerId === minePointer) minePointer = null;
-    };
-    for (const event of ['pointerup', 'pointercancel', 'lostpointercapture']) {
-      element.addEventListener(event, release as EventListener);
-    }
-  };
-  bindAction(fireAction, 'fire');
-  bindAction(mineAction, 'mine');
-  window.addEventListener('keydown', down);
-  window.addEventListener('keyup', up);
+  window.addEventListener('keyup', e => keys.delete(e.code));
   window.addEventListener('blur', clear);
+  action.addEventListener('pointerdown', e => {
+    if (!enabled || (e.pointerType === 'mouse' && e.button !== 0) || held.has(e.pointerId)) return;
+    e.preventDefault(); held.add(e.pointerId); queued.add(e.pointerId);
+    action.setPointerCapture?.(e.pointerId);
+  });
+  action.addEventListener('pointerup', e => { held.delete(e.pointerId); });
+  action.addEventListener('pointercancel', e => { held.delete(e.pointerId); queued.delete(e.pointerId); });
+  action.addEventListener('lostpointercapture', e => {
+    if (held.delete(e.pointerId)) queued.delete(e.pointerId);
+  });
   return {
     enable(value: boolean) { enabled = value; clear(); },
     read() {
-      const movementInput = {
-        x: Number(keys.has('ArrowRight') || keys.has('KeyD')) - Number(keys.has('ArrowLeft') || keys.has('KeyA')),
-        y: Number(keys.has('ArrowDown') || keys.has('KeyS')) - Number(keys.has('ArrowUp') || keys.has('KeyW')),
-        aimX: touch?.x, aimY: touch?.y,
-      };
-      const firing = queuedFire || firePointer !== null || fireKeys.some(key => keys.has(key));
-      const placing = queuedMine || minePointer !== null || mineKeys.some(key => keys.has(key));
-      queuedFire = false; queuedMine = false;
-      return { ...movementInput, firing, placing };
+      const placing = keyboardQueued || queued.size > 0;
+      keyboardQueued = false; queued.clear();
+      return { placing };
     },
   };
 }

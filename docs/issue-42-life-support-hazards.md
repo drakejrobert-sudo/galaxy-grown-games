@@ -1,5 +1,7 @@
 # Space Battle Life Support — sparks and fire contact
 
+> Historical record: Space Battle Bomber's missile controls and Life Support's Repair action have been replaced. Use [the station simplification checklist](space-battle-stations-playtest.md) for current acceptance; observations below retain their original meaning.
+
 Issue [#42](https://github.com/drakejrobert-sudo/galaxy-grown-games/issues/42), related acceptance [#10](https://github.com/drakejrobert-sudo/galaxy-grown-games/issues/10) / [#39](https://github.com/drakejrobert-sudo/galaxy-grown-games/issues/39). Base: current main `947e056`, including PR #43 artwork. This is a reviewable gameplay proposal responding to Drake's Hard/check-2 playtest feeling too easy, not final balance acceptance.
 
 ## Delivered behavior

@@ -8,8 +8,8 @@ import {
   LIFE_SUPPORT_SWITCH_Y, type LifeSupportInput, type LifeSupportPacket, type LifeSupportRoute,
   type LifeSupportState, type SpaceBattleBomberInput, type SpaceBattleBomberState,
   type SpaceBattlePilotState, type EnemyShip, type EnemyShot, type FuelCell, type SpaceBomberEnemy,
-  SPACE_BOMBER_MINE_COOLDOWN, SPACE_BOMBER_MINE_LIFETIME, SPACE_BOMBER_MISSILE_COOLDOWN,
-  createSpaceLifeSupport, stepSpaceLifeSupport, SPACE_LIFE_PLATFORMS, SPACE_LIFE_SPARK_WARNING,
+  SPACE_BOMBER_MINE_COOLDOWN, SPACE_BOMBER_MINE_LIFETIME,
+  createSpaceLifeSupport, stepSpaceLifeSupport, SPACE_LIFE_PLATFORMS, SPACE_LIFE_SPARK_WARNING, SPACE_LIFE_REPAIR_SECONDS,
   type SpaceLifeInput, type SpaceLifeState, type Mine, type Explosion,
 } from './rules';
 
@@ -39,8 +39,8 @@ export class FlightScene extends Phaser.Scene {
   readGunnerInput: () => GunnerInput = () => ({ firing: false });
   readBomberInput: () => BomberInput = () => ({ x: 0, y: 0, placing: false });
   readLifeSupportInput: () => LifeSupportInput = () => ({ route: 'Shields' });
-  readSpaceBomberInput: () => SpaceBattleBomberInput = () => ({ x: 0, y: 0, firing: false, placing: false });
-  readSpaceLifeInput: () => SpaceLifeInput = () => ({ x: 0, jump: false, repair: false });
+  readSpaceBomberInput: () => SpaceBattleBomberInput = () => ({ placing: false });
+  readSpaceLifeInput: () => SpaceLifeInput = () => ({ x: 0, jump: false });
   onFlightStep: (state: FlightState) => void = () => {};
   onSpaceGunnerStep: (state: SpaceGunnerState) => void = () => {};
   onGunnerStep: (state: GunnerState) => void = () => {};
@@ -289,44 +289,27 @@ export class FlightScene extends Phaser.Scene {
 
   private paintSpaceBattleBomberMode(g: Phaser.GameObjects.Graphics) {
     const s = this.spaceBomber;
-    this.paintWeaponTarget(g, s.aimX, Math.min(s.y - 34, s.aimY), 14, 0x79e1ce, s.missileCooldown <= 0);
     const drop = mineDropPosition(s);
     this.paintWeaponTarget(g, drop.x, drop.y, spaceBomberBlastRadius(this.config), 0xffca83, s.mineCooldown <= 0);
     if (s.impactFlash) { g.fillStyle(0xff715b, 0.14); g.fillRect(9, 9, WIDTH - 18, HEIGHT - 18); }
     for (const explosion of s.explosions) this.paintMineExplosion(g, explosion);
     for (const mine of s.mines) this.paintMine(g, mine, s.elapsed, SPACE_BOMBER_MINE_LIFETIME);
     for (const enemy of s.enemies) {
-      this.paintEnemyShip(g, enemy, s.elapsed, enemy.approach === 'forward' ? 1 : -1);
+      this.paintEnemyShip(g, enemy, s.elapsed, -1);
       this.paintBomberApproachMarker(g, enemy);
-    }
-    for (const missile of s.missiles) {
-      g.save(); g.translateCanvas(missile.x, missile.y);
-      g.rotateCanvas(Math.atan2(missile.vy, missile.vx) + Math.PI / 2);
-      g.lineStyle(10, 0x79e1ce, 0.08); g.lineBetween(0, 22, 0, 0);
-      g.lineStyle(3, 0xa8fff1, 0.9); g.lineBetween(0, 14, 0, -4);
-      g.fillStyle(0x344b62); g.fillTriangle(0, -3, -6, 6, 6, 6);
-      g.fillStyle(0xdffff6); g.fillRoundedRect(-2, -4, 4, 11, 1);
-      g.fillStyle(0xf4ffff); g.fillTriangle(0, -8, -4, 3, 4, 3);
-      g.restore();
     }
     if (s.invulnerable) this.paintProtection(g, s.x, s.y, 30, s.elapsed);
     if (!s.invulnerable || this.reducedMotion?.matches || Math.floor(s.elapsed * 10) % 2 !== 0) {
       this.paintPlayerShip(g, s.x, s.y, s.elapsed, false);
-      // Cyan nose launchers and amber aft racks keep both weapon states readable.
+      // Amber aft racks show mine readiness.
       for (const dx of [-15, 15]) {
         g.fillStyle(0x31435f); g.lineStyle(1, 0xa9bbcf); g.fillRoundedRect(s.x + dx - 3, s.y - 12, 6, 13, 2);
         g.strokeRoundedRect(s.x + dx - 3, s.y - 12, 6, 13, 2);
-        g.fillStyle(s.missileCooldown <= 0 ? 0x79e1ce : 0x526982); g.fillCircle(s.x + dx, s.y - 10, 2);
         g.fillStyle(0x33435e); g.lineStyle(1, 0xa9bbcf, .8);
         g.fillRoundedRect(s.x + dx - 4, s.y + 5, 8, 13, 2);
         g.strokeRoundedRect(s.x + dx - 4, s.y + 5, 8, 13, 2);
         g.fillStyle(s.mineCooldown <= 0 ? 0xffca83 : 0x665a76); g.fillCircle(s.x + dx, s.y + 12, 2);
       }
-    }
-    if (s.missileCooldown > 0) {
-      g.lineStyle(2, 0x79e1ce, 0.75); g.beginPath();
-      g.arc(s.x, s.y, 25, -Math.PI / 2,
-        -Math.PI / 2 + Math.PI * 2 * (1 - s.missileCooldown / SPACE_BOMBER_MISSILE_COOLDOWN)); g.strokePath();
     }
     if (s.mineCooldown > 0) {
       g.lineStyle(2, 0xffca83, 0.75); g.beginPath();
@@ -335,13 +318,11 @@ export class FlightScene extends Phaser.Scene {
   }
 
   private paintBomberApproachMarker(g: Phaser.GameObjects.Graphics, enemy: SpaceBomberEnemy) {
-    const direction = enemy.approach === 'forward' ? 1 : -1;
-    const y = enemy.y + direction * 25;
-    const color = enemy.approach === 'forward' ? 0xff7c8c : 0xffbd6b;
-    g.fillStyle(0x101528, .9); g.fillRoundedRect(enemy.x - 9, y - 9, 18, 18, 4);
-    g.lineStyle(1, color, .7); g.strokeRoundedRect(enemy.x - 9, y - 9, 18, 18, 4);
-    g.fillStyle(color, 0.95);
-    g.fillTriangle(enemy.x, y + direction * 5, enemy.x - 5, y - direction * 3, enemy.x + 5, y - direction * 3);
+    if (enemy.warningRemaining <= 0) return;
+    const y = HEIGHT - 16;
+    g.fillStyle(0x101528, .9); g.fillRoundedRect(enemy.x - 10, y - 10, 20, 20, 4);
+    g.lineStyle(2, 0xffbd6b, .9); g.strokeRoundedRect(enemy.x - 10, y - 10, 20, 20, 4);
+    g.fillStyle(0xffbd6b); g.fillTriangle(enemy.x, y - 6, enemy.x - 6, y + 4, enemy.x + 6, y + 4);
   }
 
   private paintFuelCell(g: Phaser.GameObjects.Graphics, cell: FuelCell, elapsed: number) {
@@ -384,7 +365,7 @@ export class FlightScene extends Phaser.Scene {
     g.fillStyle(0xffffff, pulse); g.fillCircle(x - 2, y - 3, 1);
   }
 
-  private paintEnemyShip(g: Phaser.GameObjects.Graphics, enemy: EnemyShip, elapsed: number, direction: 1 | -1 = 1) {
+  private paintEnemyShip(g: Phaser.GameObjects.Graphics, enemy: Pick<EnemyShip, 'id' | 'x' | 'y'>, elapsed: number, direction: 1 | -1 = 1) {
     const x = enemy.x;
     const y = enemy.y;
     const fy = (offset: number) => y + offset * direction;
@@ -820,8 +801,20 @@ export class FlightScene extends Phaser.Scene {
           g.lineBetween(fire.x + side * 30, fire.y - 14, fire.x + side * 25, fire.y - 9);
         }
       }
+      if (fire.kind === 'electrical') {
+        const progress = Math.min(1, (fire.repairProgress ?? 0) / SPACE_LIFE_REPAIR_SECONDS);
+        g.fillStyle(0x101528); g.fillRoundedRect(fire.x - 21, fire.y - 42, 42, 8, 3);
+        g.fillStyle(0x79e1ce); g.fillRect(fire.x - 19, fire.y - 40, 38 * progress, 4);
+        g.lineStyle(1, 0x89dfff, .8); g.strokeRoundedRect(fire.x - 21, fire.y - 42, 42, 8, 3);
+      }
       g.lineStyle(2, color, Math.max(0.2, fire.remaining / SPACE_LIFE_PLATFORMS.length / 3));
       g.lineBetween(fire.x - 14, fire.y + 5, fire.x + 14, fire.y + 5);
+    }
+    for (const flash of s.repairFlashes) {
+      g.lineStyle(3, 0x79e1ce, flash.remaining / 0.4);
+      g.strokeCircle(flash.x, flash.y - 14, 18 + (1 - flash.remaining / 0.4) * 12);
+      g.lineBetween(flash.x - 6, flash.y - 14, flash.x - 1, flash.y - 9);
+      g.lineBetween(flash.x - 1, flash.y - 9, flash.x + 9, flash.y - 21);
     }
     for (const icon of s.icons) {
       const color = icon.kind === 'heart' ? 0x79e1ce : 0xff8f6b;

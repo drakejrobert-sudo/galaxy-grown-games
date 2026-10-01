@@ -7,7 +7,7 @@ import {
 import { createSpaceLifeInput } from '../src/game/input.ts';
 
 const config = { total: 10, naturalOne: false };
-const idle = { x: 0, jump: false, repair: false };
+const idle = { x: 0, jump: false };
 function quiet(): SpaceLifeState {
   const s = createSpaceLifeSupport();
   s.fireIn = s.iconIn = 100;
@@ -33,18 +33,18 @@ test('jump lands on the next platform; ordinary fires require a descending stomp
   assert.equal(s.fires.length, 0);
   // From the platform edge, moving while jumping reaches the next tier.
   s.x = 240;
-  stepSpaceLifeSupport(s, config, { x: 1, jump: true, repair: false }, 0.05);
-  for (let i = 0; i < 30 && !s.grounded; i++) stepSpaceLifeSupport(s, config, { x: 1, jump: false, repair: false }, 0.05);
+  stepSpaceLifeSupport(s, config, { x: 1, jump: true }, 0.05);
+  for (let i = 0; i < 30 && !s.grounded; i++) stepSpaceLifeSupport(s, config, { x: 1, jump: false }, 0.05);
   assert.equal(s.y, 300);
 });
 
-test('electrical repairs require a nearby grounded action, and unresolved fires drain integrity', () => {
+test('electrical repairs need accumulated proximity, and unresolved fires drain integrity', () => {
   const s = quiet();
-  s.fires = [{ id: 1, x: 190, y: 520, kind: 'electrical', remaining: 1 }];
-  stepSpaceLifeSupport(s, config, { ...idle, repair: true }, 0.05);
+  s.fires = [{ id: 1, x: 190, y: 520, kind: 'electrical', remaining: 10, sparkIn: 100 }];
+  stepSpaceLifeSupport(s, config, { ...idle }, 0.05);
   assert.equal(s.electricalRepaired, 0);
   s.x = 160;
-  stepSpaceLifeSupport(s, config, { ...idle, repair: true }, 0.05);
+  advance(s, 1.5);
   assert.equal(s.electricalRepaired, 1);
   assert.equal(s.fires.length, 0);
   s.fires = [{ id: 2, x: 300, y: 300, kind: 'ordinary', remaining: 0.01 }];
@@ -118,23 +118,24 @@ test('difficulty changes hazard pressure; scoring and report retain the GM bound
   assert.match(report, /GM determines campaign outcome/);
 });
 
-test('keyboard and simultaneous touch controls move, jump, repair, and clear on pause', () => {
+test('keyboard and simultaneous touch controls move, jump, and clear on pause', () => {
   const oldWindow = globalThis.window;
   const listeners = new Map<string, Function>();
   globalThis.window = { addEventListener: (event: string, listener: Function) => listeners.set(event, listener) } as any;
   try {
     const handlers = new Map<string, Map<string, Function>>();
-    const buttons = Object.fromEntries(['left', 'right', 'jump', 'repair'].map(action => {
+    const buttons = Object.fromEntries(['left', 'right', 'jump'].map(action => {
       const events = new Map<string, Function>(); handlers.set(action, events);
       return [action, { addEventListener: (event: string, listener: Function) => events.set(event, listener), setPointerCapture() {} }];
     })) as any;
     const input = createSpaceLifeInput(buttons); input.enable(true);
+    for (const code of ['KeyE', 'Enter']) listeners.get('keydown')!({ code, preventDefault() { throw Error('removed repair key consumed'); } });
     let prevented = 0;
     listeners.get('keydown')!({ code: 'KeyD', preventDefault: () => prevented++ });
     listeners.get('keydown')!({ code: 'Space', preventDefault: () => prevented++ });
-    handlers.get('repair')!.get('pointerdown')!({ pointerId: 2, preventDefault: () => prevented++ });
-    assert.deepEqual(input.read(), { x: 1, jump: true, repair: true });
-    assert.deepEqual(input.read(), { x: 1, jump: false, repair: false });
+    handlers.get('jump')!.get('pointerdown')!({ pointerId: 2, preventDefault: () => prevented++ });
+    assert.deepEqual(input.read(), { x: 1, jump: true });
+    assert.deepEqual(input.read(), { x: 1, jump: false });
     handlers.get('left')!.get('pointerdown')!({ pointerId: 3, preventDefault: () => prevented++ });
     assert.equal(input.read().x, 0);
     handlers.get('left')!.get('pointerup')!({ pointerId: 3 });
@@ -179,9 +180,9 @@ test('newly spawned panels retain a full second before firing', () => {
 });
 
 test('repair wins over a due burst while launched sparks survive source repair', () => {
-  const s = quiet(); panel(s, .01); s.x = 85;
+  const s = quiet(); panel(s, .01); s.x = 85; s.fires[0].repairProgress = 1.45;
   s.sparks = [{ id: 19, x: 200, y: 506, vx: 165, remaining: 2 }];
-  stepSpaceLifeSupport(s, config, { ...idle, repair: true }, .05);
+  stepSpaceLifeSupport(s, config, { ...idle }, .05);
   assert.equal(s.fires.length, 0); assert.equal(s.electricalRepaired, 1);
   assert.equal(s.sparks.length, 1); assert.ok(s.sparks[0].x > 200);
   advance(s, .5); assert.equal(s.sparks.length, 1);
@@ -297,5 +298,42 @@ test('Natural 1 keeps panel cadence unchanged and successive bursts follow the b
       stepSpaceLifeSupport(s, { total, naturalOne }, idle, .01);
     assert.equal(s.nextId, 25); // Two bursts, two sparks each.
     assert.ok(Math.abs(s.fires[0].sparkIn! - interval) < 1e-8);
+  }
+});
+
+test('automatic repair retains progress through leaving, jumping, pause, and completes once', () => {
+  const s = quiet(); s.x = 85; panel(s,100);
+  advance(s,.6); const progress = s.fires[0].repairProgress!;
+  assert.ok(Math.abs(progress - .6) < 1e-9); assert.equal(s.electricalRepaired,0);
+  s.x = 121; advance(s,.2); assert.equal(s.fires[0].repairProgress,progress);
+  s.x = 85; stepSpaceLifeSupport(s,config,{x:0,jump:true},.05);
+  assert.equal(s.fires[0].repairProgress,progress);
+  s.y=520; s.vy=0; s.grounded=true;
+  const snapshot=JSON.stringify(s); stepSpaceLifeSupport(s,config,idle,0); assert.equal(JSON.stringify(s),snapshot);
+  advance(s,.89); assert.equal(s.electricalRepaired,0);
+  advance(s,.01); assert.equal(s.electricalRepaired,1); assert.equal(s.fires.length,0);
+  assert.equal(s.repairFlashes.length,1); advance(s,.5);
+  assert.equal(s.electricalRepaired,1); assert.equal(s.repairFlashes.length,0);
+  assert.deepEqual(createSpaceLifeSupport().repairFlashes,[]);
+});
+test('repair selects nearest same-platform panel, then lowest ID on ties, and only one at a time', () => {
+  const s=quiet(); s.x=150;
+  s.fires=[{id:4,x:130,y:520,kind:'electrical',remaining:100,sparkIn:100},
+    {id:2,x:170,y:520,kind:'electrical',remaining:100,sparkIn:100},
+    {id:1,x:150,y:410,kind:'electrical',remaining:100,sparkIn:100}];
+  advance(s,.1); assert.equal(s.fires[0].repairProgress,undefined);
+  assert.ok(Math.abs(s.fires[1].repairProgress!-.1)<1e-9); assert.equal(s.fires[2].repairProgress,undefined);
+  s.x=130; advance(s,.1); assert.ok(Math.abs(s.fires[0].repairProgress!-.1)<1e-9);
+  assert.ok(Math.abs(s.fires[1].repairProgress!-.1)<1e-9);
+});
+test('repair range is inclusive, expiry can defeat partial repair, and exact deadline completion wins', () => {
+  for (const total of [5,6,11,16]) for (const naturalOne of [false,true]) {
+    const cfg={total,naturalOne}; const s=quiet(); panel(s,100); s.x=120;
+    stepSpaceLifeSupport(s,cfg,idle,.05); assert.equal(s.fires[0].repairProgress,.05);
+    s.x=120.01; stepSpaceLifeSupport(s,cfg,idle,.05); assert.equal(s.fires[0].repairProgress,.05);
+    s.x=85; s.fires[0].remaining=.01; s.fires[0].repairProgress=1.48;
+    stepSpaceLifeSupport(s,cfg,idle,.05); assert.equal(s.electricalRepaired,0); assert.equal(s.firesExpired,1); assert.equal(s.integrity,4);
+    panel(s,100); s.fires[0].remaining=.02; s.fires[0].repairProgress=1.48;
+    stepSpaceLifeSupport(s,cfg,idle,.05); assert.equal(s.electricalRepaired,1); assert.equal(s.firesExpired,1);
   }
 });

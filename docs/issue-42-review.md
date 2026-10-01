@@ -1,5 +1,7 @@
 # Issue #42 — first arcade polish pass
 
+> Historical record: Space Battle Bomber's missile controls and Life Support's Repair action have been replaced. Use [the station simplification checklist](space-battle-stations-playtest.md) for current acceptance; observations below retain their original meaning.
+
 2026-09-30. Parent: [#42](https://github.com/drakejrobert-sudo/galaxy-grown-games/issues/42). Implementation base: `c7babcf` (current main when work began). This is the first bounded pass, not completion of the parent issue or final owner acceptance.
 
 ## Direction and delivered changes

@@ -72,9 +72,9 @@ test('deferred first launch recovers from load failure, starts once, and retry r
       createSpaceGunnerInput: () => ({ read: () => ({ x: 1, y: 0, firing: true }), enable: (v: boolean) => spaceGunnerInputEnabled = v }),
       createGunnerInput: () => ({ read: () => ({ firing: false }), enable: (v: boolean) => gunnerInputEnabled = v }),
       createBomberInput: () => ({ read: () => ({ x: 1, y: 0, placing: true }), enable: (v: boolean) => bomberInputEnabled = v }),
-      createSpaceBomberInput: () => ({ read: () => ({ x: 1, y: 0, firing: true, placing: true }), enable: (v: boolean) => spaceBomberInputEnabled = v }),
+      createSpaceBomberInput: () => ({ read: () => ({ placing: true }), enable: (v: boolean) => spaceBomberInputEnabled = v }),
       createLifeSupportInput: () => ({ read: () => ({ route: 'Shields' }), enable: (v: boolean) => lifeSupportInputEnabled = v, reset() {} }),
-      createSpaceLifeInput: () => ({ read: () => ({ x: 0, jump: false, repair: true }), enable: (v: boolean) => spaceLifeInputEnabled = v }),
+      createSpaceLifeInput: () => ({ read: () => ({ x: 0, jump: false }), enable: (v: boolean) => spaceLifeInputEnabled = v }),
     },
   }, {
     document: { querySelector: () => element('app'), getElementById: element, addEventListener() {} },
@@ -202,12 +202,12 @@ test('deferred first launch recovers from load failure, starts once, and retry r
   assert.equal(JSON.stringify(readyScene.spacePilot), beforePaint);
   element('abandon').listeners.get('click')(); element('role').value = 'Bomber'; await submit();
   assert.equal(spaceBomberInputEnabled, true); assert.equal(inputEnabled, false);
-  assert.equal(element('fire-action').hidden, false); assert.equal(element('action').hidden, false);
+  assert.equal(element('fire-action').hidden, true); assert.equal(element('action').hidden, false);
   assert.equal(element('fuel-wrap').hidden, true);
   readyScene.update(0, 16); assert.ok(readyScene.spaceBomber.elapsed > 0);
-  assert.equal(readyScene.spaceBomber.missilesFired, 1); assert.equal(readyScene.spaceBomber.minesPlaced, 1);
+  assert.equal(readyScene.spaceBomber.minesPlaced, 1);
   assert.match(element('mode-label').textContent, /SPACE BATTLE \/ BOMBER/);
-  assert.match(element('play-help').textContent, /Automatic flight/);
+  assert.match(element('play-help').textContent, /Automatic weaving/);
   assert.equal(readyScene.spaceBomber.x, rules.automaticShipX(readyScene.spaceBomber.elapsed));
   element('pause').listeners.get('click')();
   const pausedSpaceBomber = JSON.stringify(readyScene.spaceBomber);
@@ -241,8 +241,15 @@ test('deferred first launch recovers from load failure, starts once, and retry r
   assert.equal(element('route-controls').hidden, true);
   assert.equal(element('health-label').textContent, 'INTEGRITY');
   readyScene.spaceLife.fireIn = readyScene.spaceLife.iconIn = 100;
-  readyScene.spaceLife.fires = [{ id: 1, x: 150, y: 520, kind: 'electrical', remaining: 8 }];
+  readyScene.spaceLife.fires = [{ id: 1, x: 150, y: 520, kind: 'electrical', remaining: 8, sparkIn: 100 }];
   readyScene.update(0, 16);
+  assert.equal(readyScene.spaceLife.electricalRepaired, 0);
+  assert.ok(readyScene.spaceLife.fires[0].repairProgress > 0);
+  const partial = JSON.stringify(readyScene.spaceLife);
+  element('pause').listeners.get('click')(); readyScene.update(0, 50);
+  assert.equal(JSON.stringify(readyScene.spaceLife), partial);
+  element('resume').listeners.get('click')();
+  for (let i = 0; i < 30; i++) readyScene.update(0, 50);
   assert.equal(readyScene.spaceLife.electricalRepaired, 1);
   readyScene.spaceLife.sparks = [{ id: 5, x: 260, y: 506, vx: -165, remaining: 3 }];
   readyScene.spaceLife.fires = [{ id: 6, x: 395, y: 520, kind: 'electrical', remaining: 6, sparkIn: .4 },
@@ -382,6 +389,6 @@ test('a deferred launch stays paused after switching away until explicit resume'
 test('space battle bomber cooldown dial shares the simulation constant', () => {
   const scene = readFileSync(new URL('../src/game/scene.ts', import.meta.url), 'utf8');
 
-  assert.match(scene, /missileCooldown \/ SPACE_BOMBER_MISSILE_COOLDOWN/);
-  assert.doesNotMatch(scene, /missileCooldown \/ 0\.38/);
+  assert.match(scene, /mineCooldown \/ SPACE_BOMBER_MINE_COOLDOWN/);
+  assert.doesNotMatch(scene, /missileCooldown/);
 });
