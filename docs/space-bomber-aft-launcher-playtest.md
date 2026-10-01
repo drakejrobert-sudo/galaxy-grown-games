@@ -30,3 +30,7 @@ Physical iPhone/iPad Safari and owner gameplay judgment remain pending.
 - On desktop: hover/release, held mouse without firing, keyboard rear limits, quick Down/S, single Space/Enter presses, and cooldown rejection. Check aim retention and no stale launch after pause/app switching; retry defaults straight aft.
 - Play every band with/without Natural 1. Confirm intercept timing feels clean and fair, collisions before crossing still cost hull, and cyan peel-away ships cannot hurt or trigger mines later.
 - Complete and fail real runs, read/share reports, and record raw score, rating and gameplay judgment on the tested deployed revision. Review gameplay acceptance separately from fresh human rating calibration; #39 remains open.
+
+## Shorter-launch follow-up
+
+This record describes PR #49’s fixed-range launcher. The subsequent approved variable range and in-flight contacts are recorded in [short-launch validation](space-bomber-short-launch-playtest.md). Earlier travel-immunity assertions are historical evidence, not the current mechanic.

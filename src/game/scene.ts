@@ -294,7 +294,7 @@ export class FlightScene extends Phaser.Scene {
     this.paintWeaponTarget(g, landing.x, landing.y, spaceBomberBlastRadius(this.config), 0xffca83, s.mineCooldown <= 0);
     if (s.impactFlash) { g.fillStyle(0xff715b, 0.14); g.fillRect(9, 9, WIDTH - 18, HEIGHT - 18); }
     for (const explosion of s.explosions) this.paintMineExplosion(g, explosion);
-    for (const mine of s.mines) this.paintMine(g, mine, s.elapsed, SPACE_BOMBER_MINE_LIFETIME);
+    for (const mine of s.mines) this.paintMine(g, mine, s.elapsed, SPACE_BOMBER_MINE_LIFETIME, !!mine.flight);
     for (const enemy of s.enemies) {
       this.paintEnemyShip(g, enemy, s.elapsed, -1);
       this.paintBomberApproachMarker(g, enemy);
@@ -612,8 +612,8 @@ export class FlightScene extends Phaser.Scene {
     }
   }
 
-  private paintMine(g: Phaser.GameObjects.Graphics, mine: Mine, elapsed: number, lifetime: number) {
-    const armed = mine.armIn <= 0;
+  private paintMine(g: Phaser.GameObjects.Graphics, mine: Mine, elapsed: number, lifetime: number, impactLive = false) {
+    const armed = mine.armIn <= 0 || impactLive;
     const color = armed ? 0xffca83 : 0xbba6ff;
     const pulse = .7 + Math.sin(this.decorativeTime(elapsed) * 12 + mine.id) * .12;
     // Outer circle is the actual blast radius; the lifetime dial is separate hardware.

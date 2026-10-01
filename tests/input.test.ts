@@ -217,3 +217,17 @@ test('Space Bomber canvas previews hover and drag, launches on release, and clea
     assert.equal(h.input.read().straight,undefined);
   } finally { h.restore(); }
 });
+
+test('Space Bomber consumes pointer targets after release/hover and retains active drag previews',()=>{
+  const h=mineHarness();
+  try {
+    const e={pointerId:2,pointerType:'touch',clientX:130,clientY:120,preventDefault(){}};
+    h.surface.get('pointerdown')!(e);
+    assert.deepEqual(h.input.read().aim,{x:240,y:200});assert.deepEqual(h.input.read().aim,{x:240,y:200});
+    h.surface.get('pointerup')!(e);assert.deepEqual(h.input.read().launch,{x:240,y:200});
+    assert.deepEqual(h.input.read(),{placing:false});
+    h.pointers.get('pointerdown')!(e);assert.deepEqual(h.input.read(),{placing:true});
+    h.surface.get('pointermove')!({...e,pointerType:'mouse'});
+    assert.deepEqual(h.input.read().aim,{x:240,y:200});assert.deepEqual(h.input.read(),{placing:false});
+  } finally {h.restore();}
+});

@@ -110,3 +110,24 @@ The seeded profile script now uses straight-aft, ready-on-cooldown launches for 
 | Space Battle / Bomber | 288 | 32 | 37 | 245 | 5,100 | 6,100 |
 
 All seven other modes reproduce their previous references. The larger upper tail reflects changed gameplay and scripted targeting, not an approved rating adjustment. Preserve the historical rows above. Collect fresh completed/failed human runs across all four difficulty bands with/without Natural 1; gameplay acceptance and rating calibration remain separate owner gates. Life Support's earlier automatic-repair change still needs fresh human calibration too.
+
+## Shorter placement and in-flight impacts — live anchors retained
+
+The follow-up lets pointer targets choose 0–100px from the aft rack at 500px/s and permits direct contacts during travel. Routine still launches straight aft at maximum range when ready. Engaged selects the nearest active pursuer behind the rack and within 100px, targeting its current position when ready (entity ID breaks equal-distance ties). Passive never launches. There is no extra prediction or rating adjustment.
+
+| Mode | Runs | Min | 10th | Median | 90th | Max |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| Space Battle / Bomber | 288 | 32 | 37 | 361 | 5,100 | 6,100 |
+
+The median was 245 in the fixed-range aft-launcher reference above; the other listed percentiles and all seven other modes reproduce their previous references. Keep Bomber’s **64–3,300 live anchors**, raw formula, scoring version and difficulty bands. These scripted results are supporting engineering evidence, not human calibration. Fresh completed/failed owner runs across bands and Natural 1 remain required; gameplay acceptance and rating calibration are separate gates.
+
+
+## Release-frame mine timing correction — anchors retained
+
+PR #50 review identified a one-frame delay before newly launched travelling mines moved or detected contacts. Travel and lifetime now include the release step: 100px lands after 0.2 seconds total, and 25px can land within a single 0.05-second step. Routine/engaged profiles remain unchanged.
+
+| Mode | Runs | Min | 10th | Median | 90th | Max |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| Space Battle / Bomber | 288 | 32 | 37 | 367 | 5,100 | 6,100 |
+
+The prior median of 361 remains recorded above. All other Bomber percentiles and the seven other modes reproduce their previous references. Raw scoring and the 64–3,300 live anchors remain unchanged; these synthetic samples do not replace owner gameplay acceptance or human calibration.
