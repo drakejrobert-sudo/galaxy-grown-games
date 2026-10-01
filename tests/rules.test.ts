@@ -479,13 +479,13 @@ test('bomber automatic course ignores targeting in every band and natural-one st
       Object.assign(b, {spawnIn:100,pursuerSpawnIn:100});
       const initialY = a.y;
       for (let frame = 0; frame < 200; frame++) {
-        step(a, config, {x:1,y:-1,aimX:460,aimY:40,firing:false,placing:false}, 0.05);
-        step(b, config, {x:-1,y:1,firing:false,placing:false}, 0.05);
+        step(a, config, {x:1,y:-1,aim:{x:460,y:540},firing:false,placing:false}, 0.05);
+        step(b, config, {x:-1,y:1,turn:1,firing:false,placing:false}, 0.05);
         assert.equal(a.x, b.x); assert.equal(a.y, initialY); assert.equal(b.y, initialY);
         assert.equal(a.x, automaticShipX(a.elapsed));
       }
       assert.notEqual(a.x, WIDTH / 2);
-      assert.equal(a.aimX, b.aimX);
+      if (battle) assert.notEqual(a.aimAngle, b.aimAngle, 'aim changes independently of automatic flight');
       const snapshot = JSON.stringify(a);
       step(a, config, {x:0,y:0,firing:false,placing:false}, 0);
       assert.equal(JSON.stringify(a), snapshot);
@@ -497,23 +497,23 @@ test('bomber automatic course ignores targeting in every band and natural-one st
   }
 });
 
-test('mines release behind the ship regardless of aim, retain their position, and keep the fuse', () => {
-  for (const battle of [false, true]) for (const naturalOne of [false, true]) {
+test('Asteroid mines retain fixed aft drops and fuse despite movement input', () => {
+  for (const naturalOne of [false, true]) {
     const config = {total:10,naturalOne};
-    const s: any = battle ? createSpaceBattleBomber() : createBomber();
-    const step: any = battle ? stepSpaceBattleBomber : stepBomber;
+    const s = createBomber();
+    const step = stepBomber;
     Object.assign(s, {spawnIn:100,pursuerSpawnIn:100});
-    step(s, config, {x:1,y:-1,aimX:18,aimY:18,firing:false,placing:true}, 0.01);
+    step(s, config, {x:1,y:-1,placing:true}, 0.01);
     const mine = s.mines[0], drop = mineDropPosition(s);
     assert.equal(mine.x, s.x); assert.equal(mine.x, drop.x);
     assert.equal(mine.y, s.y + 34); assert.equal(mine.y, drop.y);
     assert.ok(mine.armIn > 0);
     const target = {id:90,x:mine.x,y:mine.y,radius:15,speed:0,warningRemaining:0};
-    if (battle) s.enemies = [target]; else s.asteroids = [target];
-    step(s, config, {x:-1,y:1,aimX:460,aimY:540,firing:false,placing:true}, 0.01);
+    s.asteroids = [target];
+    step(s, config, {x:-1,y:1,placing:true}, 0.01);
     assert.equal(s.destroyed, 0); assert.equal(s.minesPlaced, 1);
     assert.equal(mine.x, drop.x); assert.equal(mine.y, drop.y);
-    for(let frame=0;frame<6;frame++) step(s,config,{x:0,y:0,firing:false,placing:false},0.05);
+    for(let frame=0;frame<6;frame++) step(s,config,{x:0,y:0,placing:false},0.05);
     assert.equal(s.destroyed, 1);
     assert.equal(s.hull, 3);
   }

@@ -7,7 +7,7 @@ import {
   createLifeSupport, stepLifeSupport, lifeSupportScoreFor,
   createSpaceBattlePilot, stepSpaceBattlePilot, spaceBattlePilotScoreFor,
   createSpaceBattleBomber, stepSpaceBattleBomber, spaceBattleBomberScoreFor,
-  mineDropPosition, SPACE_BOMBER_MINE_ARM_TIME, SPACE_BOMBER_MINE_LIFETIME,
+  automaticShipX, SPACE_BOMBER_LAUNCH_DISTANCE, mineDropPosition, SPACE_BOMBER_MINE_ARM_TIME,
   createSpaceLifeSupport, stepSpaceLifeSupport, spaceLifeScoreFor,
   type FlightConfig, type ScoreMode, type LifeSupportRoute,
 } from '../src/game/rules.ts';
@@ -115,12 +115,15 @@ function run(mode: ScoreMode, config: FlightConfig, profile: Profile, seed: numb
   }
   const s = createSpaceBattleBomber();
   while (!s.finished) {
-    // Routine taps on cooldown. Engaged waits for a committed lane near the aft rack.
-    const dropY = mineDropPosition(s).y;
-    const opportunity = s.enemies.some(e => e.y > dropY + e.speed * SPACE_BOMBER_MINE_ARM_TIME &&
-      e.y - dropY < e.speed * SPACE_BOMBER_MINE_LIFETIME && Math.abs(e.x - s.x) <= 20);
+    // Routine uses straight aft when ready. Engaged aims at a column's predicted landing-time position.
+    const rack = mineDropPosition({x:automaticShipX(s.elapsed + step),y:s.y});
+    const target = profile === 'engaged' ? s.enemies.find(e => {
+      const y = e.y - e.speed * (step + SPACE_BOMBER_MINE_ARM_TIME);
+      return y >= rack.y && Math.abs(Math.hypot(e.x-rack.x,y-rack.y)-SPACE_BOMBER_LAUNCH_DISTANCE) <= 20;
+    }) : undefined;
     stepSpaceBattleBomber(s, config, {
-      placing: s.mineCooldown <= 0 && (profile === 'routine' || profile === 'engaged' && opportunity),
+      placing: s.mineCooldown <= 0 && (profile === 'routine' || !!target),
+      ...(target ? { launch: { x:target.x, y:target.y-target.speed*(step+SPACE_BOMBER_MINE_ARM_TIME) } } : {}),
     }, step, random);
   }
   return spaceBattleBomberScoreFor(s);

@@ -98,3 +98,15 @@ These low synthetic results are a calibration warning, not a human balance verdi
 Following owner feedback after the mine-only redesign, the Bomber now sits at y = 140 (25% of the 560px playfield) instead of y = 313.6 (56%). Mines still drop 34px behind it, now at y = 174. This adds 173.6px of approach space, about 0.86–1.88 seconds depending on the pursuer's selected speed. Predicted intercepts use the new ship height automatically. Flight weave, enemy cadence/speed, mine rules, raw points and live anchors are unchanged.
 
 The same 288 synthetic Bomber runs now yield min 29, p10 37, median 144, p90 361, max 578. The other seven modes reproduce their prior results. These scripts still do not establish human timing or rating fairness; owner playtesting and separate rating calibration remain pending.
+
+## Aimed aft launcher and clean passes — anchors retained
+
+Space Battle Bomber now launches mines 100 logical pixels through the rear half-circle over 0.2 seconds, arming at a fixed landing point. Clean flight-line crossings retire pursuers. The upper-quarter ship height, eight-second course, enemy speeds/cadence, 0.85-second cooldown, 4.5-second lifetime from launch, Natural-1 half-area blast, raw scoring, and **64–3,300 live anchors** remain unchanged.
+
+The seeded profile script now uses straight-aft, ready-on-cooldown launches for routine play. Engaged play aims at a committed column's predicted position when the mine lands, launching when that point is within 20px of the 100px launch radius. Passive never launches. This is deliberately synthetic and the engaged profile's accurate prediction is not representative of human aiming.
+
+| Mode | Runs | Min | 10th | Median | 90th | Max |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| Space Battle / Bomber | 288 | 32 | 37 | 245 | 5,100 | 6,100 |
+
+All seven other modes reproduce their previous references. The larger upper tail reflects changed gameplay and scripted targeting, not an approved rating adjustment. Preserve the historical rows above. Collect fresh completed/failed human runs across all four difficulty bands with/without Natural 1; gameplay acceptance and rating calibration remain separate owner gates. Life Support's earlier automatic-repair change still needs fresh human calibration too.

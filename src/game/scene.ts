@@ -3,7 +3,7 @@ import {
   createSpaceGunner, stepSpaceGunner, SPACE_GUNNER_DEFENSE_LINE, type SpaceGunnerInput, type SpaceGunnerState, type SpaceGunnerAttacker,
   createBomber, createFlight, createGunner, createLifeSupport, createSpaceBattleBomber, createSpaceBattlePilot, stepBomber,
   stepFlight, stepGunner, stepLifeSupport, stepSpaceBattleBomber, stepSpaceBattlePilot, WIDTH, HEIGHT,
-  mineDropPosition, automaticShipX, bomberBlastRadius, spaceBomberBlastRadius, BOMBER_MINE_COOLDOWN, BOMBER_MINE_LIFETIME, GUNNER_DEFENSE_LINE, type Asteroid, type FlightConfig, type FlightState,
+  spaceBomberLanding, mineDropPosition, automaticShipX, bomberBlastRadius, spaceBomberBlastRadius, BOMBER_MINE_COOLDOWN, BOMBER_MINE_LIFETIME, GUNNER_DEFENSE_LINE, type Asteroid, type FlightConfig, type FlightState,
   type BomberInput, type BomberState, type GunnerInput, type GunnerState, type Role, type Situation,
   LIFE_SUPPORT_SWITCH_Y, type LifeSupportInput, type LifeSupportPacket, type LifeSupportRoute,
   type LifeSupportState, type SpaceBattleBomberInput, type SpaceBattleBomberState,
@@ -289,14 +289,20 @@ export class FlightScene extends Phaser.Scene {
 
   private paintSpaceBattleBomberMode(g: Phaser.GameObjects.Graphics) {
     const s = this.spaceBomber;
-    const drop = mineDropPosition(s);
-    this.paintWeaponTarget(g, drop.x, drop.y, spaceBomberBlastRadius(this.config), 0xffca83, s.mineCooldown <= 0);
+    const rack = mineDropPosition(s), landing = spaceBomberLanding(s);
+    g.lineStyle(2, 0xffca83, .65); g.lineBetween(rack.x, rack.y, landing.x, landing.y);
+    this.paintWeaponTarget(g, landing.x, landing.y, spaceBomberBlastRadius(this.config), 0xffca83, s.mineCooldown <= 0);
     if (s.impactFlash) { g.fillStyle(0xff715b, 0.14); g.fillRect(9, 9, WIDTH - 18, HEIGHT - 18); }
     for (const explosion of s.explosions) this.paintMineExplosion(g, explosion);
     for (const mine of s.mines) this.paintMine(g, mine, s.elapsed, SPACE_BOMBER_MINE_LIFETIME);
     for (const enemy of s.enemies) {
       this.paintEnemyShip(g, enemy, s.elapsed, -1);
       this.paintBomberApproachMarker(g, enemy);
+    }
+    for (const pass of s.passes) {
+      // Cool fading outlines distinguish harmless peel-away ships from active red pursuers.
+      g.lineStyle(2, 0x79e1ce, pass.remaining / .3);
+      g.strokeTriangle(pass.x, pass.y - 18, pass.x - 20, pass.y + 12, pass.x + 20, pass.y + 12);
     }
     if (s.invulnerable) this.paintProtection(g, s.x, s.y, 30, s.elapsed);
     if (!s.invulnerable || this.reducedMotion?.matches || Math.floor(s.elapsed * 10) % 2 !== 0) {

@@ -119,6 +119,9 @@ function pilotBomberFixtures(scene: any) {
       { id: 2, x: 260, y: 390, blastRadius: radius, armIn: 0, expiresIn: .2 }],
     explosions: [{ x: 350, y: 250, radius, remaining: .14 }] });
   scene.bomber.asteroids = [{ id: 1, x: 240, y: 200, radius: 22, speed: 100 }];
+  scene.spaceBomber.aimAngle = 1.2;
+  scene.spaceBomber.passes = [{id:9,x:300,y:125,radius:16,speed:100,warningRemaining:0,side:1,remaining:.15}];
+  scene.spaceBomber.mines[0].flight = {x:90,y:260,targetX:140,targetY:330,remaining:.1};
   scene.spaceBomber.enemies = [
     { id: 1, x: 140, y: 140, radius: 20, speed: 100, warningRemaining: .4 },
     { id: 2, x: 350, y: 440, radius: 20, speed: 100, warningRemaining: .4 },
@@ -147,7 +150,7 @@ test('mine preview, deployed radius and explosion boundary use exact Natural 1 g
     h.scene.situation = situation; h.scene.role = 'Bomber'; h.paint();
     const state = situation === 'Space Battle' ? h.scene.spaceBomber : h.scene.bomber;
     const radius = situation === 'Space Battle' ? rules.spaceBomberBlastRadius(h.scene.config) : rules.bomberBlastRadius(h.scene.config);
-    const drop = rules.mineDropPosition(state);
+    const drop = situation === 'Space Battle' ? rules.spaceBomberLanding(state) : rules.mineDropPosition(state);
     for (const [x, y] of [[drop.x, drop.y], [100, 280], [260, 390], [350, 250]]) {
       assert.ok(h.commands.some(c => c[0] === 'strokeCircle' && c[1] === x && c[2] === y && c[3] === radius));
     }
@@ -189,7 +192,7 @@ test('fuel remains centered and mine readiness changes artwork without relocatin
   h.scene.role = 'Bomber'; h.paint(); const cooling = structuredClone(h.commands);
   h.scene.spaceBomber.mineCooldown = 0;
   h.paint(); assert.notDeepEqual(h.commands, cooling);
-  const drop = rules.mineDropPosition(h.scene.spaceBomber);
+  const drop = rules.spaceBomberLanding(h.scene.spaceBomber);
   assert.ok(h.commands.some(c => c[0] === 'strokeCircle' && c[1] === drop.x && c[2] === drop.y));
   const enemies = h.scene.spaceBomber.enemies;
   for (const enemy of enemies) {
