@@ -58,15 +58,16 @@ Each finished run now shows a provisional **0–100 rating** and GM advisory ban
 - Space Battle / Bomber missiles have a 0.38-second cooldown. Mines arm after 0.2 seconds, last 4.5 seconds, and have a 0.85-second cooldown. Natural 1 affects the circular mine blast target: multiplying its radius by `sqrt(0.5)` gives the rendered target and collision target exactly half normal area. Missiles are unaffected.
 - Space Battle / Bomber score is 100 per destroyed ship, rounded survival seconds × 5, and 100 per remaining hull point. The run ends after 60 seconds or when hull reaches zero.
 - Space Battle / Life Support is a fixed-screen ship-interior platformer. Move with Left/Right or A/D; jump with Up/W/Space. Touch players use separate Left, Right, Jump, and Repair buttons, including simultaneous movement and action. Land on an ordinary orange fire from above to stomp it out. Stand within 35px of a blue electrical panel on the same platform and press E/Enter or Repair to fix it.
+- Ordinary flames hurt on side/rising contact after a 0.6-second spawn warning; the full valid descending stomp approach stays safe. Electrical panels warn for 0.8 seconds before shooting left/right sparks, first firing one second after appearing. Repair stops future bursts; launched sparks remain dangerous. Sparks, flame contact and overloads share one-integrity damage and 1.25-second grace. Jump or dodge sparks and repair panels while grounded nearby. All new timing values are provisional.
 - Uncontained fires cost one of five system-integrity points when their timer expires. Heart pickups restore one integrity, up to five; touching an overload icon costs one, with 1.25 seconds of contact grace. Icon opportunities occur every five seconds: a full 12-opportunity cycle has two hearts and one overload normally, or one heart and two overloads on Natural 1. Other opportunities spawn no icon. The run ends at 60 seconds or zero integrity.
 - Space Battle / Life Support raw score is 100 per ordinary fire stomped, 150 per electrical repair, survival seconds × 5 rounded to the nearest point, and 100 per remaining integrity point. Fire spawn interval and lifetime vary by difficulty; all values are provisional playtest tuning.
 
-| Space Battle / Life Support difficulty | Fire spawn interval (s) | Time to contain each fire (s) |
-| --- | ---: | ---: |
-| Very Easy | 5.2 | 11 |
-| Easy | 4.5 | 10 |
-| Medium | 3.8 | 9 |
-| Hard | 3.2 | 8 |
+| Space Battle / Life Support difficulty | Fire spawn interval (s) | Time to contain each fire (s) | Panel burst interval (s) | Spark speed (px/s) |
+| --- | ---: | ---: | ---: | ---: |
+| Very Easy | 5.2 | 11 | 3.2 | 105 |
+| Easy | 4.5 | 10 | 2.8 | 125 |
+| Medium | 3.8 | 9 | 2.4 | 145 |
+| Hard | 3.2 | 8 | 2.0 | 165 |
 
 - Space Battle / Gunner defends a visible line from attacking ships and their projectiles. Ships fly automatically; Arrow keys/WASD aims at a normalized 225 logical px/s, while touch/mouse aims directly. Touch aiming never fires; tap/hold the separate **Fire** button, including with a second finger. Mouse primary click/hold or Space/Enter also fires. All sources share the same cooldown; released aim is retained, and pause clears held/queued actions.
 - Each attacker fires one telegraphed projectile. Armored attackers take two hits; projectiles take one. A turret shot hits the closest target within its tolerance, preferring projectiles then lower entity IDs on exact ties. Destroying the source leaves an already launched projectile intact. Breaches lose at most one hull per step, with 1.25 seconds of protection; runs end at three hull lost or 60 seconds. Natural 1 doubles only the selected band's cooldown.
@@ -200,3 +201,5 @@ Bomber and Gunner players operate weapons; Pilot players steer. Scrolling scener
 - Pause freezes the course, targets, projectiles, and cooldowns. Resume clears held/queued actions while retaining the simulation’s target. Retry resets the flight and targets.
 
 Validation for this change uses GitHub Actions because this editing session has no terminal or browser runtime. Real-device iPhone/iPad Safari and rendered desktop QA remain unverified. Before merging, play both Bomber modes and Gunner: confirm the ship moves without input, aiming cannot steer it, targets are readable, both weapon buttons are reachable, Space Battle retains missile aim after touch release and keyboard missile aiming works, pause/resume does not fire stale actions, and reports/retry work. Check portrait/landscape and Hard with Natural 1. Existing bundle-size warnings still require the tracked follow-up; this change does not approve ignoring them.
+
+The [Life Support hazard pass](docs/issue-42-life-support-hazards.md) records sparks/fire-contact behavior, automated and browser evidence, and outstanding owner/device acceptance. A rating of 100 reaches a provisional points threshold; it does not certify a flawless run.

@@ -66,3 +66,16 @@ The fixed **37–5,000** pair exactly uses those observed percentiles. The seven
 ## Real playtest review before final thresholds
 
 Record at least several completed and failed runs per mode across the four difficulties, including Natural 1, using only mode, modified total, Natural 1 flag, raw score, rating, end reason, and whether the GM thought the band described the performance. No player identities or campaign details are needed. Compare real score distributions and GM judgments with the synthetic references and current fixed anchors. Adjust anchors or bands only in a separately reviewed versioned change; the current values remain provisional until Drake accepts them after broader playtesting.
+
+
+## Space Battle Life Support hazard pass — scoring unchanged
+
+The #42 spark/fire-contact pass retains scoring v0.5, the existing raw formula, and the **130–1,350 live rating anchors**. New hit counters are report-only. A rating of 100 reaches a provisional points threshold, not a flawless-run criterion.
+
+Re-running the same 288 seeded passive/routine/engaged simulations after adding hazards produced:
+
+| Mode | Samples | Minimum | p10 | Median | p90 | Maximum |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| Space Battle / Life Support | 288 | 53 | 80 | 246 | 926 | 2,050 |
+
+Earlier results were minimum 97, p10 128, median 398, p90 1,350, maximum 2,150. These are coarse scripted movements that do not deliberately dodge sparks; they demonstrate changed pressure, not human difficulty or a justification to lower anchors. Other seven mode distributions are unchanged. Rating recalibration awaits recorded owner runs across all bands and Natural 1. See [hazard validation](issue-42-life-support-hazards.md).

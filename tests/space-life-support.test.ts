@@ -94,7 +94,7 @@ test('each complete 12-opportunity cycle has the approved standard or Natural 1 
   }
 });
 
-test('difficulty only changes fire pressure; scoring and report retain the GM boundary', () => {
+test('difficulty changes hazard pressure; scoring and report retain the GM boundary', () => {
   let previousInterval = Infinity;
   for (const total of [16, 11, 6, 5]) {
     const s = quiet(); s.fireIn = 0;
@@ -143,4 +143,159 @@ test('keyboard and simultaneous touch controls move, jump, repair, and clear on 
     assert.deepEqual(input.read(), idle);
     assert.equal(prevented, 4);
   } finally { globalThis.window = oldWindow; }
+});
+
+function advance(s: SpaceLifeState, seconds: number, total = 2) {
+  for (let i = 0; i < Math.round(seconds / .01) && !s.finished; i++)
+    stepSpaceLifeSupport(s, { total, naturalOne: false }, idle, .01);
+}
+function panel(s: SpaceLifeState, sparkIn = 1) {
+  s.fires = [{ id: 20, x: 85, y: 520, kind: 'electrical', remaining: 100, sparkIn }];
+  s.nextId = 21;
+}
+
+test('panels warn without damage, first burst waits one second, and bursts scale by band', () => {
+  for (const total of [16, 11, 6, 2]) {
+    const s = quiet(); panel(s);
+    advance(s, .2, total);
+    assert.ok(Math.abs(s.fires[0].sparkIn! - .8) < 1e-8);
+    assert.equal(s.sparks.length, 0); assert.equal(s.integrity, 5);
+    advance(s, .79, total); assert.equal(s.sparks.length, 0);
+    advance(s, .01, total); assert.equal(s.sparks.length, 2);
+    const tuning = SPACE_LIFE_TUNING[total === 16 ? 'Very Easy' : total === 11 ? 'Easy' : total === 6 ? 'Medium' : 'Hard'];
+    assert.equal(Math.abs(s.sparks[0].vx), tuning.sparkSpeed);
+    assert.deepEqual(s.sparks.map(spark => [spark.x, spark.y]), [[67, 506], [103, 506]]);
+    assert.ok(Math.abs(s.fires[0].sparkIn! - tuning.sparkEvery) < 1e-8);
+    assert.equal(s.sparks[0].remaining, 4);
+  }
+});
+
+test('newly spawned panels retain a full second before firing', () => {
+  const s = quiet(); s.fireIn = 0;
+  stepSpaceLifeSupport(s, config, idle, .05, () => 0);
+  assert.equal(s.fires[0].sparkIn, 1);
+  advance(s, .99); assert.equal(s.sparks.length, 0);
+  advance(s, .01); assert.equal(s.sparks.length, 2);
+});
+
+test('repair wins over a due burst while launched sparks survive source repair', () => {
+  const s = quiet(); panel(s, .01); s.x = 85;
+  s.sparks = [{ id: 19, x: 200, y: 506, vx: 165, remaining: 2 }];
+  stepSpaceLifeSupport(s, config, { ...idle, repair: true }, .05);
+  assert.equal(s.fires.length, 0); assert.equal(s.electricalRepaired, 1);
+  assert.equal(s.sparks.length, 1); assert.ok(s.sparks[0].x > 200);
+  advance(s, .5); assert.equal(s.sparks.length, 1);
+});
+
+test('armed flames hurt side and rising contact; spawn warning and descending stomp stay safe', () => {
+  const s = quiet();
+  s.fires = [{ id: 1, x: 150, y: 520, kind: 'ordinary', remaining: 100, arming: .6 }];
+  advance(s, .59); assert.equal(s.integrity, 5);
+  advance(s, .02); assert.equal(s.integrity, 4); assert.equal(s.fireContactHits, 1);
+  assert.equal(s.ordinaryCleared, 0);
+  const rising = quiet(); rising.y = 530; rising.vy = -100; rising.grounded = false;
+  rising.fires = [{ id: 1, x: 150, y: 520, kind: 'ordinary', remaining: 10 }];
+  stepSpaceLifeSupport(rising, config, idle, .05);
+  assert.equal(rising.fireContactHits, 1); assert.equal(rising.ordinaryCleared, 0);
+  const stomp = quiet(); stomp.y = 480; stomp.vy = 400; stomp.grounded = false;
+  stomp.fires = [{ id: 1, x: 150, y: 520, kind: 'ordinary', remaining: 10 }];
+  advance(stomp, .1);
+  assert.equal(stomp.ordinaryCleared, 1); assert.equal(stomp.integrity, 5);
+  assert.equal(stomp.fires.length, 0);
+});
+
+test('jump and outside-contact geometry provide safe routes', () => {
+  const s = quiet(); s.x = 173;
+  s.fires = [{ id: 1, x: 150, y: 520, kind: 'ordinary', remaining: 10 }];
+  advance(s, .05); assert.equal(s.integrity, 5);
+  s.x = 150; s.y = 480; s.vy = 0; s.grounded = false;
+  s.sparks = [{ id: 2, x: 150, y: 506, vx: 165, remaining: 4 }];
+  stepSpaceLifeSupport(s, config, idle, .01);
+  assert.equal(s.integrity, 5); assert.equal(s.sparks.length, 1);
+});
+
+test('spark sweep catches crossings and moving crew, with a circular rather than square corner', () => {
+  const crossing = quiet();
+  crossing.sparks = [{ id: 1, x: 100, y: 506, vx: 2000, remaining: 4 }];
+  stepSpaceLifeSupport(crossing, config, idle, .05);
+  assert.equal(crossing.sparkHits, 1); assert.equal(crossing.sparks.length, 0);
+  const moving = quiet();
+  moving.sparks = [{ id: 1, x: 169, y: 506, vx: -165, remaining: 4 }];
+  stepSpaceLifeSupport(moving, config, { ...idle, x: 1 }, .05);
+  assert.equal(moving.sparkHits, 1);
+  const corner = quiet();
+  corner.sparks = [{ id: 1, x: 164, y: 489, vx: 0, remaining: 4 }];
+  stepSpaceLifeSupport(corner, config, idle, .01);
+  assert.equal(corner.sparkHits, 0); // Four pixels beyond both edges is outside a radius-four circle.
+});
+
+test('sparks leave bounds, expire, and are consumed even during contact grace', () => {
+  const s = quiet(); s.invulnerable = 1;
+  s.sparks = [{ id: 1, x: 150, y: 506, vx: 165, remaining: 4 },
+    { id: 2, x: 483, y: 100, vx: 165, remaining: 4 },
+    { id: 3, x: 0, y: 100, vx: -165, remaining: .01 }];
+  stepSpaceLifeSupport(s, config, idle, .05);
+  assert.equal(s.sparks.length, 0); assert.equal(s.integrity, 5); assert.equal(s.sparkHits, 0);
+});
+
+test('fire, spark and overload share grace in that order; expiry remains independent', () => {
+  const s = quiet();
+  s.fires = [{ id: 1, x: 150, y: 520, kind: 'ordinary', remaining: 100 }];
+  s.sparks = [{ id: 2, x: 150, y: 506, vx: 0, remaining: 4 }];
+  s.icons = [{ id: 3, x: 150, y: 501, kind: 'overload', remaining: 4 }];
+  stepSpaceLifeSupport(s, config, idle, .05);
+  assert.equal(s.integrity, 4); assert.equal(s.fireContactHits, 1);
+  assert.equal(s.sparkHits, 0); assert.equal(s.overloadHits, 0);
+  advance(s, 1); assert.equal(s.integrity, 4);
+  advance(s, .3); assert.equal(s.integrity, 3); assert.equal(s.fireContactHits, 2);
+  s.fires.push({ id: 4, x: 395, y: 520, kind: 'ordinary', remaining: .01 });
+  stepSpaceLifeSupport(s, config, idle, .05);
+  assert.equal(s.integrity, 2); assert.equal(s.firesExpired, 1);
+});
+
+test('every fatal contact ends before a heart can revive the crew', () => {
+  for (const kind of ['fire', 'spark', 'overload']) {
+    const s = quiet(); s.integrity = 1;
+    if (kind === 'fire') s.fires = [{ id: 1, x: 150, y: 520, kind: 'ordinary', remaining: 10 }];
+    if (kind === 'spark') s.sparks = [{ id: 1, x: 150, y: 506, vx: 0, remaining: 4 }];
+    if (kind === 'overload') s.icons.push({ id: 1, x: 150, y: 501, kind: 'overload', remaining: 4 });
+    s.icons.push({ id: 2, x: 150, y: 501, kind: 'heart', remaining: 4 });
+    stepSpaceLifeSupport(s, config, idle, .05);
+    assert.equal(s.integrity, 0); assert.equal(s.finished, true); assert.equal(s.heartsCollected, 0);
+    const before = JSON.stringify(s); stepSpaceLifeSupport(s, config, idle, .05);
+    assert.equal(JSON.stringify(s), before);
+  }
+});
+
+test('zero time freezes hazards; fresh retry state and reports include contact counters', () => {
+  const s = quiet(); panel(s, .3);
+  s.sparks = [{ id: 1, x: 100, y: 506, vx: 165, remaining: 4 }];
+  const before = JSON.stringify(s); stepSpaceLifeSupport(s, config, idle, 0);
+  assert.equal(JSON.stringify(s), before);
+  const fresh = createSpaceLifeSupport();
+  assert.equal(fresh.sparks.length, 0); assert.equal(fresh.sparkHits, 0); assert.equal(fresh.fireContactHits, 0);
+  s.sparkHits = 2; s.fireContactHits = 3;
+  assert.match(spaceLifeResultText(config, s), /Spark hits: 2 • Fire contact hits: 3/);
+});
+
+
+test('expired sparks cannot hit crew that moves into their old position later in the step', () => {
+  const s = quiet();
+  s.sparks = [{ id: 1, x: 172, y: 506, vx: 0, remaining: .001 }];
+  stepSpaceLifeSupport(s, config, { ...idle, x: 1 }, .05);
+  assert.equal(s.sparkHits, 0); assert.equal(s.sparks.length, 0);
+  s.sparks = [{ id: 2, x: 250, y: 100, vx: 0, remaining: 4 }];
+  advance(s, 4.01); assert.equal(s.sparks.length, 0);
+});
+
+test('Natural 1 keeps panel cadence unchanged and successive bursts follow the band interval', () => {
+  for (const total of [16, 11, 6, 2]) for (const naturalOne of [false, true]) {
+    const s = quiet(); panel(s); s.x = 450; s.y = 190; s.grounded = true;
+    const band = total === 16 ? 'Very Easy' : total === 11 ? 'Easy' : total === 6 ? 'Medium' : 'Hard';
+    const interval = SPACE_LIFE_TUNING[band].sparkEvery;
+    for (let i = 0; i < Math.round((1 + interval) * 100); i++)
+      stepSpaceLifeSupport(s, { total, naturalOne }, idle, .01);
+    assert.equal(s.nextId, 25); // Two bursts, two sparks each.
+    assert.ok(Math.abs(s.fires[0].sparkIn! - interval) < 1e-8);
+  }
 });

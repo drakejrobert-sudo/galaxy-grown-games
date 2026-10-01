@@ -244,6 +244,9 @@ test('deferred first launch recovers from load failure, starts once, and retry r
   readyScene.spaceLife.fires = [{ id: 1, x: 150, y: 520, kind: 'electrical', remaining: 8 }];
   readyScene.update(0, 16);
   assert.equal(readyScene.spaceLife.electricalRepaired, 1);
+  readyScene.spaceLife.sparks = [{ id: 5, x: 260, y: 506, vx: -165, remaining: 3 }];
+  readyScene.spaceLife.fires = [{ id: 6, x: 395, y: 520, kind: 'electrical', remaining: 6, sparkIn: .4 },
+    { id: 7, x: 85, y: 520, kind: 'ordinary', remaining: 6, arming: .3 }];
   element('pause').listeners.get('click')();
   const pausedSpaceLife = JSON.stringify(readyScene.spaceLife);
   readyScene.update(0, 50);

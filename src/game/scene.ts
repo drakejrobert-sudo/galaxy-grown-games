@@ -9,7 +9,7 @@ import {
   type LifeSupportState, type SpaceBattleBomberInput, type SpaceBattleBomberState,
   type SpaceBattlePilotState, type EnemyShip, type EnemyShot, type FuelCell, type SpaceBomberEnemy,
   SPACE_BOMBER_MINE_COOLDOWN, SPACE_BOMBER_MINE_LIFETIME, SPACE_BOMBER_MISSILE_COOLDOWN,
-  createSpaceLifeSupport, stepSpaceLifeSupport, SPACE_LIFE_PLATFORMS,
+  createSpaceLifeSupport, stepSpaceLifeSupport, SPACE_LIFE_PLATFORMS, SPACE_LIFE_SPARK_WARNING,
   type SpaceLifeInput, type SpaceLifeState,
 } from './rules';
 
@@ -742,6 +742,16 @@ export class FlightScene extends Phaser.Scene {
         g.lineBetween(fire.x - 18, fire.y - 17, fire.x - 22, fire.y - 20);
         g.lineBetween(fire.x + 18, fire.y - 12, fire.x + 22, fire.y - 16);
       }
+      const warning = fire.kind === 'electrical' ? (fire.sparkIn ?? 1) <= SPACE_LIFE_SPARK_WARNING + 1e-9 : (fire.arming ?? 0) > 0;
+      if (warning) {
+        g.lineStyle(2, 0xffdf91, 1);
+        g.strokeRoundedRect(fire.x - 17, fire.y - 30, 34, 32, 4);
+        for (const side of fire.kind === 'electrical' ? [-1, 1] : []) {
+          g.lineBetween(fire.x + side * 20, fire.y - 14, fire.x + side * 30, fire.y - 14);
+          g.lineBetween(fire.x + side * 30, fire.y - 14, fire.x + side * 25, fire.y - 19);
+          g.lineBetween(fire.x + side * 30, fire.y - 14, fire.x + side * 25, fire.y - 9);
+        }
+      }
       g.lineStyle(2, color, Math.max(0.2, fire.remaining / SPACE_LIFE_PLATFORMS.length / 3));
       g.lineBetween(fire.x - 14, fire.y + 5, fire.x + 14, fire.y + 5);
     }
@@ -755,6 +765,14 @@ export class FlightScene extends Phaser.Scene {
         g.fillStyle(0x9bbbd1, 0.7); g.fillCircle(icon.x + dx, icon.y + 11, 1);
       }
       this.paintLifeSupportSymbol(g, { kind: icon.kind, target: 'Shields' }, icon.x, icon.y, 0.72);
+    }
+    for (const spark of s.sparks) {
+      const direction = Math.sign(spark.vx);
+      g.lineStyle(6, 0x89dfff, 0.24); g.lineBetween(spark.x - direction * 15, spark.y, spark.x, spark.y);
+      g.lineStyle(2, 0x89dfff, 0.95); g.lineBetween(spark.x - direction * 10, spark.y, spark.x, spark.y);
+      g.fillStyle(0x091827); g.fillCircle(spark.x, spark.y, 5.5);
+      g.fillStyle(0xe4faff); g.fillCircle(spark.x, spark.y, 4);
+      g.lineStyle(1, 0x89dfff); g.strokeCircle(spark.x, spark.y, 4);
     }
     this.paintSpaceLifeCrew(g, s);
     if (s.invulnerable > 0) {

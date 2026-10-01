@@ -41,8 +41,9 @@ function fixtures(scene: any) {
       { id: 3, x: 480, y: 400, radius: 21, speed: 85, hp: 1, maxHp: 2, fired: true },
     ], projectiles: [{ id: 4, x: 240, y: 330, radius: 10, speed: 180 }] });
   Object.assign(scene.spaceLife, { elapsed: 8, x: 150, y: 410, invulnerable: .5,
-    fires: [{ id: 1, x: 85, y: 520, kind: 'ordinary', remaining: 5 },
-      { id: 2, x: 205, y: 410, kind: 'electrical', remaining: 1 }],
+    fires: [{ id: 1, x: 85, y: 520, kind: 'ordinary', remaining: 5, arming: .4 },
+      { id: 2, x: 205, y: 410, kind: 'electrical', remaining: 1, sparkIn: .4 }],
+    sparks: [{ id: 5, x: 260, y: 396, vx: 165, remaining: 3 }],
     icons: [{ id: 3, x: 95, y: 155, kind: 'heart', remaining: 6 },
       { id: 4, x: 390, y: 265, kind: 'overload', remaining: 6 }] });
 }
@@ -86,4 +87,15 @@ test('added decorative motion follows the live reduced-motion preference and use
   assert.notDeepEqual(h.commands, moving);
   h.paint(); const stable = structuredClone(h.commands);
   h.paint(); assert.deepEqual(h.commands, stable);
+});
+
+
+test('hazard warnings and spark cores remain visible with reduced motion', () => {
+  const h = harness(); fixtures(h.scene); h.setReduced(true);
+  h.scene.situation = 'Space Battle'; h.scene.role = 'Life Support'; h.paint();
+  assert.ok(h.commands.some(command => command[0] === 'strokeRoundedRect' && command[1] === 188 && command[2] === 380));
+  assert.ok(h.commands.some(command => command[0] === 'fillCircle' && command[1] === 260 && command[2] === 396 && command[3] === 4));
+  h.scene.spaceLife.fires[1].sparkIn = 1;
+  h.paint();
+  assert.ok(!h.commands.some(command => command[0] === 'strokeRoundedRect' && command[1] === 188 && command[2] === 380));
 });
