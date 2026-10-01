@@ -114,16 +114,15 @@ function pilotBomberFixtures(scene: any) {
     ['bomber', rules.bomberBlastRadius(scene.config), rules.BOMBER_MINE_LIFETIME],
     ['spaceBomber', rules.spaceBomberBlastRadius(scene.config), rules.SPACE_BOMBER_MINE_LIFETIME],
   ] as const) Object.assign(scene[key], { elapsed: 8.1, invulnerable: .5, impactFlash: .1,
-    cooldown: .3, mineCooldown: .3, missileCooldown: .2,
+    cooldown: .3, mineCooldown: .3,
     mines: [{ id: 1, x: 100, y: 280, blastRadius: radius, armIn: .1, expiresIn: lifetime },
       { id: 2, x: 260, y: 390, blastRadius: radius, armIn: 0, expiresIn: .2 }],
     explosions: [{ x: 350, y: 250, radius, remaining: .14 }] });
   scene.bomber.asteroids = [{ id: 1, x: 240, y: 200, radius: 22, speed: 100 }];
   scene.spaceBomber.enemies = [
-    { id: 1, x: 140, y: 140, radius: 20, speed: 100, approach: 'forward' },
-    { id: 2, x: 350, y: 440, radius: 20, speed: 100, approach: 'pursuer' },
+    { id: 1, x: 140, y: 140, radius: 20, speed: 100, warningRemaining: .4 },
+    { id: 2, x: 350, y: 440, radius: 20, speed: 100, warningRemaining: .4 },
   ];
-  scene.spaceBomber.missiles = [{ id: 3, x: 210, y: 300, vx: -60, vy: -200 }];
 }
 
 test('Pilot and Bomber representative states render frozen across both situations and Natural 1', () => {
@@ -183,18 +182,28 @@ test('selected modes freeze decoration with reduced motion while preserving esse
   }
 });
 
-test('fuel remains centered and missile/mine readiness changes artwork without relocating targets', () => {
+test('fuel remains centered and mine readiness changes artwork without relocating targets', () => {
   const h = harness(); pilotBomberFixtures(h.scene); h.setReduced(true);
   h.scene.situation = 'Space Battle'; h.scene.role = 'Pilot'; h.paint();
   assert.ok(h.commands.some(c => c[0] === 'fillRoundedRect' && c[1] === 82 && c[2] === 158));
   h.scene.role = 'Bomber'; h.paint(); const cooling = structuredClone(h.commands);
-  h.scene.spaceBomber.mineCooldown = 0; h.scene.spaceBomber.missileCooldown = 0;
+  h.scene.spaceBomber.mineCooldown = 0;
   h.paint(); assert.notDeepEqual(h.commands, cooling);
   const drop = rules.mineDropPosition(h.scene.spaceBomber);
   assert.ok(h.commands.some(c => c[0] === 'strokeCircle' && c[1] === drop.x && c[2] === drop.y));
   const enemies = h.scene.spaceBomber.enemies;
   for (const enemy of enemies) {
-    const direction = enemy.approach === 'forward' ? 1 : -1;
-    assert.ok(h.commands.some(c => c[0] === 'fillTriangle' && c[1] === enemy.x && c[2] === enemy.y + direction * 30));
+
+    assert.ok(h.commands.some(c => c[0] === 'fillTriangle' && c[1] === enemy.x && c[2] === rules.HEIGHT - 22));
   }
+});
+
+test('repair progress and completion feedback render frozen without moving panel geometry', () => {
+  const h = harness(); fixtures(h.scene);
+  h.scene.situation = 'Space Battle'; h.scene.role = 'Life Support';
+  h.scene.spaceLife.fires[1].repairProgress = .75;
+  h.scene.spaceLife.repairFlashes = [{x:95,y:190,remaining:.2}];
+  freeze(h.scene.spaceLife); h.paint();
+  assert.ok(h.commands.some(c => c[0] === 'fillRect' && c[1] === 186 && c[2] === 370 && c[3] === 19));
+  assert.ok(h.commands.some(c => c[0] === 'strokeCircle' && c[1] === 95 && c[2] === 176 && c[3] === 24));
 });

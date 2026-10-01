@@ -1,5 +1,7 @@
 # Issue #12 — results and cross-device playtest
 
+> Historical record: Space Battle Bomber's missile controls and Life Support's Repair action have been replaced. Use [the station simplification checklist](space-battle-stations-playtest.md) for current acceptance; observations below retain their original meaning.
+
 Status: **complete**. Desktop browser QA and Drake's cross-device playtest passed for all six playable prototypes. Scores remain provisional and the GM determines campaign outcomes. Copying the detailed report is an optional convenience, not a release requirement; players may report only the final score.
 
 ## Desktop browser evidence — 2026-09-15

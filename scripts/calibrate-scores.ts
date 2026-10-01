@@ -7,6 +7,7 @@ import {
   createLifeSupport, stepLifeSupport, lifeSupportScoreFor,
   createSpaceBattlePilot, stepSpaceBattlePilot, spaceBattlePilotScoreFor,
   createSpaceBattleBomber, stepSpaceBattleBomber, spaceBattleBomberScoreFor,
+  mineDropPosition, SPACE_BOMBER_MINE_ARM_TIME, SPACE_BOMBER_MINE_LIFETIME,
   createSpaceLifeSupport, stepSpaceLifeSupport, spaceLifeScoreFor,
   type FlightConfig, type ScoreMode, type LifeSupportRoute,
 } from '../src/game/rules.ts';
@@ -108,18 +109,18 @@ function run(mode: ScoreMode, config: FlightConfig, profile: Profile, seed: numb
       const x = profile === 'passive' ? 0 : Math.abs(targetX - s.x) < 12 ? 0 : targetX > s.x ? 1 : -1;
       const jump = profile !== 'passive' && s.grounded &&
         (profile === 'engaged' ? !!fire && (fire.y < s.y || fire.kind === 'ordinary') : Math.floor(s.elapsed * 1.4) % 2 === 0);
-      const repair = profile !== 'passive' && s.fires.some(f => f.kind === 'electrical' && f.y === s.y && Math.abs(f.x - s.x) <= 35);
-      stepSpaceLifeSupport(s, config, { x, jump, repair }, step, random);
+      stepSpaceLifeSupport(s, config, { x, jump }, step, random);
     }
     return spaceLifeScoreFor(s);
   }
   const s = createSpaceBattleBomber();
   while (!s.finished) {
-    const target = profile === 'engaged'
-      ? [...s.enemies].filter(e => e.y < s.y).sort((a, b) => b.y - a.y)[0] : undefined;
+    // Routine taps on cooldown. Engaged waits for a committed lane near the aft rack.
+    const dropY = mineDropPosition(s).y;
+    const opportunity = s.enemies.some(e => e.y > dropY + e.speed * SPACE_BOMBER_MINE_ARM_TIME &&
+      e.y - dropY < e.speed * SPACE_BOMBER_MINE_LIFETIME && Math.abs(e.x - s.x) <= 20);
     stepSpaceBattleBomber(s, config, {
-      x: 0, y: 0, aimX: target?.x ?? s.x, aimY: target?.y ?? 50,
-      firing: profile === 'engaged', placing: profile !== 'passive',
+      placing: s.mineCooldown <= 0 && (profile === 'routine' || profile === 'engaged' && opportunity),
     }, step, random);
   }
   return spaceBattleBomberScoreFor(s);

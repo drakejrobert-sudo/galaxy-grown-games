@@ -53,11 +53,11 @@ Each finished run now shows a provisional **0–100 rating** and GM advisory ban
 - Space Battle enemies cross the field and fire shots aimed at the ship's position when fired. Contact with a ship or shot removes one of 3 hull points, with 1.25 seconds of collision grace.
 - Space Battle / Pilot ends after 60 seconds, at zero hull, or when fuel is depleted. Its score is rounded survival seconds × 10, plus 100 per remaining hull point and 50 per fuel cell collected.
 - Space Battle / Pilot uses the shared keyboard/touch steering path. A Natural 1 applies the same overloaded-engine impairment: 60% of the selected difficulty's normal movement speed.
-- Space Battle / Bomber flies automatically. Touch/mouse or Arrow keys/WASD aims missiles ahead; Space or **Fire missile** launches from the nose toward the cyan target. Enter/Shift or **Drop mine** releases a mine 34px directly behind the ship, independent of missile aim. Missiles maintain their launch direction and speed; mines retain the contact fuse and arming delay.
-- Forward enemy ships enter from the top while pursuing ships enter from behind. Missiles and mines can destroy either when their paths overlap; ship collisions cost one of 3 hull points with 1.25 seconds of collision grace.
-- Space Battle / Bomber missiles have a 0.38-second cooldown. Mines arm after 0.2 seconds, last 4.5 seconds, and have a 0.85-second cooldown. Natural 1 affects the circular mine blast target: multiplying its radius by `sqrt(0.5)` gives the rendered target and collision target exactly half normal area. Missiles are unaffected.
+- Space Battle / Bomber weaves automatically along the eight-second course. Pursuers enter from behind on straight columns chosen to intercept the ship's predicted position at arrival. A bottom-edge arrow marks each new approach for 0.8 seconds. Pursuers never home, fire, or change lanes; there are no missiles or aiming controls.
+- Press Space/Enter or tap **Drop mine** for one mine attempt. Holding never repeats; presses during cooldown are discarded. Mines release 34px directly behind the ship, arm after 0.2 seconds, last 4.5 seconds, and have a 0.85-second cooldown. The aft amber lights, blast preview, cooldown dial, and button text show readiness.
+- Natural 1 multiplies mine radius by `sqrt(0.5)`, giving the rendered and collision target half normal area. Ship collisions cost one of 3 hull points with 1.25 seconds of grace; escaping pursuers cause no damage or points.
 - Space Battle / Bomber score is 100 per destroyed ship, rounded survival seconds × 5, and 100 per remaining hull point. The run ends after 60 seconds or when hull reaches zero.
-- Space Battle / Life Support is a fixed-screen ship-interior platformer. Move with Left/Right or A/D; jump with Up/W/Space. Touch players use separate Left, Right, Jump, and Repair buttons, including simultaneous movement and action. Land on an ordinary orange fire from above to stomp it out. Stand within 35px of a blue electrical panel on the same platform and press E/Enter or Repair to fix it.
+- Space Battle / Life Support is a fixed-screen ship-interior platformer. Move with Left/Right or A/D; jump with Up/W/Space. Touch uses Left, Right, and Jump, including simultaneous movement/jump. Land on orange fires from above to stomp them out. Stand grounded within 35px of a blue panel on the same platform for 1.5 seconds to repair it automatically. Its overhead bar fills; moving away or jumping pauses progress without erasing it. Only the nearest eligible panel advances (lowest ID breaks ties). The hazard deadline continues; a completion exactly at the deadline wins. There is no Repair button or repair key.
 - Ordinary flames hurt on side/rising contact after a 0.6-second spawn warning; the full valid descending stomp approach stays safe. Electrical panels warn for 0.8 seconds before shooting left/right sparks, first firing one second after appearing. Repair stops future bursts; launched sparks remain dangerous. Sparks, flame contact and overloads share one-integrity damage and 1.25-second grace. Jump or dodge sparks and repair panels while grounded nearby. All new timing values are provisional.
 - Uncontained fires cost one of five system-integrity points when their timer expires. Heart pickups restore one integrity, up to five; touching an overload icon costs one, with 1.25 seconds of contact grace. Icon opportunities occur every five seconds: a full 12-opportunity cycle has two hearts and one overload normally, or one heart and two overloads on Natural 1. Other opportunities spawn no icon. The run ends at 60 seconds or zero integrity.
 - Space Battle / Life Support raw score is 100 per ordinary fire stomped, 150 per electrical repair, survival seconds × 5 rounded to the nearest point, and 100 per remaining integrity point. Fire spawn interval and lifetime vary by difficulty; all values are provisional playtest tuning.
@@ -151,16 +151,16 @@ Space Battle fuel timing, enemy pressure, collision tolerance, and scoring are p
 
 ### Proposed Space Battle bomber balance
 
-Harder checks send faster forward and pursuing enemy ships more frequently and retain the same automatic flight course. Both weapon cooldowns stay consistent across difficulty bands; Natural 1 independently halves the mine blast target area.
+Harder checks send faster pursuing ships more frequently and retain the same automatic flight course. Mine cooldown stays consistent across difficulty bands; Natural 1 independently halves the mine blast target area.
 
-| Difficulty | Enemy speed (px/s) | Forward spawn (s) | Pursuer spawn (s) |
-| --- | ---: | ---: | ---: |
-| Very Easy | 105 | 1.48 | 1.90 |
-| Easy | 130 | 1.22 | 1.55 |
-| Medium | 155 | 1.00 | 1.28 |
-| Hard | 180 | 0.82 | 1.05 |
+| Difficulty | Enemy speed (px/s) | Pursuer spawn (s) |
+| --- | ---: | ---: |
+| Very Easy | 105 | 1.90 |
+| Easy | 130 | 1.55 |
+| Medium | 155 | 1.28 |
+| Hard | 180 | 1.05 |
 
-Enemy pressure, 58px mine radius, weapon cadence, collision tolerance, and scoring are provisional playtest values. Real-device testing should confirm that both weapon buttons remain reachable while aiming, especially on narrow iPhone screens.
+Enemy pressure, 58px mine radius, weapon cadence, collision tolerance, and scoring are provisional playtest values. Real-device testing should confirm that individual mine taps are reachable and intercept timing is readable, especially on narrow iPhone screens. Ratings need fresh owner calibration for mine-only gameplay.
 
 ### Proposed Asteroid Field bomber balance
 
@@ -199,13 +199,13 @@ Automated regression coverage verifies safe escapes and near misses in all four 
 
 ### Automatic flight for weapon stations
 
-Bomber and Gunner players operate weapons; Pilot players steer. Scrolling scenery represents forward travel. Weapon-station ships weave predictably by `120 * sin(elapsed * PI / 4)` pixels around center, without reacting to targeting input. The course now completes a full cycle in eight seconds (formerly about 50 seconds), and weapon-station stars pass at 110–200px/s with light streaks. The course and missile reticle speed are provisional playtest choices. Difficulty bands, weapon cooldowns, hazard pressure, natural-1 effects, hull rules, and GM reporting remain unchanged.
+Bomber and Gunner players operate weapons; Pilot players steer. Scrolling scenery represents forward travel. Weapon-station ships weave predictably by `120 * sin(elapsed * PI / 4)` pixels around center, without reacting to targeting input. The course now completes a full cycle in eight seconds (formerly about 50 seconds), and weapon-station stars pass at 110–200px/s with light streaks. The course is provisional playtest tuning. Difficulty bands, weapon cooldowns, hazard pressure, natural-1 effects, hull rules, and GM reporting remain unchanged.
 
 - Asteroid Bomber shows an amber mine blast preview fixed behind the ship. Mines release there, stay at their drop location as the ship moves on, arm after the existing delay, and detonate on contact. Players time releases; they cannot place mines remotely.
-- Space Battle Bomber shows a cyan forward missile target and an amber mine preview fixed behind the ship. Missile aim never changes the mine drop point. The blast preview uses the exact same natural-1 radius as damage.
+- Space Battle Bomber shows an amber mine preview fixed behind the ship and brief bottom-edge pursuit markers. The blast preview uses the exact same natural-1 radius as damage.
 - Gunner retains direct touch/mouse firing, armor, and defense-line mechanics. Its enlarged armored ship has vented engine pods, twin rotating barrels, cooling bands, recoil, muzzle flashes and impact sparks. Extra detail uses bounded procedural drawing without new assets.
 - Pause freezes the course, targets, projectiles, and cooldowns. Resume clears held/queued actions while retaining the simulation’s target. Retry resets the flight and targets.
 
-Validation for this change uses GitHub Actions because this editing session has no terminal or browser runtime. Real-device iPhone/iPad Safari and rendered desktop QA remain unverified. For owner acceptance after a reviewed merge and successful deployment, play both Bomber modes and Gunner: confirm the ship moves without input, aiming cannot steer it, targets are readable, both weapon buttons are reachable, Space Battle retains missile aim after touch release and keyboard missile aiming works, pause/resume does not fire stale actions, and reports/retry work. Check portrait/landscape and Hard with Natural 1. Existing bundle-size warnings still require the tracked follow-up; this change does not approve ignoring them.
+For current validation of the simplified Space Battle stations, see [station simplification playtest](docs/space-battle-stations-playtest.md). Older playtest records describe the controls at the time of those runs. Owner acceptance still requires iPhone/iPad Safari and gameplay/rating review; successful builds and desktop fixtures do not establish those gates.
 
-The [Life Support hazard pass](docs/issue-42-life-support-hazards.md) records sparks/fire-contact behavior, automated and browser evidence, and outstanding owner/device acceptance. A rating of 100 reaches a provisional points threshold; it does not certify a flawless run.
+The [Life Support hazard pass](docs/issue-42-life-support-hazards.md) records sparks/fire-contact behavior and its historical validation. A rating of 100 reaches a provisional points threshold; it does not certify a flawless run.

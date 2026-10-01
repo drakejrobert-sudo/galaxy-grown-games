@@ -79,3 +79,16 @@ Re-running the same 288 seeded passive/routine/engaged simulations after adding 
 | Space Battle / Life Support | 288 | 53 | 80 | 246 | 926 | 2,050 |
 
 Earlier results were minimum 97, p10 128, median 398, p90 1,350, maximum 2,150. These are coarse scripted movements that do not deliberately dodge sparks; they demonstrate changed pressure, not human difficulty or a justification to lower anchors. Other seven mode distributions are unchanged. Rating recalibration awaits recorded owner runs across all bands and Natural 1. See [hazard validation](issue-42-life-support-hazards.md).
+
+## Space Battle station simplification — existing anchors retained
+
+Mine-only Bomber removes missiles/forward attackers and uses committed pursuers and one press per mine. Life Support now accumulates 1.5 seconds of proximity repair, preserving interruption progress. Raw-score formulas, live v0.5 anchors (Bomber 64–3,300; Life Support 130–1,350), and advisory/failure rules remain unchanged by agreement. These anchors describe older gameplay and need fresh owner calibration; new reports should be identified with the station redesign build/PR when collecting samples.
+
+The updated script models routine Bomber taps when ready and engaged taps when an enemy column is within 20px of the aft rack and its arrival is between the arming delay and mine lifetime. Life Support uses navigation/jump profiles with automatic repairs. Passive can now incidentally repair nearby panels. The same 288-run seeded matrix yields:
+
+| Mode | Runs | Min | 10th | Median | 90th | Max |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| Space Battle / Bomber | 288 | 25 | 30 | 146 | 459 | 878 |
+| Space Battle / Life Support | 288 | 53 | 79 | 178 | 677 | 1,255 |
+
+These low synthetic results are a calibration warning, not a human balance verdict or replacement rating anchors. Other modes reproduce their existing synthetic references. Collect completed/failed owner runs across bands and Natural 1 before a separately reviewed rating adjustment.

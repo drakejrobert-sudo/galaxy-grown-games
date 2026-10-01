@@ -354,24 +354,10 @@ export function automaticShipX(elapsed: number): number {
   return WIDTH / 2 + Math.sin(elapsed * Math.PI / 4) * 120;
 }
 
-export const BOMBER_AIM_SPEED = 225;
 export const MINE_DROP_OFFSET = 34;
 export function mineDropPosition(ship: { x: number; y: number }) {
   return { x: ship.x, y: ship.y + MINE_DROP_OFFSET };
 }
-function aimBomber(
-  s: { aimX: number; aimY: number },
-  input: BomberInput,
-  dt: number,
-  minY: number,
-): void {
-  const magnitude = Math.max(1, Math.hypot(input.x, input.y));
-  s.aimX = Math.max(18, Math.min(WIDTH - 18,
-    input.aimX ?? s.aimX + input.x / magnitude * BOMBER_AIM_SPEED * dt));
-  s.aimY = Math.max(minY, Math.min(HEIGHT - 18,
-    input.aimY ?? s.aimY + input.y / magnitude * BOMBER_AIM_SPEED * dt));
-}
-
 export function bomberBlastRadius(config: FlightConfig): number {
   return BOMBER_BLAST_RADIUS * (config.naturalOne ? BOMBER_IMPAIRMENT_SCALE : 1);
 }
@@ -823,19 +809,16 @@ export function spaceBattlePilotResultText(config: FlightConfig, s: SpaceBattleP
 
 export interface SpaceBattleBomberTuning {
   enemySpeed: number;
-  forwardSpawnEvery: number;
   pursuerSpawnEvery: number;
 }
 
 // Initial playtest values, not GM-approved balance.
 export const SPACE_BATTLE_BOMBER_TUNING: Record<Difficulty, SpaceBattleBomberTuning> = {
-  Hard: { enemySpeed: 180, forwardSpawnEvery: 0.82, pursuerSpawnEvery: 1.05 },
-  Medium: { enemySpeed: 155, forwardSpawnEvery: 1.00, pursuerSpawnEvery: 1.28 },
-  Easy: { enemySpeed: 130, forwardSpawnEvery: 1.22, pursuerSpawnEvery: 1.55 },
-  'Very Easy': { enemySpeed: 105, forwardSpawnEvery: 1.48, pursuerSpawnEvery: 1.90 },
+  Hard: { enemySpeed: 180, pursuerSpawnEvery: 1.05 },
+  Medium: { enemySpeed: 155, pursuerSpawnEvery: 1.28 },
+  Easy: { enemySpeed: 130, pursuerSpawnEvery: 1.55 },
+  'Very Easy': { enemySpeed: 105, pursuerSpawnEvery: 1.90 },
 };
-export const SPACE_BOMBER_MISSILE_SPEED = 430;
-export const SPACE_BOMBER_MISSILE_COOLDOWN = 0.38;
 export const SPACE_BOMBER_MINE_COOLDOWN = 0.85;
 export const SPACE_BOMBER_MINE_ARM_TIME = 0.2;
 export const SPACE_BOMBER_MINE_LIFETIME = 4.5;
@@ -843,40 +826,24 @@ export const SPACE_BOMBER_BLAST_RADIUS = 58;
 export const SPACE_BOMBER_PLAYER_RADIUS = 13;
 export const SPACE_BOMBER_COLLISION_GRACE = 1.25;
 
-export interface SpaceBomberEnemy extends EnemyShip {
-  approach: 'forward' | 'pursuer';
+export interface SpaceBomberEnemy {
+  id: number; x: number; y: number; radius: number; speed: number;
+  warningRemaining: number;
 }
-export interface SpaceBomberMissile {
-  vx: number;
-  vy: number;
-  id: number;
-  x: number;
-  y: number;
-  radius: number;
-  speed: number;
-}
-export interface SpaceBattleBomberInput extends BomberInput {
-  firing: boolean;
-  placing: boolean;
-}
+/** One frame's mine press, consumed even if the weapon is cooling down. */
+export interface SpaceBattleBomberInput { placing: boolean }
 export interface SpaceBattleBomberState {
   x: number;
   y: number;
-  aimX: number;
-  aimY: number;
   elapsed: number;
   hull: number;
   hits: number;
   destroyed: number;
-  missilesFired: number;
   minesPlaced: number;
-  missileCooldown: number;
   mineCooldown: number;
   invulnerable: number;
-  forwardSpawnIn: number;
   pursuerSpawnIn: number;
   enemies: SpaceBomberEnemy[];
-  missiles: SpaceBomberMissile[];
   mines: Mine[];
   explosions: Explosion[];
   nextId: number;
@@ -884,17 +851,17 @@ export interface SpaceBattleBomberState {
   finished: boolean;
 }
 
-/** Natural 1 affects this mode's circular mine blast target, not its missiles. */
+/** Natural 1 affects this mode's circular mine blast target, independently of difficulty. */
 export function spaceBomberBlastRadius(config: FlightConfig): number {
   return SPACE_BOMBER_BLAST_RADIUS * (config.naturalOne ? BOMBER_IMPAIRMENT_SCALE : 1);
 }
 
 export function createSpaceBattleBomber(): SpaceBattleBomberState {
   return {
-    x: WIDTH / 2, y: HEIGHT * 0.56, aimX: WIDTH / 2, aimY: 170, elapsed: 0, hull: 3, hits: 0, destroyed: 0,
-    missilesFired: 0, minesPlaced: 0, missileCooldown: 0, mineCooldown: 0,
-    invulnerable: 0, forwardSpawnIn: 0.65, pursuerSpawnIn: 1.1,
-    enemies: [], missiles: [], mines: [], explosions: [], nextId: 1,
+    x: WIDTH / 2, y: HEIGHT * 0.56, elapsed: 0, hull: 3, hits: 0, destroyed: 0,
+    minesPlaced: 0, mineCooldown: 0,
+    invulnerable: 0, pursuerSpawnIn: 1.1,
+    enemies: [], mines: [], explosions: [], nextId: 1,
     impactFlash: 0, finished: false,
   };
 }
@@ -908,30 +875,16 @@ export function stepSpaceBattleBomber(
 ): void {
   if (s.finished) return;
   dt = Math.min(Math.max(dt, 0), 0.05, DURATION - s.elapsed);
+  if (dt <= 0) return;
   const tuning = SPACE_BATTLE_BOMBER_TUNING[difficultyFor(config.total)];
   s.elapsed += dt;
   s.invulnerable = Math.max(0, s.invulnerable - dt);
-  s.missileCooldown = Math.max(0, s.missileCooldown - dt);
   s.mineCooldown = Math.max(0, s.mineCooldown - dt);
   s.impactFlash = Math.max(0, s.impactFlash - dt);
   for (const explosion of s.explosions) explosion.remaining -= dt;
   s.explosions = s.explosions.filter(explosion => explosion.remaining > 0);
 
   s.x = automaticShipX(s.elapsed);
-  aimBomber(s, input, dt, 18);
-
-  if (input.firing && s.missileCooldown <= 0) {
-    const dx = s.aimX - s.x;
-    const dy = Math.min(s.y - 34, s.aimY) - (s.y - 22);
-    const length = Math.hypot(dx, dy);
-    s.missiles.push({
-      id: s.nextId++, x: s.x, y: s.y - 22, radius: 5, speed: SPACE_BOMBER_MISSILE_SPEED,
-      vx: dx / length * SPACE_BOMBER_MISSILE_SPEED,
-      vy: dy / length * SPACE_BOMBER_MISSILE_SPEED,
-    });
-    s.missilesFired++;
-    s.missileCooldown = SPACE_BOMBER_MISSILE_COOLDOWN;
-  }
   if (input.placing && s.mineCooldown <= 0) {
     s.mines.push({
       id: s.nextId++, ...mineDropPosition(s), blastRadius: spaceBomberBlastRadius(config),
@@ -941,39 +894,26 @@ export function stepSpaceBattleBomber(
     s.mineCooldown = SPACE_BOMBER_MINE_COOLDOWN;
   }
 
-  const spawnEnemy = (approach: SpaceBomberEnemy['approach']) => {
-    const radius = 16;
-    const x = radius + random() * (WIDTH - radius * 2);
-    const speed = tuning.enemySpeed * (0.88 + random() * 0.24);
-    s.enemies.push({
-      id: s.nextId++, x, y: approach === 'forward' ? -radius - 4 : HEIGHT + radius + 4,
-      radius, speed, vx: (random() - 0.5) * 36, shotIn: Infinity, approach,
-    });
-  };
-  s.forwardSpawnIn -= dt;
-  while (s.forwardSpawnIn <= 0) { spawnEnemy('forward'); s.forwardSpawnIn += tuning.forwardSpawnEvery; }
-  s.pursuerSpawnIn -= dt;
-  while (s.pursuerSpawnIn <= 0) { spawnEnemy('pursuer'); s.pursuerSpawnIn += tuning.pursuerSpawnEvery; }
-
+  // Each ship commits to the predicted intercept column at its actual spawn time.
+  // Advance existing pursuers first, so a new ship gets no unaccounted extra movement.
   for (const enemy of s.enemies) {
-    enemy.x += enemy.vx * dt;
-    enemy.y += enemy.speed * dt * (enemy.approach === 'forward' ? 1 : -1);
-    if (enemy.x < enemy.radius || enemy.x > WIDTH - enemy.radius) {
-      enemy.x = Math.max(enemy.radius, Math.min(WIDTH - enemy.radius, enemy.x));
-      enemy.vx *= -1;
-    }
+    enemy.y -= enemy.speed * dt;
+    enemy.warningRemaining = Math.max(0, enemy.warningRemaining - dt);
   }
-  for (const missile of s.missiles) { missile.x += missile.vx * dt; missile.y += missile.vy * dt; }
+  s.pursuerSpawnIn -= dt;
+  while (s.pursuerSpawnIn <= 0) {
+    const radius = 16;
+    const speed = tuning.enemySpeed * (0.88 + random() * 0.24);
+    const age = -s.pursuerSpawnIn;
+    const spawnY = HEIGHT + radius + 4;
+    const interceptTime = s.elapsed - age + (spawnY - s.y) / speed;
+    s.enemies.push({ id: s.nextId++, x: automaticShipX(interceptTime),
+      y: spawnY - speed * age, radius, speed, warningRemaining: Math.max(0, 0.8 - age) });
+    s.pursuerSpawnIn += tuning.pursuerSpawnEvery;
+  }
   for (const mine of s.mines) { mine.armIn -= dt; mine.expiresIn -= dt; }
 
   const destroyedIds = new Set<number>();
-  const usedMissiles = new Set<number>();
-  for (const missile of s.missiles) {
-    const enemy = s.enemies.find(candidate => !destroyedIds.has(candidate.id)
-      && Math.hypot(candidate.x - missile.x, candidate.y - missile.y) <= candidate.radius + missile.radius);
-    if (enemy) { destroyedIds.add(enemy.id); usedMissiles.add(missile.id); }
-  }
-
   const detonatedMines = new Set<number>();
   for (const mine of s.mines) {
     if (mine.armIn > 0 || mine.expiresIn <= 0) continue;
@@ -988,7 +928,6 @@ export function stepSpaceBattleBomber(
   }
   s.destroyed += destroyedIds.size;
   s.enemies = s.enemies.filter(enemy => !destroyedIds.has(enemy.id));
-  s.missiles = s.missiles.filter(missile => missile.y + missile.radius >= 0 && missile.x >= -20 && missile.x <= WIDTH + 20 && !usedMissiles.has(missile.id));
   s.mines = s.mines.filter(mine => mine.expiresIn > 0 && !detonatedMines.has(mine.id));
 
   const colliding = s.enemies.filter(enemy =>
@@ -1003,8 +942,7 @@ export function stepSpaceBattleBomber(
     const collidedIds = new Set(colliding.map(enemy => enemy.id));
     s.enemies = s.enemies.filter(enemy => !collidedIds.has(enemy.id));
   }
-  s.enemies = s.enemies.filter(enemy => enemy.approach === 'forward'
-    ? enemy.y - enemy.radius < HEIGHT + 20 : enemy.y + enemy.radius > -20);
+  s.enemies = s.enemies.filter(enemy => enemy.y + enemy.radius > -20);
   s.finished = s.hull <= 0 || s.elapsed >= DURATION;
 }
 
@@ -1019,7 +957,7 @@ export function spaceBattleBomberResultText(config: FlightConfig, s: SpaceBattle
     `Natural 1: ${config.naturalOne ? 'Yes — mine blast target has half normal area' : 'No'}`,
     `Score: ${spaceBattleBomberScoreFor(s)} • Time: ${s.elapsed.toFixed(1)}s • Destroyed: ${s.destroyed}`,
     ratingReportText('space-bomber', spaceBattleBomberScoreFor(s), s.hull <= 0),
-    `Missiles: ${s.missilesFired} • Mines: ${s.minesPlaced} • Hull: ${s.hull}/3 • Hits: ${s.hits}`,
+    `Mines: ${s.minesPlaced} • Hull: ${s.hull}/3 • Hits: ${s.hits}`,
     s.hull > 0 ? 'Bombing run complete' : 'Hull depleted',
     'GM determines campaign outcome.',
   ].join('\n');
@@ -1033,14 +971,15 @@ export const SPACE_LIFE_PLATFORMS = [
   { x1: 38, x2: 254, y: 190 },
 ] as const;
 export const SPACE_LIFE_MAX_INTEGRITY = 5;
+export const SPACE_LIFE_REPAIR_SECONDS = 1.5;
 export const SPACE_LIFE_TUNING: Record<Difficulty, { spawnEvery: number; fireLifetime: number; sparkEvery: number; sparkSpeed: number }> = {
   'Very Easy': { spawnEvery: 5.2, fireLifetime: 11, sparkEvery: 3.2, sparkSpeed: 105 },
   Easy: { spawnEvery: 4.5, fireLifetime: 10, sparkEvery: 2.8, sparkSpeed: 125 },
   Medium: { spawnEvery: 3.8, fireLifetime: 9, sparkEvery: 2.4, sparkSpeed: 145 },
   Hard: { spawnEvery: 3.2, fireLifetime: 8, sparkEvery: 2, sparkSpeed: 165 },
 };
-export type SpaceLifeInput = { x: number; jump: boolean; repair: boolean };
-export type SpaceLifeFire = { id: number; x: number; y: number; kind: 'ordinary' | 'electrical'; remaining: number; arming?: number; sparkIn?: number };
+export type SpaceLifeInput = { x: number; jump: boolean };
+export type SpaceLifeFire = { id: number; x: number; y: number; kind: 'ordinary' | 'electrical'; remaining: number; arming?: number; sparkIn?: number; repairProgress?: number };
 export type SpaceLifeIcon = { id: number; x: number; y: number; kind: 'heart' | 'overload'; remaining: number };
 export type SpaceLifeSpark = { id: number; x: number; y: number; vx: number; remaining: number };
 export const SPACE_LIFE_SPARK_RADIUS = 4;
@@ -1050,6 +989,7 @@ export interface SpaceLifeState {
   x: number; y: number; vy: number; grounded: boolean; elapsed: number; integrity: number;
   ordinaryCleared: number; electricalRepaired: number; overloadHits: number; heartsCollected: number;
   firesExpired: number; fireIn: number; iconIn: number; iconIndex: number; nextId: number;
+  repairFlashes: { x: number; y: number; remaining: number }[];
   fires: SpaceLifeFire[]; icons: SpaceLifeIcon[]; sparks: SpaceLifeSpark[];
   sparkHits: number; fireContactHits: number; invulnerable: number; finished: boolean;
 }
@@ -1063,7 +1003,7 @@ export function createSpaceLifeSupport(): SpaceLifeState {
   return { x: 150, y: 520, vy: 0, grounded: true, elapsed: 0, integrity: SPACE_LIFE_MAX_INTEGRITY,
     ordinaryCleared: 0, electricalRepaired: 0, overloadHits: 0, heartsCollected: 0,
     firesExpired: 0, fireIn: 1.5, iconIn: 0.8, iconIndex: 0, nextId: 1,
-    fires: [], icons: [], sparks: [], sparkHits: 0, fireContactHits: 0, invulnerable: 0, finished: false };
+    repairFlashes: [], fires: [], icons: [], sparks: [], sparkHits: 0, fireContactHits: 0, invulnerable: 0, finished: false };
 }
 function spaceLifeSparkContact(x0: number, y0: number, x1: number, y1: number): boolean {
   const r = SPACE_LIFE_SPARK_RADIUS;
@@ -1095,6 +1035,8 @@ export function stepSpaceLifeSupport(
   if (s.finished) return;
   dt = Math.min(Math.max(dt, 0), 0.05, DURATION - s.elapsed);
   if (dt <= 0) return;
+  for (const flash of s.repairFlashes) flash.remaining -= dt;
+  s.repairFlashes = s.repairFlashes.filter(flash => flash.remaining > 0);
   const previousX = s.x, previousFeet = s.y;
   const existingSparks = new Set(s.sparks.map(spark => spark.id));
   const tuning = SPACE_LIFE_TUNING[difficultyFor(config.total)];
@@ -1122,10 +1064,20 @@ export function stepSpaceLifeSupport(
       fire.remaining = 0; s.ordinaryCleared++;
     }
   }
-  if (input.repair && s.grounded) {
-    const panel = s.fires.find(fire => fire.kind === 'electrical' &&
-      fire.y === s.y && Math.abs(fire.x - s.x) <= 35);
-    if (panel) { panel.remaining = 0; s.electricalRepaired++; }
+  if (s.grounded) {
+    const panel = s.fires.filter(fire => fire.kind === 'electrical' && fire.remaining > 0 &&
+      fire.y === s.y && Math.abs(fire.x - s.x) <= 35)
+      .sort((a, b) => Math.abs(a.x - s.x) - Math.abs(b.x - s.x) || a.id - b.id)[0];
+    if (panel) {
+      // Expiry keeps running; a repair must finish before (or exactly at) its deadline.
+      const progress = panel.repairProgress ?? 0;
+      const needed = SPACE_LIFE_REPAIR_SECONDS - progress;
+      panel.repairProgress = Math.min(SPACE_LIFE_REPAIR_SECONDS, progress + Math.min(dt, panel.remaining));
+      if (needed <= Math.min(dt, panel.remaining) + 1e-9) {
+        panel.remaining = 0; s.electricalRepaired++;
+        s.repairFlashes.push({ x: panel.x, y: panel.y, remaining: 0.4 });
+      }
+    }
   }
   s.fires = s.fires.filter(fire => fire.remaining > 0);
 
@@ -1136,7 +1088,7 @@ export function stepSpaceLifeSupport(
       .find(candidate => !s.fires.some(fire => fire.x === candidate.x && fire.y === candidate.y));
     if (site) s.fires.push({ id: s.nextId++, ...site,
       kind: random() < 0.4 ? 'electrical' : 'ordinary', remaining: tuning.fireLifetime,
-      arming: SPACE_LIFE_FIRE_WARNING + dt, sparkIn: 1 + dt });
+      arming: SPACE_LIFE_FIRE_WARNING + dt, sparkIn: 1 + dt, repairProgress: 0 });
     s.fireIn += tuning.spawnEvery;
   }
   for (const fire of s.fires) {

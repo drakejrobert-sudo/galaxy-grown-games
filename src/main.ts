@@ -37,9 +37,9 @@ app.innerHTML = `
   <div class="play-heading"><div><p id="mode-label" class="eyebrow">ASTEROID FIELD / PILOT</p><h2 id="mode-heading">Keep your hull intact.</h2></div><div class="play-actions"><button id="pause" type="button">Pause</button></div></div>
   <div class="hud"><div><span>TIME LEFT</span><strong id="time">60s</strong></div><div><span id="health-label">HULL</span><strong id="hull">3 / 3</strong></div><div id="fuel-wrap" hidden><span>FUEL</span><strong id="fuel">18.0s</strong></div><div><span>SCORE</span><strong id="score">300</strong></div></div>
   <p id="flight-status" class="flight-status"></p>
-  <div class="flight-stage"><div class="flight-wrap"><div id="canvas" aria-label="Asteroid field. Steer with arrow keys, WASD, or touch." role="application" tabindex="0"></div><div id="pause-overlay" hidden><h2>Challenge paused</h2><p>Your timer is stopped.</p><button id="resume" class="primary" type="button">Resume challenge</button><button id="abandon" type="button">Back to setup</button></div></div><div id="action-rail" class="action-rail" hidden><button id="fire-action" class="action action-fire" type="button" hidden>Fire missile</button><button id="action" class="action action-mine" type="button" hidden>Drop mine</button></div></div>
+  <div class="flight-stage"><div class="flight-wrap"><div id="canvas" aria-label="Asteroid field. Steer with arrow keys, WASD, or touch." role="application" tabindex="0"></div><div id="pause-overlay" hidden><h2>Challenge paused</h2><p>Your timer is stopped.</p><button id="resume" class="primary" type="button">Resume challenge</button><button id="abandon" type="button">Back to setup</button></div></div><div id="action-rail" class="action-rail" hidden><button id="fire-action" class="action action-fire" type="button" hidden>Fire</button><button id="action" class="action action-mine" type="button" hidden>Drop mine</button></div></div>
   <div id="route-controls" class="route-controls" aria-label="Life Support routing switch" hidden><button id="route-thrusters" type="button" aria-pressed="false"><span>▲</span>Thrusters<small>1</small></button><button id="route-shields" type="button" aria-pressed="true"><span>●</span>Shields<small>2</small></button><button id="route-guns" type="button" aria-pressed="false"><span>✛</span>Guns<small>3</small></button></div>
-  <div id="platform-controls" class="platform-controls" aria-label="Platformer controls" hidden><button id="move-left" type="button">◀ Left</button><button id="move-right" type="button">Right ▶</button><button id="jump" type="button">Jump</button><button id="repair" type="button">Repair</button></div>
+  <div id="platform-controls" class="platform-controls" aria-label="Platformer controls" hidden><button id="move-left" type="button">◀ Left</button><button id="move-right" type="button">Right ▶</button><button id="jump" type="button">Jump</button></div>
   <p id="play-help" class="help center">Avoid asteroids · Arrow keys / WASD · Hold and drag to steer</p>
 </section>
 <section id="results" class="panel results" hidden>
@@ -67,9 +67,9 @@ const gunnerInput = createGunnerInput(canvas);
 const spaceGunnerInput = createSpaceGunnerInput(canvas, fireAction);
 const spaceGunnerHelp = 'Ship flies automatically. Touch/mouse aims; touch aim never fires. Hold Fire to shoot. Mouse primary click also fires. Arrow keys / WASD aims; Space / Enter fires.';
 const bomberInput = createBomberInput(canvas, action);
-const spaceBomberInput = createSpaceBomberInput(canvas, fireAction, action);
+const spaceBomberInput = createSpaceBomberInput(action);
 const lifeSupportInput = createLifeSupportInput(routeButtons);
-const spaceLifeInput = createSpaceLifeInput({ left: get('move-left'), right: get('move-right'), jump: get('jump'), repair: get('repair') });
+const spaceLifeInput = createSpaceLifeInput({ left: get('move-left'), right: get('move-right'), jump: get('jump') });
 let game: Phaser.Game | null = null;
 let loading = false;
 let launchPending = false;
@@ -126,10 +126,10 @@ function refreshSetup() {
       ? selectedSituation === 'Space Battle' ? spaceGunnerHelp : 'Ship flies automatically. Touch: tap, hold, or drag to aim and fire. Mouse: move to aim, then click or hold to fire.'
       : selectedRole === 'Bomber'
         ? selectedSituation === 'Space Battle'
-          ? 'Ship flies automatically. Touch, mouse, or Arrow keys / WASD aims missiles ahead; Space or Fire missile launches from the nose. Enter, Shift, or Drop mine releases a mine directly behind the ship.'
+          ? 'Ship weaves automatically. Pursuers commit to straight approaches from behind. Press Space/Enter or tap Drop mine once per release; time mines to intercept their paths. Wait for the amber ready light.'
           : 'Ship flies automatically. Time your drops as the ship sweeps across the field. Hold Drop mine, Space, or Enter to release mines directly behind the ship. Only ship collisions cost hull; missed asteroids pass safely.'
         : selectedSituation === 'Space Battle'
-          ? 'Move with Left/Right or A/D, jump with Up/W/Space, and repair nearby electrical panels with E/Enter. On touch screens, use the four controls below the playfield.'
+          ? 'Move with Left/Right or A/D and jump with Up/W/Space. Stand beside a blue panel for 1.5 seconds to repair it automatically; progress is kept when you move away. Touch uses Left, Right, and Jump.'
           : 'Use Left/Right or A/D to turn the routing switch. Use 1, 2, or 3 to choose a system directly. Touch players can tap a system button.';
   get('error').textContent = '';
 }
@@ -168,9 +168,10 @@ function preparePlayLayout() {
   get('play').setAttribute('data-role', role);
   get('play').setAttribute('data-situation', situation);
   action.hidden = role !== 'Bomber';
+  action.textContent = 'Drop mine';
   const spaceGunner = situation === 'Space Battle' && role === 'Gunner';
-  fireAction.hidden = !spaceGunner && (role !== 'Bomber' || situation !== 'Space Battle');
-  fireAction.textContent = spaceGunner ? 'Fire' : 'Fire missile';
+  fireAction.hidden = !spaceGunner;
+  fireAction.textContent = 'Fire';
   actionRail.hidden = role !== 'Bomber' && !spaceGunner;
   routeControls.hidden = role !== 'Life Support' || situation !== 'Asteroid Field';
   platformControls.hidden = role !== 'Life Support' || situation !== 'Space Battle';
@@ -208,16 +209,16 @@ function launch() {
       ? situation === 'Space Battle' ? spaceGunnerHelp : 'Automatic flight · Touch to aim/fire · Mouse to aim, click to fire'
       : role === 'Bomber'
         ? situation === 'Space Battle'
-          ? 'Automatic flight · Aim missiles ahead: touch, mouse, arrows/WASD · Space: fire · Enter/Shift: drop mine behind ship'
+          ? 'Automatic weaving · Pursuers approach from behind · Space/Enter or Drop mine: one mine per press · Amber means ready'
           : 'Automatic flight · Time your mine drops · Space / Enter or Drop mine releases behind ship · Only ship hits cost hull'
         : situation === 'Space Battle'
-          ? 'Stomp orange fires; side contact hurts · Blue panels warn then shoot sparks: jump/dodge, stand nearby and Repair · Hearts heal · Avoid overloads'
+          ? 'Stomp orange fires; side contact hurts · Blue panels warn then shoot sparks: jump/dodge, stand nearby for 1.5s to repair · Progress is kept · Hearts heal · Avoid overloads'
           : 'Match packet symbols · Left/Right or A/D · 1/2/3 · Tap a system';
   canvas.setAttribute('aria-label', situation === 'Space Battle'
     ? role === 'Gunner' ? `Space battle gunner station. ${spaceGunnerHelp}` : role === 'Bomber'
-      ? 'Space battle bomber station. Ship flies automatically. Aim missiles ahead with touch, mouse, arrow keys or WASD. Space fires from the nose; Enter or Shift drops mines directly behind the ship. Touch uses two weapon buttons.'
+      ? 'Space battle bomber station. Ship weaves automatically. Pursuers approach from behind on fixed paths. Press Space or Enter, or tap Drop mine, for one mine per press when ready. Mines drop directly behind the ship.'
       : role === 'Life Support'
-        ? 'Space battle life support. Move left or right and jump between platforms. Stomp orange fires from above; side contact hurts. Dodge or jump over sparks from blue panels; repair panels while standing nearby. Touch controls are below the playfield.'
+        ? 'Space battle life support. Move left or right and jump between platforms. Stomp orange fires from above; side contact hurts. Dodge or jump over sparks from blue panels; automatically repair panels by standing nearby for 1.5 seconds; progress is kept when leaving. Touch controls are below the playfield.'
         : 'Space battle pilot station. Collect fuel and evade enemy ships and fire with arrow keys, WASD, or touch.'
     : role === 'Pilot' ? 'Asteroid field. Steer with arrow keys, WASD, or touch.'
     : role === 'Gunner' ? 'Asteroid gunner station. Ship flies automatically. Tap, hold, or drag with touch; move a mouse to aim and click or hold to fire.'
@@ -363,6 +364,7 @@ scene.onSpacePilotStep = s => {
   }
 };
 scene.onSpaceBomberStep = s => {
+  action.textContent = s.mineCooldown <= 0 ? 'Drop mine · Ready' : 'Mine cooling';
   get('time').textContent = `${Math.ceil(DURATION - s.elapsed)}s`;
   get('hull').textContent = `${s.hull} / 3`;
   get('score').textContent = String(spaceBattleBomberScoreFor(s));

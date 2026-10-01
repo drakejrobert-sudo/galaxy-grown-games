@@ -1,5 +1,7 @@
 # Issue #10 — Space Battle / Life Support closeout
 
+> Historical record: Space Battle Bomber's missile controls and Life Support's Repair action have been replaced. Use [the station simplification checklist](space-battle-stations-playtest.md) for current acceptance; observations below retain their original meaning.
+
 Status: **device playtest pending**. PR #36 merged the playable mode into `main`. The automated checks below validate the implemented rules and input mappings; they do not establish real iPhone or iPad Safari behavior. Leave issue #10 open until the device checks pass and Drake approves the closeout.
 
 ## Merged implementation
