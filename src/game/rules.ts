@@ -858,7 +858,8 @@ export function spaceBomberBlastRadius(config: FlightConfig): number {
 
 export function createSpaceBattleBomber(): SpaceBattleBomberState {
   return {
-    x: WIDTH / 2, y: HEIGHT * 0.56, elapsed: 0, hull: 3, hits: 0, destroyed: 0,
+    // Upper-quarter station leaves room to read pursuers and lay mines. Provisional tuning.
+    x: WIDTH / 2, y: HEIGHT * 0.25, elapsed: 0, hull: 3, hits: 0, destroyed: 0,
     minesPlaced: 0, mineCooldown: 0,
     invulnerable: 0, pursuerSpawnIn: 1.1,
     enemies: [], mines: [], explosions: [], nextId: 1,
