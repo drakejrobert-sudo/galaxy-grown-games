@@ -27,7 +27,7 @@ test('seeded calibration preserves unchanged references and records redesigned s
       assert.deepEqual({ low: Number(low), high: Number(high) }, SCORE_ANCHORS[mode]);
     } else if (mode === 'space-bomber') {
       assert.deepEqual(SCORE_ANCHORS[mode], { low: 64, high: 3300 });
-      assert.deepEqual([min,low,median,high,max].map(Number), [32,37,361,5100,6100]);
+      assert.deepEqual([min,low,median,high,max].map(Number), [32,37,367,5100,6100]);
     } else if (mode === 'space-life-support') {
       assert.deepEqual(SCORE_ANCHORS[mode], { low: 130, high: 1350 });
       // Observed synthetic outcomes, not live rating anchors; the assertion above keeps 130–1350 fixed.

@@ -918,7 +918,6 @@ export function stepSpaceBattleBomber(
   if (dt <= 0) return;
   const tuning = SPACE_BATTLE_BOMBER_TUNING[difficultyFor(config.total)];
   const oldShipX = s.x, oldGrace = s.invulnerable;
-  const previousMines = new Set(s.mines.map(mine => mine.id));
   s.elapsed += dt;
   s.invulnerable = Math.max(0, s.invulnerable - dt);
   s.mineCooldown = Math.max(0, s.mineCooldown - dt);
@@ -978,10 +977,8 @@ export function stepSpaceBattleBomber(
   };
   const contacts: { time: number; x: number; y: number; mine: SpaceBomberMine; enemy: SpaceBomberEnemy }[] = [];
   for (const mine of s.mines) {
-    // Travelling launches start moving next step. Rack placements are already armed
-    // and must defend this frame, before a pursuer crosses into the ship.
-    const existing = previousMines.has(mine.id);
-    if (!existing && mine.armIn > 0) continue;
+    // Releases start at time zero of this step, so movement and contact defense
+    // include the release frame for travelling and stationary mines alike.
     const expiresAt = mine.expiresIn, flight = mine.flight;
     const oldX = mine.x, oldY = mine.y;
     const landsAt = flight ? (flight.remaining <= dt + 1e-9 ? Math.min(dt, Math.max(0, flight.remaining)) : flight.remaining) : 0;
@@ -1003,7 +1000,7 @@ export function stepSpaceBattleBomber(
         mine.armIn = 0;
       } else mine.armIn = flight.remaining;
     } else mine.armIn = Math.max(0, mine.armIn - dt);
-    if (existing) mine.expiresIn -= dt; // Keep the initial launch lifetime intact.
+    mine.expiresIn -= dt;
     // Sweep relative mine/enemy motion separately before and after landing.
     for (const enemy of s.enemies) {
       const path = paths.get(enemy.id)!;
