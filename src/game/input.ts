@@ -215,6 +215,9 @@ export function createSpaceBomberInput(surface: HTMLElement, action: HTMLElement
       if (turn) input.turn = turn;
       if (straightQueued || keys.has('ArrowDown') || keys.has('KeyS')) input.straight = true;
       keyboardQueued = false; straightQueued = false; queued.clear(); launch = undefined;
+      // Once a gesture ends (or hover stops moving), retain its direction/range in simulation.
+      // Replaying the world point would silently change range as the automatic ship weaves.
+      if (gesture === null) aim = undefined;
       return input;
     },
   };

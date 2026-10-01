@@ -121,7 +121,7 @@ function pilotBomberFixtures(scene: any) {
   scene.bomber.asteroids = [{ id: 1, x: 240, y: 200, radius: 22, speed: 100 }];
   scene.spaceBomber.aimAngle = 1.2;
   scene.spaceBomber.passes = [{id:9,x:300,y:125,radius:16,speed:100,warningRemaining:0,side:1,remaining:.15}];
-  scene.spaceBomber.mines[0].flight = {x:90,y:260,targetX:140,targetY:330,remaining:.1};
+  scene.spaceBomber.mines[0].flight = {x:90,y:260,targetX:140,targetY:330,duration:.2,remaining:.1};
   scene.spaceBomber.enemies = [
     { id: 1, x: 140, y: 140, radius: 20, speed: 100, warningRemaining: .4 },
     { id: 2, x: 350, y: 440, radius: 20, speed: 100, warningRemaining: .4 },
@@ -209,4 +209,17 @@ test('repair progress and completion feedback render frozen without moving panel
   freeze(h.scene.spaceLife); h.paint();
   assert.ok(h.commands.some(c => c[0] === 'fillRect' && c[1] === 186 && c[2] === 370 && c[3] === 19));
   assert.ok(h.commands.some(c => c[0] === 'strokeCircle' && c[1] === 95 && c[2] === 176 && c[3] === 24));
+});
+
+test('short-launch previews show the actual selected landing point and travelling mines look contact-live',()=>{
+  const h=harness();h.scene.situation='Space Battle';h.scene.role='Bomber';
+  for(const naturalOne of [false,true]) for(const distance of [0,25,50,100]) {
+    h.scene.config.naturalOne=naturalOne;h.scene.spaceBomber.aimDistance=distance;h.scene.spaceBomber.aimAngle=.4;
+    h.paint();const rack=rules.mineDropPosition(h.scene.spaceBomber),landing=rules.spaceBomberLanding(h.scene.spaceBomber);
+    assert.ok(h.commands.some(c=>c[0]==='lineBetween'&&c[1]===rack.x&&c[2]===rack.y&&c[3]===landing.x&&c[4]===landing.y));
+    assert.ok(h.commands.some(c=>c[0]==='strokeCircle'&&c[1]===landing.x&&c[2]===landing.y&&c[3]===rules.spaceBomberBlastRadius(h.scene.config)));
+  }
+  const mine={id:1,x:50,y:200,blastRadius:58,armIn:.1,expiresIn:4.5};
+  h.commands.length=0;h.scene.paintMine(h.scene.add.graphics(),mine,0,4.5,true);
+  assert.ok(h.commands.some(c=>c[0]==='fillCircle'&&c[1]===50&&c[2]===200&&c[3]===3));
 });

@@ -6,7 +6,9 @@ import { createSpaceBattleBomber, stepSpaceBattleBomber, automaticShipX, mineDro
 const idle = { placing: false };
 function quiet() { const s = createSpaceBattleBomber(); s.pursuerSpawnIn = 100; return s; }
 function advance(s: SpaceBattleBomberState, seconds: number, config = {total:10,naturalOne:false}) {
-  for (let i = 0; i < Math.round(seconds / .01); i++) stepSpaceBattleBomber(s, config, idle, .01);
+  while (seconds > 1e-9) {
+    const dt=Math.min(.01,seconds); stepSpaceBattleBomber(s,config,idle,dt); seconds-=dt;
+  }
 }
 for (const total of [5,6,11,16]) for (const naturalOne of [false,true]) {
   const config = {total,naturalOne};
@@ -44,12 +46,12 @@ for (const total of [5,6,11,16]) for (const naturalOne of [false,true]) {
     stepSpaceBattleBomber(s, config, {placing:true}, .01); assert.equal(s.minesPlaced, 2);
     advance(s, 4.6, config); assert.equal(s.mines.length, 0);
     const fuse = quiet(); stepSpaceBattleBomber(fuse, config, {placing:true}, .01);
-    const m = fuse.mines[0], target = spaceBomberLanding(fuse);
+    advance(fuse, .21, config);
+    const m = fuse.mines[0], target = {x:m.x,y:m.y};
     fuse.enemies = [{id:90,x:target.x,y:target.y,radius:16,speed:0,warningRemaining:0},
       {id:91,x:target.x+m.blastRadius-1,y:target.y,radius:16,speed:0,warningRemaining:0},
       {id:92,x:target.x+m.blastRadius+1,y:target.y,radius:16,speed:0,warningRemaining:0}];
-    advance(fuse, .1, config); assert.equal(fuse.destroyed, 0);
-    advance(fuse, .11, config); assert.equal(fuse.destroyed, 2);
+    advance(fuse, .01, config); assert.equal(fuse.destroyed, 2);
     assert.equal(fuse.mines.length, 0); assert.equal(fuse.explosions[0].radius,m.blastRadius);
     assert.deepEqual(fuse.enemies.map(e=>e.id),[92]);
   });
@@ -102,8 +104,6 @@ for(const total of [5,6,11,16]) for(const naturalOne of [false,true]) {
     const s=quiet(); s.aimAngle=.6;
     stepSpaceBattleBomber(s,config,{placing:true},.01);
     const mine=s.mines[0], rack={x:mine.x,y:mine.y}, target=spaceBomberLanding(s);
-    // An enemy on the launch path does not detonate an unarmed mine.
-    s.enemies=[enemy(100,rack.x,rack.y+10)];
     advance(s,.1,config);
     assert.equal(s.destroyed,0); assert.equal(s.mines.length,1);
     assert.ok(Math.abs(mine.x-(rack.x+target.x)/2)<1e-9);
@@ -163,13 +163,103 @@ for(const total of [5,6,11,16]) for(const naturalOne of [false,true]) {
   });
 }
 
-test('a mine ignores pre-landing swept contact but catches a contact after landing within the same step',()=>{
+test('travel and post-landing contacts both detonate within a split step',()=>{
   const config={total:10,naturalOne:false};
   for(const after of [false,true]) {
     const s=quiet(); s.mines=[{id:1,x:240,y:250,blastRadius:58,armIn:.03,expiresIn:1,
-      flight:{x:240,y:174,targetX:240,targetY:260,remaining:.03}}];
+      flight:{x:240,y:174,targetX:240,targetY:260,duration:.2,remaining:.03}}];
     s.enemies=[{id:2,x:240,y:after?330:290,radius:16,speed:2000,warningRemaining:0}];
     stepSpaceBattleBomber(s,config,idle,.05);
-    assert.equal(s.destroyed,after?1:0);
+    assert.equal(s.destroyed,1);
   }
 });
+
+for(const total of [5,6,11,16]) for(const naturalOne of [false,true]) {
+  const config={total,naturalOne};
+  test(`variable distances and retained shortcuts: ${total}/${naturalOne}`,()=>{
+    for(const distance of [0,25,50,100,180]) {
+      const s=quiet(), x=automaticShipX(.01), point={x,y:s.y+34+distance};
+      stepSpaceBattleBomber(s,config,{placing:false,aim:point},.01);
+      const selected=Math.min(distance,100);
+      assert.ok(Math.abs(s.aimDistance-selected)<1e-9);
+      const preview=spaceBomberLanding(s);
+      assert.deepEqual(preview,{x,y:s.y+34+selected});
+      stepSpaceBattleBomber(s,config,{placing:true},.01);
+      const mine=s.mines[0], duration=selected/500;
+      assert.equal(mine.armIn,duration);
+      assert.equal(mine.flight?.duration??0,duration);
+      if(selected===0) assert.equal(mine.flight,undefined);
+      const target={x:mine.flight?.targetX??mine.x,y:mine.flight?.targetY??mine.y};
+      const origin={x:mine.x,y:mine.y};
+      if(selected>0){
+        advance(s,duration/2,config);
+        assert.ok(Math.abs(Math.hypot(mine.x-origin.x,mine.y-origin.y)-selected/2)<1e-8);
+        advance(s,duration/2,config); assert.equal(mine.armIn,0); assert.equal(mine.flight,undefined);
+      }
+      assert.deepEqual({x:mine.x,y:mine.y},target);
+      assert.ok(Math.abs(mine.expiresIn-(4.5-duration))<1e-8);
+      stepSpaceBattleBomber(s,config,{placing:false,turn:1},.05);
+      assert.ok(Math.abs(s.aimDistance-selected)<1e-9);
+      stepSpaceBattleBomber(s,config,{placing:false,straight:true},.01);
+      assert.ok(Math.abs(s.aimDistance-selected)<1e-9);
+      const frozen=JSON.stringify(s);stepSpaceBattleBomber(s,config,{placing:true,aim:{x:0,y:500}},0);
+      assert.equal(JSON.stringify(s),frozen);
+      advance(s,1,config);stepSpaceBattleBomber(s,config,{placing:true},.01);
+      assert.equal(s.minesPlaced,2);assert.equal(s.mines[1].flight?.duration??0,duration);
+      assert.deepEqual({x:mine.x,y:mine.y},target);
+      advance(s,3.6,config);assert.equal(s.mines.length,1, 'first mine expires from launch while the newer mine remains');
+      const retry=createSpaceBattleBomber();assert.equal(retry.aimDistance,100);assert.equal(retry.aimAngle,Math.PI/2);
+    }
+  });
+  test(`moving mine contact center, splash and exactly-once scoring: ${total}/${naturalOne}`,()=>{
+    const s=quiet(); stepSpaceBattleBomber(s,config,{placing:true},.01);
+    const m=s.mines[0], x=m.x, start=m.y, blast=m.blastRadius;
+    // Mine (500px/s down) and ship (100px/s up) contact after (50-24)/600 seconds.
+    const time=26/600, hitY=start+500*time;
+    s.enemies=[
+      {id:100,x,y:start+50,radius:16,speed:100,warningRemaining:0},
+      {id:101,x:x+blast,y:hitY,radius:1,speed:0,warningRemaining:0},
+      {id:102,x:x+blast+1,y:hitY,radius:1,speed:0,warningRemaining:0},
+    ];
+    stepSpaceBattleBomber(s,config,idle,.05);
+    assert.equal(s.destroyed,2);assert.equal(s.mines.length,0);assert.equal(s.hits,0);
+    assert.ok(Math.abs(s.explosions[0].y-hitY)<1e-8);
+    assert.equal(s.explosions[0].x,x);assert.equal(s.explosions[0].radius,blast);
+    assert.deepEqual(s.enemies.map(e=>e.id),[102]);
+    stepSpaceBattleBomber(s,config,idle,.05);assert.equal(s.destroyed,2);
+  });
+  test(`moving sweep cannot skip between-frame contacts or hit retired ships: ${total}/${naturalOne}`,()=>{
+    const s=quiet();stepSpaceBattleBomber(s,config,{placing:true},.01);
+    const m=s.mines[0];
+    // Relative endpoints are 40px and -85px apart: neither touches the 24px fuse.
+    s.enemies=[{id:100,x:m.x,y:m.y+40,radius:16,speed:2000,warningRemaining:0}];
+    stepSpaceBattleBomber(s,config,idle,.05);
+    assert.equal(s.destroyed,1);assert.equal(s.hits,0);assert.ok(s.explosions[0].y<m.y+1);
+    const retired=quiet();stepSpaceBattleBomber(retired,config,{placing:true},.01);
+    const mine=retired.mines[0];
+    retired.passes=[{id:100,x:mine.x,y:mine.y+20,radius:16,speed:100,warningRemaining:0,side:1,remaining:.3}];
+    retired.enemies=[{id:101,x:mine.x,y:retired.y-1,radius:16,speed:0,warningRemaining:0}];
+    advance(retired,.2,config);assert.equal(retired.destroyed,0);assert.equal(retired.hits,0);assert.equal(retired.mines.length,1);
+  });
+}
+
+for(const total of [5,6,11,16]) for(const naturalOne of [false,true]) {
+  test(`flight expiry and competing mine contacts: ${total}/${naturalOne}`,()=>{
+    const config={total,naturalOne};
+    for(const expires of [.02,.04]) {
+      const s=quiet();stepSpaceBattleBomber(s,config,{placing:true},.01);
+      const m=s.mines[0];m.expiresIn=expires;
+      s.enemies=[{id:100,x:m.x,y:m.y+40,radius:16,speed:0,warningRemaining:0}];
+      stepSpaceBattleBomber(s,config,idle,.05);
+      assert.equal(s.destroyed,expires===.04?1:0);assert.equal(s.mines.length,0);
+    }
+    const s=quiet();stepSpaceBattleBomber(s,config,{placing:true},.01);
+    const m=s.mines[0];s.mines.push({...structuredClone(m),id:50});
+    s.enemies=[{id:100,x:m.x,y:m.y+40,radius:16,speed:0,warningRemaining:0},
+      {id:101,x:m.x,y:m.y+45,radius:16,speed:0,warningRemaining:0}];
+    stepSpaceBattleBomber(s,config,idle,.05);
+    assert.equal(s.destroyed,2);assert.equal(s.explosions.length,1);
+    assert.deepEqual(s.mines.map(m=>m.id),[50]);
+    assert.ok(Math.abs(s.explosions[0].y-190)<1e-9,'explosion uses first contact position');
+  });
+}

@@ -20,14 +20,14 @@ test('seeded calibration preserves unchanged references and records redesigned s
   const rows = output.trim().split('\n');
   assert.equal(rows.length, 8);
   for (const row of rows) {
-    const [mode, count, , low, , high] = row.split('\t');
+    const [mode, count, min, low, median, high, max] = row.split('\t');
     assert.equal(Number(count), 288, mode);
     if (mode === 'space-gunner') {
       assert.deepEqual(SCORE_ANCHORS[mode], { low: 37, high: 5000 });
       assert.deepEqual({ low: Number(low), high: Number(high) }, SCORE_ANCHORS[mode]);
     } else if (mode === 'space-bomber') {
       assert.deepEqual(SCORE_ANCHORS[mode], { low: 64, high: 3300 });
-      assert.deepEqual({ low: Number(low), high: Number(high) }, { low: 37, high: 5100 });
+      assert.deepEqual([min,low,median,high,max].map(Number), [32,37,361,5100,6100]);
     } else if (mode === 'space-life-support') {
       assert.deepEqual(SCORE_ANCHORS[mode], { low: 130, high: 1350 });
       // Observed synthetic outcomes, not live rating anchors; the assertion above keeps 130–1350 fixed.
