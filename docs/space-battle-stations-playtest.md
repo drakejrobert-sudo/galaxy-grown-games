@@ -29,3 +29,13 @@ Desktop Chrome with narrow viewports is not physical touch or iPhone/iPad Safari
 - [ ] Life Support: simultaneous movement/jump, fire stomps, hearts, sparks and overloads; stand near panels and read progress. Leave/jump and return to continue. Verify expiry pressure while repairing.
 - [ ] Portrait/landscape on iPhone/iPad, reachable external controls, readable markers/bars, explicit pause, focus-loss pause, resume and fresh retry.
 - [ ] Earn completed and failed runs in both modes, inspect/copy reports, and compare rating to your gameplay judgment before recalibrating anchors.
+
+## Bomber height follow-up
+
+Owner feedback after merging #47 requested more room to drop mines. The Space Battle ship now flies at 25% of playfield height (y = 140), up from 56% (y = 313.6); mines release at y = 174. This adds 173.6px of approach space, approximately 0.86–1.88 seconds across the current speed range. Intercept predictions automatically account for the new height. Other modes and all weapon/enemy cadence rules remain unchanged.
+
+Engineering validation: all 125 tests and the production build passed (existing Phaser chunk advisory). The all-band/Natural-1 pursuit regression now requires over two seconds from spawn to the mine row at base speed, a mine row in the upper third, and correct committed intercept prediction. Updated synthetic Bomber references are documented in scoring calibration; live rating anchors remain unchanged.
+
+Desktop Chrome actual-shell checks at 1100/390/320px verified y = 140, keyboard release at y = 174, positive full-width canvas bounds, no horizontal overflow, readable ship/mine/pursuer artwork, external action placement, and pause/resume. Screenshots were inspected; no browser page/console errors were reported. Physical iPhone/iPad Safari and owner judgment of the increased mine-timing window remain pending under #39.
+
+- [ ] After review/merge and successful automatic deployment, test mine timing on desktop and iPhone/iPad Safari across difficulties, including Natural 1. Confirm the higher ship gives enough useful approach time and the mine preview stays readable throughout the weave.

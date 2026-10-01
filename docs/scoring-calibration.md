@@ -92,3 +92,9 @@ The updated script models routine Bomber taps when ready and engaged taps when a
 | Space Battle / Life Support | 288 | 53 | 79 | 178 | 677 | 1,255 |
 
 These low synthetic results are a calibration warning, not a human balance verdict or replacement rating anchors. Other modes reproduce their existing synthetic references. Collect completed/failed owner runs across bands and Natural 1 before a separately reviewed rating adjustment.
+
+## Higher Space Battle Bomber station
+
+Following owner feedback after the mine-only redesign, the Bomber now sits at y = 140 (25% of the 560px playfield) instead of y = 313.6 (56%). Mines still drop 34px behind it, now at y = 174. This adds 173.6px of approach space, about 0.86–1.88 seconds depending on the pursuer's selected speed. Predicted intercepts use the new ship height automatically. Flight weave, enemy cadence/speed, mine rules, raw points and live anchors are unchanged.
+
+The same 288 synthetic Bomber runs now yield min 29, p10 37, median 144, p90 361, max 578. The other seven modes reproduce their prior results. These scripts still do not establish human timing or rating fairness; owner playtesting and separate rating calibration remain pending.

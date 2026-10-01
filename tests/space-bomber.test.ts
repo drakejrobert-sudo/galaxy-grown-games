@@ -16,6 +16,9 @@ for (const total of [5,6,11,16]) for (const naturalOne of [false,true]) {
     stepSpaceBattleBomber(s, config, idle, .05, () => .5);
     assert.equal(s.enemies.length, 1);
     const enemy = s.enemies[0];
+    const mineApproach = (HEIGHT + 20 - mineDropPosition(s).y) / speed;
+    assert.ok(mineApproach > 2, 'even Hard gives over two seconds from spawn to the mine row');
+    assert.ok(mineDropPosition(s).y < HEIGHT / 3, 'mine row leaves the lower two thirds for approach');
     const arrival = 1.025 + (HEIGHT + 20 - s.y) / speed;
     assert.ok(Math.abs(enemy.x - automaticShipX(arrival)) < 1e-9);
     assert.ok(Math.abs(enemy.y - (HEIGHT + 20 - speed * .025)) < 1e-9);
