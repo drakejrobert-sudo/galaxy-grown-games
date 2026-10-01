@@ -223,3 +223,63 @@ test('short-launch previews show the actual selected landing point and travellin
   h.commands.length=0;h.scene.paintMine(h.scene.add.graphics(),mine,0,4.5,true);
   assert.ok(h.commands.some(c=>c[0]==='fillCircle'&&c[1]===50&&c[2]===200&&c[3]===3));
 });
+
+
+function asteroidGunnerFixture(scene: any) {
+  scene.situation = 'Asteroid Field'; scene.role = 'Gunner'; scene.activeFlight = false;
+  Object.assign(scene.gunner, { elapsed: 8.1, crosshairX: 110, crosshairY: 160, beamTime: .05,
+    beamX: 110, beamY: 160, asteroids: [
+      { id: 1, x: 100, y: 160, radius: 20, speed: 100, hp: 2, maxHp: 2, rotation: .3 },
+      { id: 2, x: 310, y: 250, radius: 25, speed: 100, hp: 1, maxHp: 2, rotation: .7 },
+      { id: 3, x: 220, y: 320, radius: 18, speed: 100, hp: 1, maxHp: 1 },
+    ] });
+}
+
+test('Asteroid Gunner presents actual target selection and distinct bounded shot outcomes', () => {
+  const h = harness(); asteroidGunnerFixture(h.scene);
+  for (const outcome of ['miss', 'armor-hit', 'destroyed']) {
+    h.scene.gunner.shotFeedback = { outcome, x: 200, y: 180, radius: outcome === 'miss' ? 0 : 20, remaining: .12 };
+    freeze(h.scene.gunner); h.paint();
+    assert.ok(!h.commands.some(c => c[0] === 'fillCircle' && c[1] === 110 && c[2] === 160 && c[3] === 5), 'misses never get the old impact dot');
+    if (outcome === 'miss') assert.ok(h.commands.some(c => c[0] === 'strokeCircle' && c[1] === 200 && c[2] === 180));
+    if (outcome === 'armor-hit') assert.ok(h.commands.some(c => c[0] === 'lineStyle' && c[2] === 0xffca83 && Math.abs(Number(c[3]) - 2 / 3) < 1e-10));
+    if (outcome === 'destroyed') assert.ok(h.commands.some(c => c[0] === 'fillTriangle' && Number(c[1]) > 200));
+    assert.ok(h.commands.some(c => c[0] === 'lineBetween' && c[1] === 76 && c[2] === 136 && c[3] === 83));
+    const commands = structuredClone(h.commands); h.commands.length = 0;
+    h.scene.update(9999, 1000); assert.deepEqual(h.commands, commands);
+    h.scene.gunner = { ...h.scene.gunner, finished: true }; h.paint(); assert.deepEqual(h.commands, commands);
+    h.scene.gunner = structuredClone(h.scene.gunner);
+  }
+});
+
+test('Asteroid Gunner cooldown dial uses every band and Natural 1, including edge reticles and open centers', () => {
+  const h = harness(); asteroidGunnerFixture(h.scene);
+  for (const total of [5, 6, 11, 16]) for (const naturalOne of [false, true]) {
+    h.scene.config = { total, naturalOne };
+    for (const fraction of [0, .25, .75, 1]) for (const [x, y] of [[12, 18], [468, rules.GUNNER_DEFENSE_LINE - 8]]) {
+      Object.assign(h.scene.gunner, { crosshairX: x, crosshairY: y, cooldown: rules.gunnerFireEvery(h.scene.config) * (1 - fraction) });
+      h.paint();
+      const arcs = h.commands.filter(c => c[0] === 'arc' && c[1] === x && c[2] === y && c[3] === 21);
+      assert.equal(arcs.length, fraction > 0 ? 2 : 1);
+      if (fraction > 0) assert.ok(Math.abs(Number(arcs[1][5]) - Math.PI * fraction) < 1e-12);
+      assert.ok(!h.commands.some(c => c[0] === 'fillCircle' && c[1] === x && c[2] === y), 'reticle center remains open');
+    }
+  }
+});
+
+test('Asteroid Gunner reduced motion freezes decoration and feedback geometry while gameplay cues remain', () => {
+  const h = harness(); asteroidGunnerFixture(h.scene); h.setReduced(true);
+  for (const outcome of ['miss', 'armor-hit', 'destroyed']) {
+    h.scene.gunner.shotFeedback = { outcome, x: 200, y: 180, radius: 20, remaining: .15 };
+    h.paint();
+    const geometry = h.commands.filter(c => !['lineStyle', 'fillStyle'].includes(String(c[0])));
+    h.scene.gunner.elapsed += 8;
+    h.scene.gunner.shotFeedback.remaining = .05;
+    h.paint();
+    const laterGeometry = h.commands.filter(c => !['lineStyle', 'fillStyle'].includes(String(c[0])));
+    assert.equal(geometry.length, laterGeometry.length);
+    geometry.forEach((c, i) => c.forEach((v, j) => typeof v === 'number'
+      ? assert.ok(Math.abs(v - Number(laterGeometry[i][j])) < 1e-9)
+      : assert.equal(v, laterGeometry[i][j])));
+  }
+});

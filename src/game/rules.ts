@@ -152,6 +152,30 @@ export interface GunnerInput {
   aimY?: number;
   firing: boolean;
 }
+// Provisional cosmetic timing; does not participate in damage, targeting or scoring.
+export const GUNNER_SHOT_FEEDBACK_SECONDS = 0.18;
+export interface GunnerShotFeedback {
+  outcome: 'miss' | 'armor-hit' | 'destroyed';
+  x: number;
+  y: number;
+  radius: number;
+  remaining: number;
+}
+
+/** Nearest eligible center wins; exact ties retain the first asteroid in array order. */
+export function gunnerTargetAt(asteroids: readonly GunnerAsteroid[], x: number, y: number): GunnerAsteroid | undefined {
+  let target: GunnerAsteroid | undefined;
+  let targetDistance = Infinity;
+  for (const asteroid of asteroids) {
+    const distance = Math.hypot(asteroid.x - x, asteroid.y - y);
+    if (distance <= asteroid.radius + 7 && distance < targetDistance) {
+      target = asteroid;
+      targetDistance = distance;
+    }
+  }
+  return target;
+}
+
 export interface GunnerState {
   crosshairX: number;
   crosshairY: number;
@@ -169,6 +193,7 @@ export interface GunnerState {
   beamX: number;
   beamY: number;
   impactFlash: number;
+  shotFeedback: GunnerShotFeedback | null;
 }
 
 export function createGunner(): GunnerState {
@@ -176,7 +201,7 @@ export function createGunner(): GunnerState {
     crosshairX: WIDTH / 2, crosshairY: HEIGHT / 2, elapsed: 0, hull: 3,
     impacts: 0, destroyed: 0, shots: 0, cooldown: 0, spawnIn: 0.7,
     asteroids: [], finished: false, nextId: 1, beamTime: 0,
-    beamX: WIDTH / 2, beamY: HEIGHT / 2, impactFlash: 0,
+    beamX: WIDTH / 2, beamY: HEIGHT / 2, impactFlash: 0, shotFeedback: null,
   };
 }
 
@@ -199,6 +224,10 @@ export function stepGunner(
   s.cooldown = Math.max(0, s.cooldown - dt);
   s.beamTime = Math.max(0, s.beamTime - dt);
   s.impactFlash = Math.max(0, s.impactFlash - dt);
+  if (s.shotFeedback) {
+    s.shotFeedback.remaining = Math.max(0, s.shotFeedback.remaining - dt);
+    if (s.shotFeedback.remaining <= 0) s.shotFeedback = null;
+  }
 
   if (input.aimX !== undefined && input.aimY !== undefined) {
     s.crosshairX = Math.max(12, Math.min(WIDTH - 12, input.aimX));
@@ -211,15 +240,12 @@ export function stepGunner(
     s.beamTime = 0.09;
     s.beamX = s.crosshairX;
     s.beamY = s.crosshairY;
-    let target: GunnerAsteroid | undefined;
-    let targetDistance = Infinity;
-    for (const asteroid of s.asteroids) {
-      const distance = Math.hypot(asteroid.x - s.crosshairX, asteroid.y - s.crosshairY);
-      if (distance <= asteroid.radius + 7 && distance < targetDistance) {
-        target = asteroid;
-        targetDistance = distance;
-      }
-    }
+    const target = gunnerTargetAt(s.asteroids, s.crosshairX, s.crosshairY);
+    s.shotFeedback = {
+      outcome: target ? target.hp > 1 ? 'armor-hit' : 'destroyed' : 'miss',
+      x: target?.x ?? s.beamX, y: target?.y ?? s.beamY, radius: target?.radius ?? 0,
+      remaining: GUNNER_SHOT_FEEDBACK_SECONDS,
+    };
     if (target) {
       target.hp--;
       if (target.hp <= 0) {
