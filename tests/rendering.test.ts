@@ -99,3 +99,102 @@ test('hazard warnings and spark cores remain visible with reduced motion', () =>
   h.paint();
   assert.ok(!h.commands.some(command => command[0] === 'strokeRoundedRect' && command[1] === 188 && command[2] === 380));
 });
+
+function pilotBomberFixtures(scene: any) {
+  Object.assign(scene.flight, { elapsed: 8.1, invulnerable: .5, asteroids: [
+    { x: -40, y: 100, radius: 20, speed: 100, vx: 80, side: 'left', rotation: .2 },
+    { x: 520, y: 200, radius: 20, speed: 100, vx: -80, side: 'right' },
+    { x: 240, y: 280, radius: 30, speed: 100, rotation: .7 },
+  ] });
+  Object.assign(scene.spacePilot, { elapsed: 8.1, invulnerable: .5, impactFlash: .1,
+    fuelCells: [{ id: 1, x: 90, y: 170, radius: 13 }],
+    enemies: [{ id: 2, x: 240, y: 260, radius: 20, speed: 100, fireIn: .1 }],
+    shots: [{ x: 310, y: 350, vx: 30, vy: 100, radius: 5 }, { x: 100, y: 350, vx: 0, vy: 0, radius: 5 }] });
+  for (const [key, radius, lifetime] of [
+    ['bomber', rules.bomberBlastRadius(scene.config), rules.BOMBER_MINE_LIFETIME],
+    ['spaceBomber', rules.spaceBomberBlastRadius(scene.config), rules.SPACE_BOMBER_MINE_LIFETIME],
+  ] as const) Object.assign(scene[key], { elapsed: 8.1, invulnerable: .5, impactFlash: .1,
+    cooldown: .3, mineCooldown: .3, missileCooldown: .2,
+    mines: [{ id: 1, x: 100, y: 280, blastRadius: radius, armIn: .1, expiresIn: lifetime },
+      { id: 2, x: 260, y: 390, blastRadius: radius, armIn: 0, expiresIn: .2 }],
+    explosions: [{ x: 350, y: 250, radius, remaining: .14 }] });
+  scene.bomber.asteroids = [{ id: 1, x: 240, y: 200, radius: 22, speed: 100 }];
+  scene.spaceBomber.enemies = [
+    { id: 1, x: 140, y: 140, radius: 20, speed: 100, approach: 'forward' },
+    { id: 2, x: 350, y: 440, radius: 20, speed: 100, approach: 'pursuer' },
+  ];
+  scene.spaceBomber.missiles = [{ id: 3, x: 210, y: 300, vx: -60, vy: -200 }];
+}
+
+test('Pilot and Bomber representative states render frozen across both situations and Natural 1', () => {
+  for (const naturalOne of [false, true]) {
+    const h = harness(); h.scene.config.naturalOne = naturalOne; pilotBomberFixtures(h.scene);
+    for (const key of ['flight', 'spacePilot', 'bomber', 'spaceBomber']) freeze(h.scene[key]);
+    for (const situation of ['Asteroid Field', 'Space Battle']) for (const role of ['Pilot', 'Bomber']) {
+      h.scene.situation = situation; h.scene.role = role; h.paint();
+      const commands = structuredClone(h.commands);
+      h.commands.length = 0; h.scene.update(90000, 1000);
+      assert.deepEqual(h.commands, commands, 'pause uses simulation time');
+      const key = situation === 'Space Battle' ? role === 'Pilot' ? 'spacePilot' : 'spaceBomber' : role === 'Pilot' ? 'flight' : 'bomber';
+      h.scene[key] = { ...h.scene[key], finished: true };
+      h.paint(); assert.deepEqual(h.commands, commands, 'terminal rendering stays frozen');
+    }
+  }
+});
+
+test('mine preview, deployed radius and explosion boundary use exact Natural 1 geometry in both Bomber modes', () => {
+  for (const situation of ['Asteroid Field', 'Space Battle']) for (const naturalOne of [false, true]) {
+    const h = harness(); h.scene.config.naturalOne = naturalOne; pilotBomberFixtures(h.scene);
+    h.scene.situation = situation; h.scene.role = 'Bomber'; h.paint();
+    const state = situation === 'Space Battle' ? h.scene.spaceBomber : h.scene.bomber;
+    const radius = situation === 'Space Battle' ? rules.spaceBomberBlastRadius(h.scene.config) : rules.bomberBlastRadius(h.scene.config);
+    const drop = rules.mineDropPosition(state);
+    for (const [x, y] of [[drop.x, drop.y], [100, 280], [260, 390], [350, 250]]) {
+      assert.ok(h.commands.some(c => c[0] === 'strokeCircle' && c[1] === x && c[2] === y && c[3] === radius));
+    }
+  }
+});
+
+test('mine arming and expiry retain distinct cues and use each modes own lifetime', () => {
+  const h = harness(); h.setReduced(true);
+  for (const lifetime of [rules.BOMBER_MINE_LIFETIME, rules.SPACE_BOMBER_MINE_LIFETIME]) {
+    const mine = { id: 1, x: 100, y: 100, blastRadius: 60, armIn: .1, expiresIn: lifetime };
+    h.commands.length = 0; h.scene.paintMine(h.scene.add.graphics(), mine, 8, lifetime);
+    assert.ok(h.commands.some(c => c[0] === 'strokeCircle' && c[3] === 3), 'hollow unarmed core');
+    assert.ok(h.commands.some(c => c[0] === 'arc' && c[3] === 18 && c[5] === Math.PI * 1.5));
+    mine.armIn = 0; mine.expiresIn = lifetime / 2; h.commands.length = 0;
+    h.scene.paintMine(h.scene.add.graphics(), mine, 8, lifetime);
+    assert.ok(h.commands.some(c => c[0] === 'fillCircle' && c[3] === 3), 'solid armed core');
+    assert.ok(h.commands.some(c => c[0] === 'arc' && c[3] === 18 && c[5] === Math.PI / 2));
+  }
+});
+
+test('selected modes freeze decoration with reduced motion while preserving essential state feedback', () => {
+  const h = harness(); pilotBomberFixtures(h.scene); h.setReduced(true);
+  for (const situation of ['Asteroid Field', 'Space Battle']) for (const role of ['Pilot', 'Bomber']) {
+    h.scene.situation = situation; h.scene.role = role;
+    const state = situation === 'Space Battle' ? role === 'Pilot' ? h.scene.spacePilot : h.scene.spaceBomber
+      : role === 'Pilot' ? h.scene.flight : h.scene.bomber;
+    state.elapsed = 8; h.paint(); const commands = structuredClone(h.commands);
+    state.elapsed = 15; h.paint(); assert.deepEqual(h.commands, commands);
+    assert.ok(h.commands.some(c => c[0] === 'strokeEllipse' && c[3] === 9 && c[4] === 15), 'protected ship remains visible');
+    if (situation === 'Asteroid Field' && role === 'Pilot')
+      assert.ok(h.commands.some(c => c[0] === 'strokeRoundedRect' && c[1] === 6 && c[2] === 81), 'edge warning remains visible');
+  }
+});
+
+test('fuel remains centered and missile/mine readiness changes artwork without relocating targets', () => {
+  const h = harness(); pilotBomberFixtures(h.scene); h.setReduced(true);
+  h.scene.situation = 'Space Battle'; h.scene.role = 'Pilot'; h.paint();
+  assert.ok(h.commands.some(c => c[0] === 'fillRoundedRect' && c[1] === 82 && c[2] === 158));
+  h.scene.role = 'Bomber'; h.paint(); const cooling = structuredClone(h.commands);
+  h.scene.spaceBomber.mineCooldown = 0; h.scene.spaceBomber.missileCooldown = 0;
+  h.paint(); assert.notDeepEqual(h.commands, cooling);
+  const drop = rules.mineDropPosition(h.scene.spaceBomber);
+  assert.ok(h.commands.some(c => c[0] === 'strokeCircle' && c[1] === drop.x && c[2] === drop.y));
+  const enemies = h.scene.spaceBomber.enemies;
+  for (const enemy of enemies) {
+    const direction = enemy.approach === 'forward' ? 1 : -1;
+    assert.ok(h.commands.some(c => c[0] === 'fillTriangle' && c[1] === enemy.x && c[2] === enemy.y + direction * 30));
+  }
+});

@@ -64,3 +64,51 @@ No obvious desktop regression in these samples. Full dynamic runs on slower hard
 - [ ] Confirm decorative reduced motion and acceptable performance on supported devices; give dated gameplay/presentation acceptance in #39 and retain #10's outstanding gates.
 
 Keep #42 open for the remaining enhancement passes. Drake reviews and merges the PR; this record grants no deployment or final balance approval.
+
+## Pilot and Bomber graphics and clarity pass
+
+2026-09-30. Base: merged `main` at `7198675` (including #43 and #44). Drake selected both Pilot and both Bomber modes, approved graphics/clarity scope, and said Space Battle Gunner and Life Support are good. That records presentation satisfaction for this pass, without inventing device-specific evidence or closing #39/#10.
+
+### Delivered presentation
+
+| Mode | Enhancement disposition |
+| --- | --- |
+| Asteroid Pilot | Inset ship plating, vents and cockpit highlights; rock facets/fractures inside existing silhouettes; backed side-warning chevrons; layered protection ring. Existing warning gates stay intact. |
+| Asteroid Bomber | Shared ship/rock detail, rack vents, consistent fixed mine hardware, hollow unarmed/solid armed cores, lifetime dials, and layered blasts with an exact outer radius. |
+| Space Pilot | Shared ship detail, enemy nacelles/panels, backed projectile cores and bracketed fuel canisters centered on their simulation positions. Layered protection ring. |
+| Space Bomber | Shared ship/enemy detail, distinct nose/aft racks, missile body/fins, backed forward/pursuer markers, and the same mine/blast language using its own lifetime constants. |
+
+Only `scene.ts` changes at runtime. Physics, input, check bands, cooldowns, automatic flight, rating anchors, report text and 480×560 geometry are unchanged. Shared ship/asteroid detail and reduced-motion background opt in only for Pilot/Bomber. The existing Space Gunner/Life Support renderers and Asteroid Gunner/Life Support output remain intact. Mine previews, deployed blast circles and explosion boundaries use actual state radii, including Natural 1's half-area target.
+
+Pilot/Bomber decorative background travel, engine/shield/pickup/shot modulation and warning flicker respect the live reduced-motion preference. Protected Pilot/Space Bomber ships remain visible instead of blinking in reduced motion. Warning gates, mine arming/expiry, readiness and explosion decay still follow actual gameplay state. Paused/completed state has no independent animation clock. Procedural effects are bounded; no new dependencies, downloaded art, audio or campaign content.
+
+### Validation and evidence
+
+- `npm test`: **100/100 passed** (95 existing + five renderer regressions). Representative frozen states cover all four modes, both Natural 1 states, zero-velocity shot geometry, mine arming/expiry and each lifetime constant, exact preview/deployed/explosion radii, readiness, both enemy directions, fuel centering, transforms, finite geometry, pause/terminal rendering and reduced motion.
+- `npm run build` and `git diff --check`: passed. Deferred Phaser runtime: **1,240.97 kB minified / 339.43 kB gzip**; the existing large-chunk advisory remains enabled. No new initial-load artwork.
+- Temporary VM comparison against `7198675`: all eight drawing-command comparisons identical for both Gunner and both Life Support modes, with normal/reduced motion and populated representative hazards.
+- Desktop Google Chrome via Playwright: twelve actual-shell checks (four modes × 1100/320/390px). Confirmed Pilot keyboard movement and Bomber keyboard mine release; exercised canvas pointer input, missile key/button and mine-button input, explicit pause/resume, synthetic window blur, fresh retry, and report Copy. No horizontal overflow. All twelve copied their reports successfully.
+- Completion and hull-failure report paths used deterministic simulation-state fixtures in the running shell, not player-earned 60-second runs. Real simultaneous physical touch, successful live mine/missile hits, fuel collections and owner balance judgments are not established by these checks.
+- Matched before/after screenshots were captured and visually inspected for each mode at identical frozen 8.1-second states and 480×560 canvases. Narrow paused-shell screenshots and a live 390px Hard/Natural 1 Space Bomber screenshot were also inspected. External screenshot evidence is provided in the Codex task; temporary harnesses and screenshots are not shipped repository files.
+- No page exceptions. The comparison/interaction harness logged a missing `/favicon.ico` 404; its source URL was verified separately. A fresh Hard/Natural 1 smoke run had no failed page responses. No gameplay resource or renderer error was observed.
+- Resizing from desktop to 320px while setup hid the existing Phaser parent yielded a zero-sized canvas on the next launch in the harness. Narrow tests therefore used fresh page loads at their target widths. Active-play resize from 390px to 900px passed with a visible canvas. Setup-time resize/rotation remains an unresolved lifecycle follow-up; no shell/scale code changed in this graphics pass.
+
+### Comparable desktop rendering sample
+
+Temporary comparison harness, eight simultaneous frozen Canvas scenes (before/after each mode), **240 samples per scene**. Update time measures drawing-command rebuilding, excluding later rasterization; frame intervals include scheduling. These coarse short desktop samples do not establish mobile rendering headroom or an FPS guarantee.
+
+| Mode | Update median before → after (ms) | Update p95 before → after (ms) | Frame median before → after (ms) | Frame p95 before → after (ms) |
+| --- | ---: | ---: | ---: | ---: |
+| Asteroid Pilot | 0.10 → 0.10 | 0.20 → 0.20 | 16.70 → 16.70 | 17.10 → 17.10 |
+| Asteroid Bomber | 0.10 → 0.10 | 0.20 → 0.20 | 16.70 → 16.70 | 17.20 → 17.20 |
+| Space Pilot | 0.10 → 0.10 | 0.20 → 0.20 | 16.70 → 16.70 | 17.20 → 17.30 |
+| Space Bomber | 0.10 → 0.10 | 0.20 → 0.20 | 16.70 → 16.70 | 17.30 → 17.30 |
+
+### Owner/device checklist
+
+- [ ] iPhone/iPad Safari portrait/landscape: readable rocks, shots, fuel, warnings and mine cues; reachable controls, smooth rendering, no accidental scroll; rotate during setup and play.
+- [ ] Pilot steering with keyboard/touch; Space Pilot collect fuel and evade shots. Both Bomber modes: automatic flight and directly-behind mines; Space Bomber independent aim/mine/missile multitouch and forward/pursuer recognition.
+- [ ] All four bands ± Natural 1: compare mine target area, weapon readiness, warnings and protection. Assess presentation without changing score/balance here.
+- [ ] Reduced motion; pause/app switch/explicit resume; retry; player-earned full completion and failure; inspect/copy GM report.
+
+Keep #42 open for remaining Asteroid Gunner/Life Support polish and agreed follow-ups. Drake reviews and merges; this pass performs no merge or manual deployment.
