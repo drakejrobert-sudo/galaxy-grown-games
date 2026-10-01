@@ -7,7 +7,7 @@ import {
   createLifeSupport, stepLifeSupport, lifeSupportScoreFor,
   createSpaceBattlePilot, stepSpaceBattlePilot, spaceBattlePilotScoreFor,
   createSpaceBattleBomber, stepSpaceBattleBomber, spaceBattleBomberScoreFor,
-  automaticShipX, SPACE_BOMBER_LAUNCH_DISTANCE, mineDropPosition,
+  SPACE_BOMBER_LAUNCH_DISTANCE, mineDropPosition,
   createSpaceLifeSupport, stepSpaceLifeSupport, spaceLifeScoreFor,
   type FlightConfig, type ScoreMode, type LifeSupportRoute,
 } from '../src/game/rules.ts';
@@ -116,7 +116,7 @@ function run(mode: ScoreMode, config: FlightConfig, profile: Profile, seed: numb
   const s = createSpaceBattleBomber();
   while (!s.finished) {
     // Routine uses maximum range. Engaged selects the nearest active rear pursuer within range.
-    const rack = mineDropPosition({x:automaticShipX(s.elapsed + step),y:s.y});
+    const rack = mineDropPosition(s);
     const distance = (e: {x:number;y:number}) => Math.hypot(e.x-rack.x,e.y-rack.y);
     const target = profile === 'engaged' ? s.enemies.filter(e => e.y >= rack.y && distance(e) <= SPACE_BOMBER_LAUNCH_DISTANCE)
       .sort((a,b) => distance(a)-distance(b) || a.id-b.id)[0] : undefined;

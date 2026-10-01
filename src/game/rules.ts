@@ -930,7 +930,7 @@ export function stepSpaceBattleBomber(
   }
   s.passes = s.passes.filter(pass => pass.remaining > 0);
 
-  s.x = automaticShipX(s.elapsed);
+  // Input coordinates refer to the rack displayed before this step advances flight.
   if (input.aim) {
     const target = aftTarget(input.aim, s);
     if (target) Object.assign(s, target);
@@ -949,6 +949,8 @@ export function stepSpaceBattleBomber(
       ...(duration > 0 ? { flight: { ...rack, targetX: target.x, targetY: target.y, duration, remaining: duration } } : {}) });
     s.minesPlaced++; s.mineCooldown = SPACE_BOMBER_MINE_COOLDOWN;
   }
+
+  s.x = automaticShipX(s.elapsed);
 
   // Preserve each entity's exact within-step path, including a fractional spawn.
   const paths = new Map<number, { y: number; start: number; end: number }>();
@@ -976,8 +978,10 @@ export function stepSpaceBattleBomber(
   };
   const contacts: { time: number; x: number; y: number; mine: SpaceBomberMine; enemy: SpaceBomberEnemy }[] = [];
   for (const mine of s.mines) {
-    // Launches occur at the end of this step, so flight/lifetime starts next step.
-    if (!previousMines.has(mine.id)) continue;
+    // Travelling launches start moving next step. Rack placements are already armed
+    // and must defend this frame, before a pursuer crosses into the ship.
+    const existing = previousMines.has(mine.id);
+    if (!existing && mine.armIn > 0) continue;
     const expiresAt = mine.expiresIn, flight = mine.flight;
     const oldX = mine.x, oldY = mine.y;
     const landsAt = flight ? (flight.remaining <= dt + 1e-9 ? Math.min(dt, Math.max(0, flight.remaining)) : flight.remaining) : 0;
@@ -999,7 +1003,7 @@ export function stepSpaceBattleBomber(
         mine.armIn = 0;
       } else mine.armIn = flight.remaining;
     } else mine.armIn = Math.max(0, mine.armIn - dt);
-    mine.expiresIn -= dt;
+    if (existing) mine.expiresIn -= dt; // Keep the initial launch lifetime intact.
     // Sweep relative mine/enemy motion separately before and after landing.
     for (const enemy of s.enemies) {
       const path = paths.get(enemy.id)!;

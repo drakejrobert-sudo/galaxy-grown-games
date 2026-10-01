@@ -14,7 +14,7 @@ Ship flight, clean-pass retirement, cooldown (0.85s), lifetime (4.5s from launch
 
 ## Automated validation
 
-- `npm test`: 186/186 pass, including 0/25/50/100px and clamped targets, fixed speed and destinations, retained shortcut range, landing and lifetime boundaries, pause/reset, cancellation and cooldown.
+- `npm test`: 194/194 pass, including 0/25/50/100px and clamped targets, fixed speed and destinations, retained shortcut range, landing and lifetime boundaries, pause/reset, cancellation and cooldown.
 - All four difficulty bands with/without Natural 1 cover moving relative sweeps, contacts missed by endpoint checks, actual contact-centered splash, exact blast boundary inclusion, multiple mines/targets, expiry during flight, defense priority and retired-ship exclusion.
 - Updated render tests cover selected landing markers, exact blast geometry, contact-live travel artwork and frozen states. Shared startup, controls, reports, other-mode mechanics and rating regressions pass.
 - `npm run build` and `git diff --check` pass. The existing deferred Phaser chunk-size advisory remains.
@@ -34,3 +34,11 @@ No application exceptions or other errors were observed. As in PR #49, emulated 
 - Desktop: mouse range selection and rear limits; keyboard/button retained range, single launches and cooldown rejection; pause/tab switching without stale actions and retry at default range.
 - All bands with/without Natural 1: direct in-flight hits and stationary interceptions should feel clean, while retired ships stay harmless. Confirm close placement does not make pressure trivial.
 - Complete/fail real rounds, read/share reports and record tested revision, raw points, rating and gameplay judgment. Physical Safari, owner gameplay acceptance and fresh human rating calibration remain pending; keep #39 open.
+
+## PR review timing regressions
+
+Both PR #50 timing findings are fixed. Pointer selection and launch origin use the displayed rack before flight advances, preserving actual click/tap range and landing coordinates. Fresh zero-duration rack mines participate in contact resolution during the launch frame, ahead of swept hull damage; travelling launches retain their existing timing and fresh mines retain their initial lifetime.
+
+Eight additional band/Natural-1 regressions cover pointer and shortcut rack placements at 0.01s and 0.05s steps, overlapping pursuers crossing into the ship, exact contact-centered explosions with no hull loss, and displayed-rack 0/25/50/100px targets. These tests reproduced the failures before the patch. The full 194-test suite, production build and whitespace checks pass; all eight synthetic distributions are unchanged.
+
+Targeted Chrome QA at 1100px (mouse), 390px and 320px (emulated touch) used actual release gestures against a frozen rendered rack, then a controlled 0.05s simulation step: a ~25px target retained the exact captured range and landed at the captured point. An actual Launch mine press with selected zero range destroyed an overlapping pursuer in that same step while hull stayed 3/3. Screenshots were inspected; no application exceptions were observed. These are controlled browser-input regressions, not physical Safari or owner gameplay acceptance.

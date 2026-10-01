@@ -34,8 +34,9 @@ for (const total of [5,6,11,16]) for (const naturalOne of [false,true]) {
     assert.ok(!('missiles' in s) && !('aimX' in s) && !('forwardSpawnIn' in s));
   });
   test(`mine cooldown, fuse, expiry and blast area, total ${total}, Natural 1 ${naturalOne}`, () => {
-    const s = quiet(); stepSpaceBattleBomber(s, config, {placing:true}, .01);
-    const drop = mineDropPosition(s), landing = spaceBomberLanding(s), mine = s.mines[0];
+    const s = quiet(), drop = mineDropPosition(s), landing = spaceBomberLanding(s);
+    stepSpaceBattleBomber(s, config, {placing:true}, .01);
+    const mine = s.mines[0];
     assert.equal(mine.x, drop.x); assert.equal(mine.y, drop.y);
     assert.equal(mine.blastRadius, spaceBomberBlastRadius(config));
     assert.ok(Math.abs(mine.blastRadius ** 2 / 58 ** 2 - (naturalOne ? .5 : 1)) < 1e-9);
@@ -102,8 +103,9 @@ for(const total of [5,6,11,16]) for(const naturalOne of [false,true]) {
   const enemy=(id:number,x:number,y:number,speed=0)=>({id,x,y,radius:16,speed,warningRemaining:0});
   test(`flight landing, expiry and swept armed contacts: ${total}/${naturalOne}`,()=>{
     const s=quiet(); s.aimAngle=.6;
+    const target=spaceBomberLanding(s);
     stepSpaceBattleBomber(s,config,{placing:true},.01);
-    const mine=s.mines[0], rack={x:mine.x,y:mine.y}, target=spaceBomberLanding(s);
+    const mine=s.mines[0], rack={x:mine.x,y:mine.y};
     advance(s,.1,config);
     assert.equal(s.destroyed,0); assert.equal(s.mines.length,1);
     assert.ok(Math.abs(mine.x-(rack.x+target.x)/2)<1e-9);
@@ -178,12 +180,12 @@ for(const total of [5,6,11,16]) for(const naturalOne of [false,true]) {
   const config={total,naturalOne};
   test(`variable distances and retained shortcuts: ${total}/${naturalOne}`,()=>{
     for(const distance of [0,25,50,100,180]) {
-      const s=quiet(), x=automaticShipX(.01), point={x,y:s.y+34+distance};
+      const s=quiet(), x=s.x, point={x,y:s.y+34+distance};
       stepSpaceBattleBomber(s,config,{placing:false,aim:point},.01);
       const selected=Math.min(distance,100);
       assert.ok(Math.abs(s.aimDistance-selected)<1e-9);
       const preview=spaceBomberLanding(s);
-      assert.deepEqual(preview,{x,y:s.y+34+selected});
+      assert.deepEqual(preview,{x:s.x,y:s.y+34+selected});
       stepSpaceBattleBomber(s,config,{placing:true},.01);
       const mine=s.mines[0], duration=selected/500;
       assert.equal(mine.armIn,duration);
@@ -261,5 +263,29 @@ for(const total of [5,6,11,16]) for(const naturalOne of [false,true]) {
     assert.equal(s.destroyed,2);assert.equal(s.explosions.length,1);
     assert.deepEqual(s.mines.map(m=>m.id),[50]);
     assert.ok(Math.abs(s.explosions[0].y-190)<1e-9,'explosion uses first contact position');
+  });
+}
+
+for(const total of [5,6,11,16]) for(const naturalOne of [false,true]) {
+  test(`rack taps defend during the launch frame and use displayed origin: ${total}/${naturalOne}`,()=>{
+    const config={total,naturalOne};
+    for(const dt of [.01,.05]) for(const pointer of [false,true]) {
+      const s=quiet(), rack=mineDropPosition(s); s.aimDistance=0;
+      s.enemies=[{id:100,x:rack.x,y:rack.y,radius:16,speed:800,warningRemaining:0}];
+      stepSpaceBattleBomber(s,config,{placing:true,...(pointer?{launch:rack}:{})},dt);
+      assert.equal(s.aimDistance,0,'tap on displayed rack is zero range');
+      assert.equal(s.destroyed,1,'instant mine protects before swept hull contact');
+      assert.equal(s.hull,3);assert.equal(s.hits,0);assert.equal(s.mines.length,0);
+      assert.equal(s.explosions[0].x,rack.x);assert.equal(s.explosions[0].y,rack.y);
+    }
+    for(const distance of [0,25,50,100]) {
+      const s=quiet(), rack=mineDropPosition(s), point={x:rack.x,y:rack.y+distance};
+      stepSpaceBattleBomber(s,config,{placing:true,launch:point},.05);
+      const mine=s.mines[0];assert.equal(s.aimDistance,distance);
+      assert.equal(mine.x,rack.x);assert.equal(mine.y,rack.y);
+      assert.equal(mine.flight?.targetX??mine.x,point.x);
+      assert.equal(mine.flight?.targetY??mine.y,point.y);
+      if(distance===0){assert.equal(mine.armIn,0);assert.equal(mine.flight,undefined);}
+    }
   });
 }
