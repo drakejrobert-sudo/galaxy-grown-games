@@ -14,7 +14,7 @@ const simulatedAnchorsV02: Partial<Record<ScoreMode, { low: number; high: number
   'space-bomber': { low: 64, high: 5800 },
 };
 
-test('seeded calibration reproduces the historical v0.2 reference anchors', () => {
+test('seeded calibration preserves unchanged references and records harder Life Support outcomes', () => {
   const output = execFileSync(process.execPath, ['--import', 'tsx', 'scripts/calibrate-scores.ts'], {
     cwd: fileURLToPath(new URL('..', import.meta.url)), encoding: 'utf8',
   });
@@ -28,7 +28,8 @@ test('seeded calibration reproduces the historical v0.2 reference anchors', () =
       assert.deepEqual({ low: Number(low), high: Number(high) }, SCORE_ANCHORS[mode]);
     } else if (mode === 'space-life-support') {
       assert.deepEqual(SCORE_ANCHORS[mode], { low: 130, high: 1350 });
-      assert.deepEqual({ low: Number(low), high: Number(high) }, { low: 128, high: 1350 });
+      // Observed synthetic outcomes, not live rating anchors; the assertion above keeps 130–1350 fixed.
+      assert.deepEqual({ low: Number(low), high: Number(high) }, { low: 80, high: 926 });
     } else {
       assert.deepEqual(simulatedAnchorsV02[mode as ScoreMode], { low: Number(low), high: Number(high) });
       if (mode !== 'space-pilot' && mode !== 'space-bomber') {

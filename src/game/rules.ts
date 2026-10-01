@@ -1033,20 +1033,25 @@ export const SPACE_LIFE_PLATFORMS = [
   { x1: 38, x2: 254, y: 190 },
 ] as const;
 export const SPACE_LIFE_MAX_INTEGRITY = 5;
-export const SPACE_LIFE_TUNING: Record<Difficulty, { spawnEvery: number; fireLifetime: number }> = {
-  'Very Easy': { spawnEvery: 5.2, fireLifetime: 11 },
-  Easy: { spawnEvery: 4.5, fireLifetime: 10 },
-  Medium: { spawnEvery: 3.8, fireLifetime: 9 },
-  Hard: { spawnEvery: 3.2, fireLifetime: 8 },
+export const SPACE_LIFE_TUNING: Record<Difficulty, { spawnEvery: number; fireLifetime: number; sparkEvery: number; sparkSpeed: number }> = {
+  'Very Easy': { spawnEvery: 5.2, fireLifetime: 11, sparkEvery: 3.2, sparkSpeed: 105 },
+  Easy: { spawnEvery: 4.5, fireLifetime: 10, sparkEvery: 2.8, sparkSpeed: 125 },
+  Medium: { spawnEvery: 3.8, fireLifetime: 9, sparkEvery: 2.4, sparkSpeed: 145 },
+  Hard: { spawnEvery: 3.2, fireLifetime: 8, sparkEvery: 2, sparkSpeed: 165 },
 };
 export type SpaceLifeInput = { x: number; jump: boolean; repair: boolean };
-export type SpaceLifeFire = { id: number; x: number; y: number; kind: 'ordinary' | 'electrical'; remaining: number };
+export type SpaceLifeFire = { id: number; x: number; y: number; kind: 'ordinary' | 'electrical'; remaining: number; arming?: number; sparkIn?: number };
 export type SpaceLifeIcon = { id: number; x: number; y: number; kind: 'heart' | 'overload'; remaining: number };
+export type SpaceLifeSpark = { id: number; x: number; y: number; vx: number; remaining: number };
+export const SPACE_LIFE_SPARK_RADIUS = 4;
+export const SPACE_LIFE_SPARK_WARNING = 0.8;
+export const SPACE_LIFE_FIRE_WARNING = 0.6;
 export interface SpaceLifeState {
   x: number; y: number; vy: number; grounded: boolean; elapsed: number; integrity: number;
   ordinaryCleared: number; electricalRepaired: number; overloadHits: number; heartsCollected: number;
   firesExpired: number; fireIn: number; iconIn: number; iconIndex: number; nextId: number;
-  fires: SpaceLifeFire[]; icons: SpaceLifeIcon[]; invulnerable: number; finished: boolean;
+  fires: SpaceLifeFire[]; icons: SpaceLifeIcon[]; sparks: SpaceLifeSpark[];
+  sparkHits: number; fireContactHits: number; invulnerable: number; finished: boolean;
 }
 const SPACE_LIFE_FIRE_SITES = [
   { x: 85, y: 520 }, { x: 395, y: 520 },
@@ -1058,14 +1063,40 @@ export function createSpaceLifeSupport(): SpaceLifeState {
   return { x: 150, y: 520, vy: 0, grounded: true, elapsed: 0, integrity: SPACE_LIFE_MAX_INTEGRITY,
     ordinaryCleared: 0, electricalRepaired: 0, overloadHits: 0, heartsCollected: 0,
     firesExpired: 0, fireIn: 1.5, iconIn: 0.8, iconIndex: 0, nextId: 1,
-    fires: [], icons: [], invulnerable: 0, finished: false };
+    fires: [], icons: [], sparks: [], sparkHits: 0, fireContactHits: 0, invulnerable: 0, finished: false };
 }
+function spaceLifeSparkContact(x0: number, y0: number, x1: number, y1: number): boolean {
+  const r = SPACE_LIFE_SPARK_RADIUS;
+  const rectangle = (left: number, top: number, right: number, bottom: number) => {
+    let enter = 0, leave = 1;
+    for (const [origin, delta, low, high] of [[x0, x1 - x0, left, right], [y0, y1 - y0, top, bottom]]) {
+      if (delta === 0) { if (origin < low || origin > high) return false; }
+      else {
+        const a = (low - origin) / delta, b = (high - origin) / delta;
+        enter = Math.max(enter, Math.min(a, b)); leave = Math.min(leave, Math.max(a, b));
+        if (enter > leave) return false;
+      }
+    }
+    return true;
+  };
+  if (rectangle(-10 - r, -27, 10 + r, 0) || rectangle(-10, -27 - r, 10, r)) return true;
+  const dx = x1 - x0, dy = y1 - y0, length2 = dx * dx + dy * dy;
+  for (const x of [-10, 10]) for (const y of [-27, 0]) {
+    const t = length2 === 0 ? 0 : Math.max(0, Math.min(1, ((x - x0) * dx + (y - y0) * dy) / length2));
+    if ((x0 + t * dx - x) ** 2 + (y0 + t * dy - y) ** 2 <= r * r) return true;
+  }
+  return false;
+}
+
 export function stepSpaceLifeSupport(
   s: SpaceLifeState, config: FlightConfig, input: SpaceLifeInput, dt: number,
   random: () => number = Math.random,
 ): void {
   if (s.finished) return;
   dt = Math.min(Math.max(dt, 0), 0.05, DURATION - s.elapsed);
+  if (dt <= 0) return;
+  const previousX = s.x, previousFeet = s.y;
+  const existingSparks = new Set(s.sparks.map(spark => spark.id));
   const tuning = SPACE_LIFE_TUNING[difficultyFor(config.total)];
   s.elapsed += dt;
   s.invulnerable = Math.max(0, s.invulnerable - dt);
@@ -1104,15 +1135,65 @@ export function stepSpaceLifeSupport(
     const site = Array.from({ length: SPACE_LIFE_FIRE_SITES.length }, (_, i) => SPACE_LIFE_FIRE_SITES[(first + i) % SPACE_LIFE_FIRE_SITES.length])
       .find(candidate => !s.fires.some(fire => fire.x === candidate.x && fire.y === candidate.y));
     if (site) s.fires.push({ id: s.nextId++, ...site,
-      kind: random() < 0.4 ? 'electrical' : 'ordinary', remaining: tuning.fireLifetime });
+      kind: random() < 0.4 ? 'electrical' : 'ordinary', remaining: tuning.fireLifetime,
+      arming: SPACE_LIFE_FIRE_WARNING + dt, sparkIn: 1 + dt });
     s.fireIn += tuning.spawnEvery;
   }
   for (const fire of s.fires) {
     fire.remaining -= dt;
+    fire.arming = Math.max(0, (fire.arming ?? 0) - dt);
+    if (fire.arming < 1e-9) fire.arming = 0;
     if (fire.remaining <= 0) { s.firesExpired++; s.integrity = Math.max(0, s.integrity - 1); }
   }
   s.fires = s.fires.filter(fire => fire.remaining > 0);
   if (s.integrity <= 0) { s.finished = true; return; }
+
+  // Containment/repair and expiry resolve before contact hazards. Repair cancels a due burst.
+  for (const fire of s.fires) {
+    if (fire.kind === 'electrical') {
+      fire.sparkIn = (fire.sparkIn ?? 1) - dt;
+      while (fire.sparkIn <= 1e-9) {
+        for (const direction of [-1, 1]) s.sparks.push({ id: s.nextId++,
+          x: fire.x + direction * 18, y: fire.y - 14,
+          vx: direction * tuning.sparkSpeed, remaining: 4 });
+        fire.sparkIn += tuning.sparkEvery;
+      }
+    }
+  }
+  const contactDamage = (kind: 'fire' | 'spark' | 'overload') => {
+    if (s.invulnerable > 0) return;
+    s.integrity = Math.max(0, s.integrity - 1); s.invulnerable = 1.25;
+    if (kind === 'fire') s.fireContactHits++;
+    else if (kind === 'spark') s.sparkHits++;
+    else s.overloadHits++;
+    if (s.integrity <= 0) s.finished = true;
+  };
+  for (const fire of s.fires) {
+    if (fire.kind === 'ordinary' && (fire.arming ?? 0) <= 0 &&
+      // A descending approach is safe until it reaches the existing stomp plane.
+      !(nextY > previousY && previousY <= fire.y - 8 && Math.abs(s.x - fire.x) <= 19) &&
+      Math.abs(s.x - fire.x) <= 22 && s.y >= fire.y - 22 && s.y - 27 <= fire.y) {
+      contactDamage('fire');
+      if (s.finished) return;
+    }
+  }
+  // Relative motion sweeps a circular spark against the crew body, including moving crew.
+  for (const spark of s.sparks) {
+    const oldX = spark.x;
+    const wasPresent = existingSparks.has(spark.id);
+    const travelDt = wasPresent ? Math.min(dt, spark.remaining) : 0;
+    spark.x += spark.vx * travelDt;
+    spark.remaining -= travelDt;
+    const crewX = wasPresent ? previousX + (s.x - previousX) * travelDt / dt : s.x;
+    const crewFeet = wasPresent ? previousFeet + (s.y - previousFeet) * travelDt / dt : s.y;
+    if (spaceLifeSparkContact(oldX - (wasPresent ? previousX : s.x),
+      spark.y - (wasPresent ? previousFeet : s.y), spark.x - crewX, spark.y - crewFeet)) {
+      spark.remaining = 0; contactDamage('spark');
+      if (s.finished) return;
+    }
+  }
+  s.sparks = s.sparks.filter(spark => spark.remaining > 0 &&
+    spark.x >= -SPACE_LIFE_SPARK_RADIUS && spark.x <= WIDTH + SPACE_LIFE_SPARK_RADIUS);
 
   s.iconIn -= dt;
   while (s.iconIn <= 0) {
@@ -1129,7 +1210,8 @@ export function stepSpaceLifeSupport(
       if (icon.kind === 'heart') {
         s.heartsCollected++; s.integrity = Math.min(SPACE_LIFE_MAX_INTEGRITY, s.integrity + 1);
       } else if (s.invulnerable <= 0) {
-        s.overloadHits++; s.integrity = Math.max(0, s.integrity - 1); s.invulnerable = 1.25;
+        contactDamage('overload');
+        if (s.finished) return;
       }
       icon.remaining = 0;
     }
@@ -1148,7 +1230,7 @@ export function spaceLifeResultText(config: FlightConfig, s: SpaceLifeState): st
     `Natural 1: ${config.naturalOne ? 'Yes — one heart and two overload icons per 12 opportunities' : 'No — two hearts and one overload icon per 12 opportunities'}`,
     `Score: ${points} • Time: ${s.elapsed.toFixed(1)}s • Fires stomped: ${s.ordinaryCleared} • Electrical repairs: ${s.electricalRepaired}`,
     ratingReportText('space-life-support', points, s.integrity <= 0),
-    `Integrity: ${s.integrity}/${SPACE_LIFE_MAX_INTEGRITY} • Uncontained fires: ${s.firesExpired} • Hearts: ${s.heartsCollected} • Overload hits: ${s.overloadHits}`,
+    `Integrity: ${s.integrity}/${SPACE_LIFE_MAX_INTEGRITY} • Uncontained fires: ${s.firesExpired} • Hearts: ${s.heartsCollected} • Overload hits: ${s.overloadHits} • Spark hits: ${s.sparkHits} • Fire contact hits: ${s.fireContactHits}`,
     s.integrity > 0 ? 'Systems stabilized' : 'Systems failed',
     'GM determines campaign outcome.',
   ].join('\n');
