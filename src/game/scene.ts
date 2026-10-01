@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import {
   createSpaceGunner, stepSpaceGunner, SPACE_GUNNER_DEFENSE_LINE, type SpaceGunnerInput, type SpaceGunnerState, type SpaceGunnerAttacker,
+  gunnerTargetAt, gunnerFireEvery, GUNNER_SHOT_FEEDBACK_SECONDS, type GunnerShotFeedback,
   createBomber, createFlight, createGunner, createLifeSupport, createSpaceBattleBomber, createSpaceBattlePilot, stepBomber,
   stepFlight, stepGunner, stepLifeSupport, stepSpaceBattleBomber, stepSpaceBattlePilot, WIDTH, HEIGHT,
   spaceBomberLanding, mineDropPosition, automaticShipX, bomberBlastRadius, spaceBomberBlastRadius, BOMBER_MINE_COOLDOWN, BOMBER_MINE_LIFETIME, GUNNER_DEFENSE_LINE, type Asteroid, type FlightConfig, type FlightState,
@@ -123,7 +124,7 @@ export class FlightScene extends Phaser.Scene {
       : this.role === 'Pilot' ? this.flight.elapsed
         : this.role === 'Gunner' ? this.gunner.elapsed
           : this.role === 'Bomber' ? this.bomber.elapsed : this.lifeSupport.elapsed;
-    this.paintBackground(g, this.role === 'Pilot' || this.role === 'Bomber' ? this.decorativeTime(elapsed) : elapsed);
+    this.paintBackground(g, this.role === 'Pilot' || this.role === 'Bomber' || (this.situation === 'Asteroid Field' && this.role === 'Gunner') ? this.decorativeTime(elapsed) : elapsed);
     if (this.situation === 'Space Battle') {
       if (this.role === 'Life Support') this.paintSpaceLifeMode(g);
       else if (this.role === 'Gunner') this.paintSpaceGunnerMode(g);
@@ -194,7 +195,7 @@ export class FlightScene extends Phaser.Scene {
       g.fillStyle(0x514b60); g.fillCircle(x, y, asteroid.radius * (0.17 + i * 0.025));
       g.lineStyle(1, 0xb0a0a2, 0.7); g.strokeCircle(x - 1, y - 1, asteroid.radius * (0.17 + i * 0.025));
     }
-    if (this.role === 'Pilot' || this.role === 'Bomber') {
+    if (this.role === 'Pilot' || this.role === 'Bomber' || (this.situation === 'Asteroid Field' && this.role === 'Gunner')) {
       // Surface facets remain inside the existing rock outline; no new armor meaning.
       const r = asteroid.radius;
       g.fillStyle(0xc5b4ad, 0.19);
@@ -452,11 +453,63 @@ export class FlightScene extends Phaser.Scene {
     for (const asteroid of s.asteroids) {
       this.paintAsteroid(g, asteroid, asteroid.maxHp > 1, asteroid.hp < asteroid.maxHp);
       if (asteroid.maxHp > 1) {
-        g.fillStyle(asteroid.hp > 1 ? 0xffc270 : 0xff715b);
-        for (let hp = 0; hp < asteroid.hp; hp++) g.fillCircle(asteroid.x - 4 + hp * 8, asteroid.y - asteroid.radius - 7, 2.5);
+        const r = asteroid.radius;
+        // Inset armor follows the rock, with exposed seams after the first hit.
+        for (const side of [-1, 1]) {
+          g.lineStyle(3, asteroid.hp > 1 ? 0xffca83 : 0xa0775c, .9);
+          g.beginPath(); g.arc(asteroid.x, asteroid.y, r * .72,
+            (asteroid.rotation ?? 0) + side * Math.PI / 2 - .45,
+            (asteroid.rotation ?? 0) + side * Math.PI / 2 + .45); g.strokePath();
+        }
+        if (asteroid.hp < asteroid.maxHp) {
+          g.lineStyle(2, 0x24243b); g.lineBetween(asteroid.x - r * .35, asteroid.y - r * .6, asteroid.x + r * .1, asteroid.y);
+          g.lineBetween(asteroid.x + r * .1, asteroid.y, asteroid.x - r * .25, asteroid.y + r * .5);
+        }
+        for (let hp = 0; hp < asteroid.maxHp; hp++) {
+          const x = asteroid.x + (hp - (asteroid.maxHp - 1) / 2) * 9, y = asteroid.y - r - 7;
+          g.fillStyle(0x101528, .95); g.fillCircle(x, y, 4);
+          g.lineStyle(1, 0xffca83, .8); g.strokeCircle(x, y, 3);
+          if (hp < asteroid.hp) { g.fillStyle(0xffca83); g.fillCircle(x, y, 2); }
+        }
       }
     }
+    const target = gunnerTargetAt(s.asteroids, s.crosshairX, s.crosshairY);
+    if (target) {
+      const r = target.radius + 4, length = 7;
+      for (const dx of [-1, 1]) for (const dy of [-1, 1]) {
+        const x = target.x + dx * r, y = target.y + dy * r;
+        for (const [width, color] of [[4, 0x101528], [1.5, 0x79e1ce]]) {
+          g.lineStyle(width, color, .95);
+          g.lineBetween(x, y, x - dx * length, y); g.lineBetween(x, y, x, y - dy * length);
+        }
+      }
+    }
+    if (s.shotFeedback) this.paintGunnerShotFeedback(g, s.shotFeedback);
+
     this.paintGunnerTurret(g, s);
+  }
+
+  private paintGunnerShotFeedback(g: Phaser.GameObjects.Graphics, feedback: GunnerShotFeedback) {
+    const alpha = Math.min(1, feedback.remaining / GUNNER_SHOT_FEEDBACK_SECONDS);
+    const progress = this.reducedMotion?.matches ? .35 : 1 - alpha;
+    const { x, y } = feedback;
+    if (feedback.outcome === 'miss') {
+      g.lineStyle(1, 0xbba6ff, alpha * .7); g.strokeCircle(x, y, 5 + progress * 7);
+      return;
+    }
+    const destroyed = feedback.outcome === 'destroyed';
+    const distance = destroyed ? feedback.radius * (.35 + progress * .65) : 7 + progress * 10;
+    g.lineStyle(2, destroyed ? 0xd9fff6 : 0xffca83, alpha);
+    for (let i = 0; i < 6; i++) {
+      const angle = i * Math.PI / 3 + progress * .35;
+      const px = x + Math.cos(angle) * distance, py = y + Math.sin(angle) * distance;
+      if (destroyed) {
+        g.fillStyle(i % 2 ? 0xc5b4ad : 0xffca83, alpha * .85);
+        g.fillTriangle(px, py - 3, px - 3, py + 2, px + 3, py + 2);
+      } else {
+        g.lineBetween(px, py, px + Math.cos(angle) * 5, py + Math.sin(angle) * 5);
+      }
+    }
   }
 
   private paintSpaceGunnerMode(g: Phaser.GameObjects.Graphics) {
@@ -536,10 +589,12 @@ export class FlightScene extends Phaser.Scene {
   }
 
   private paintGunnerTurret(g: Phaser.GameObjects.Graphics, s: GunnerState | SpaceGunnerState) {
+    const asteroidMode = this.situation === 'Asteroid Field';
+    const time = asteroidMode ? this.decorativeTime(s.elapsed) : s.elapsed;
     const turretX = automaticShipX(s.elapsed), turretY = HEIGHT - 44;
     // A larger armored weapon deck, exposed engines and service lights.
     g.save(); g.translateCanvas(turretX, turretY); g.scaleCanvas(1.65, 1.25);
-    this.paintPlayerShip(g, 0, 0, s.elapsed, false); g.restore();
+    this.paintPlayerShip(g, 0, 0, time, false); g.restore();
     for (const side of [-1, 1]) {
       const x = turretX + side * 32;
       g.fillStyle(0x26384f); g.lineStyle(1, 0x91b7d5, 0.9);
@@ -549,7 +604,7 @@ export class FlightScene extends Phaser.Scene {
         g.lineStyle(2, 0x101b30); g.lineBetween(x - 4, turretY + vent * 5, x + 4, turretY + vent * 5);
       }
       g.fillStyle(0x79e1ce, 0.8); g.fillCircle(x, turretY - 6, 2);
-      const flame = 12 + Math.sin(s.elapsed * 35) * 4;
+      const flame = 12 + Math.sin(time * 35) * 4;
       g.fillStyle(0x71e4f5, 0.22); g.fillTriangle(x - 6, turretY + 20, x + 6, turretY + 20, x, turretY + 20 + flame);
       g.fillStyle(0xe4ffff); g.fillTriangle(x - 2, turretY + 20, x + 2, turretY + 20, x, turretY + 27);
     }
@@ -559,7 +614,7 @@ export class FlightScene extends Phaser.Scene {
     if (s.beamTime > 0) {
       g.lineStyle(8, 0x79e1ce, 0.10); g.lineBetween(muzzleX, muzzleY, s.beamX, s.beamY);
       g.lineStyle(2, 0xd9fff6, 0.9); g.lineBetween(muzzleX, muzzleY, s.beamX, s.beamY);
-      g.fillStyle(0xffffff, 0.9); g.fillCircle(s.beamX, s.beamY, 5);
+      if (!asteroidMode) { g.fillStyle(0xffffff, 0.9); g.fillCircle(s.beamX, s.beamY, 5); }
     }
     g.fillStyle(0x26364f); g.lineStyle(2, 0x8facc7);
     g.fillCircle(turretX, turretY, 17); g.strokeCircle(turretX, turretY, 17);
@@ -583,13 +638,17 @@ export class FlightScene extends Phaser.Scene {
     if (s.beamTime > 0) {
       g.fillStyle(0xd9fff6, 0.7); g.fillCircle(muzzleX, muzzleY, 6);
       g.lineStyle(2, 0xffca83, 0.8);
-      for (let spark = 0; spark < 6; spark++) {
+      for (let spark = 0; !asteroidMode && spark < 6; spark++) {
         const direction = spark * Math.PI / 3 + s.elapsed;
         g.lineBetween(s.beamX + Math.cos(direction) * 8, s.beamY + Math.sin(direction) * 8,
           s.beamX + Math.cos(direction) * 16, s.beamY + Math.sin(direction) * 16);
       }
     }
     g.fillStyle(s.cooldown <= 0 ? 0x79e1ce : 0xffac64); g.fillCircle(turretX, turretY, 5);
+    if (asteroidMode) {
+      this.paintAsteroidGunnerReticle(g, s);
+      return;
+    }
     const ready = s.cooldown <= 0;
     const pulse = ready ? 1 : 0.45;
     g.lineStyle(2, ready ? 0x79e1ce : 0xbba6ff, pulse);
@@ -599,6 +658,29 @@ export class FlightScene extends Phaser.Scene {
     g.lineBetween(s.crosshairX, s.crosshairY - 24, s.crosshairX, s.crosshairY - 8);
     g.lineBetween(s.crosshairX, s.crosshairY + 8, s.crosshairX, s.crosshairY + 24);
     g.fillStyle(ready ? 0x79e1ce : 0xbba6ff, pulse); g.fillCircle(s.crosshairX, s.crosshairY, 2.5);
+  }
+
+  private paintAsteroidGunnerReticle(g: Phaser.GameObjects.Graphics, s: GunnerState | SpaceGunnerState) {
+    const ready = s.cooldown <= 0;
+    const color = ready ? 0x79e1ce : 0xbba6ff;
+    const fraction = Math.max(0, Math.min(1, 1 - s.cooldown / gunnerFireEvery(this.config)));
+    const x = s.crosshairX, y = s.crosshairY;
+    // Stroke backing preserves the open center and keeps small targets visible.
+    g.lineStyle(5, 0x101528, .95); g.strokeCircle(x, y, 16);
+    g.lineStyle(2, color, ready ? .95 : .45); g.strokeCircle(x, y, 16);
+    for (const [width, tint] of [[5, 0x101528], [2, color]]) {
+      g.lineStyle(width, tint, .95);
+      g.lineBetween(x - 23, y, x - 10, y); g.lineBetween(x + 10, y, x + 23, y);
+      g.lineBetween(x, y - 23, x, y - 10); g.lineBetween(x, y + 10, x, y + 23);
+    }
+    // Lower semicircle fits even at the minimum aim Y; progress remains essential in reduced motion.
+    g.lineStyle(4, 0x101528, .9); g.beginPath(); g.arc(x, y, 21, 0, Math.PI); g.strokePath();
+    if (fraction > 0) {
+      g.lineStyle(2, color, .95); g.beginPath(); g.arc(x, y, 21, 0, Math.PI * fraction); g.strokePath();
+    }
+    if (ready) {
+      g.lineStyle(2, color, .95); g.lineBetween(x - 3, y + 27, x + 3, y + 27);
+    }
   }
 
   private paintProtection(g: Phaser.GameObjects.Graphics, x: number, y: number, radius: number, elapsed: number) {

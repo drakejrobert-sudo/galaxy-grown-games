@@ -114,3 +114,40 @@ Temporary comparison harness, eight simultaneous frozen Canvas scenes (before/af
 - [ ] Reduced motion; pause/app switch/explicit resume; retry; player-earned full completion and failure; inspect/copy GM report.
 
 Keep #42 open for remaining Asteroid Gunner/Life Support polish and agreed follow-ups. Drake reviews and merges; this pass performs no merge or manual deployment.
+
+
+## Asteroid Field Gunner targeting and impact polish
+
+2026-10-01. Base: current main at `7b080a7`, including Space Battle Bomber's shorter-launch follow-ups. Parent: #42; owner/device acceptance remains under #39 and shared controls #3.
+
+### Delivered presentation and interfaces
+
+Asteroid Gunner now has an open-center, dark-backed reticle with a lower-semicircle cooldown dial. Progress uses the selected band's actual cooldown, including Natural 1's doubled cooldown. Thin mint corner brackets identify the nearest currently eligible asteroid; the renderer and firing simulation share the pure `gunnerTargetAt` helper. Eligibility remains center distance <= radius + 7, with the nearest center winning and exact ties retaining array order. Brackets show current eligibility, not a guaranteed future hit or aim assistance.
+
+Rocks gain inset facets; armored rocks have amber inset segments, backed filled/empty HP pips and visible fractures after their first hit. These details retain the existing rock silhouette and target geometry.
+
+A nullable `GunnerState.shotFeedback` record stores outcome, impact position, radius and remaining simulation time. Each actual shot replaces it; rejected cooldown attempts do not. Misses show a restrained lavender ripple at the unchanged beam endpoint, surviving armor hits show amber sparks at the target's firing-time position, and destroyed rocks show six bounded fragments. Feedback lasts **0.18 simulation seconds**, a provisional cosmetic value. No new RNG calls, scoring events or collision targets are introduced. The existing beam endpoint remains the aim position.
+
+Asteroid Gunner decoration follows simulation time and freezes during pause/completion. Reduced motion freezes background/exhaust decoration and holds shot-effect geometry static while opacity fades; real hazards, automatic ship movement and cooldown progress remain functional. Changes to shared rendering are gated to Asteroid Gunner. Controls, shell, reports, difficulty bands, automatic course, cooldowns, damage and scoring v0.5 anchors are unchanged. Space Gunner and the other modes retain their renderer output.
+
+### Engineering evidence
+
+- `npm test`: **209/209 passed**, including seven new mechanics/renderer tests. Coverage includes nearest/tied/outside-tolerance targets, all bands with/without Natural 1, armor damage/destruction/misses, firing-time coordinates, cooldown rejection, feedback replacement/expiry, terminal freeze, retry defaults, RNG consumption, edge reticles, actual cooldown fractions, reduced motion, frozen-state rendering, finite geometry and restored transforms. Existing seeded calibration remains unchanged.
+- `npm run build`: passed TypeScript and Vite production build. Deferred Phaser runtime: **1,243.05 kB minified / 340.07 kB gzip**. Existing large-chunk advisory remains enabled.
+- Temporary base/current simulation comparison: **9,600 step calls** across four bands with/without Natural 1 produced identical state excluding the new cosmetic record, using matched seeded RNG streams. Calls after terminal state were included.
+- Temporary drawing-command comparison: **14 fixtures** (seven unaffected modes, normal/reduced motion), with populated representative hazards, matched the base renderer exactly.
+- Desktop Google Chrome via Playwright at **1100×1000, 390×1000 and 320×1000**: exercised actual mouse hover/click/hold and emulated-touch tap/hold/drag, aiming, miss/armor-hit/destruction outcomes against controlled hazards, explicit pause/resume, synthetic blur auto-pause, fresh retry, and copied completion/failure reports. No horizontal overflow or application page/console errors observed. The missing favicon response is excluded from application-error counts.
+- Completion/failure reports used controlled terminal fixtures, not player-earned full rounds. Hazard fixtures isolated actual pointer firing and outcome behavior; they do not establish human interception skill or balance.
+- Matched frozen before/after canvas screenshots and full-shell 320px/390px screenshots were captured and inspected. Reduced-motion canvas output, each distinct shot outcome and an edge-reticle fixture were also inspected. An additional 390px emulated-touch check confirmed three repeated shots while held and no further firing after release. Screenshots and harnesses stay outside the repository and are supplied in the Codex task.
+- Bounded desktop sample: **240 paired frozen-renderer paints**, sequential baseline/current per animation frame. Drawing-command rebuild median was about **0.10 ms** and p95 about **0.20 ms** for both. This excludes later Canvas rasterization and does not establish mobile FPS or sustained device performance.
+- `git diff --check`: passed.
+
+### Owner playtest checklist and limits
+
+- [ ] Actual iPhone/iPad Safari, portrait/landscape: tap/hold/drag aiming and firing, reachable Pause, readable armor pips/brackets/cooldown and uncluttered effects; check physical touch and smooth performance.
+- [ ] All four bands with/without Natural 1: identify misses, first armor hits and destruction; confirm the doubled cooldown's dial matches readiness and the ship remains automatic.
+- [ ] Pause, true app switching, explicit resume without stale firing, setup/play rotation, retry, player-earned completion/failure and manual GM report sharing.
+- [ ] Reduced-motion preference: restrained feedback remains recognizable while hazards and cooldown cues stay usable.
+- [ ] Record tested revision and Drake's gameplay/presentation judgment in #39; keep #42 open for remaining upgrades, including Asteroid Life Support.
+
+Real iPhone/iPad Safari, physical touch, rotation, true app switching, owner balance/presentation acceptance and sustained mobile performance remain unverified. Setup-time resize recovery and rating calibration remain separate follow-ups. Drake reviews and merges; no manual deployment or issue closure is performed.
