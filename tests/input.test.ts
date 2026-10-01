@@ -136,16 +136,16 @@ test('life support switch supports cycling, direct keyboard selection, and touch
 
 function mineHarness() {
   const oldWindow = globalThis.window;
-  const keys = new Map<string, Function>(), pointers = new Map<string, Function>();
+  const keys = new Map<string, Function>(), pointers = new Map<string, Function>(), surface = new Map<string, Function>();
   globalThis.window = { addEventListener: (name: string, fn: Function) => keys.set(name, fn) } as any;
-  const input = createSpaceBomberInput({ addEventListener: (name: string, fn: Function) => pointers.set(name, fn), setPointerCapture() {} } as any);
+  const input = createSpaceBomberInput({ addEventListener: (name: string, fn: Function) => surface.set(name, fn), setPointerCapture() {}, querySelector: () => ({ getBoundingClientRect: () => ({left:10,top:20,width:240,height:280}) }) } as any, { addEventListener: (name: string, fn: Function) => pointers.set(name, fn), setPointerCapture() {} } as any);
   input.enable(true);
-  return { input, keys, pointers, restore: () => { globalThis.window = oldWindow; } };
+  return { input, keys, pointers, surface, restore: () => { globalThis.window = oldWindow; } };
 }
-test('Space Bomber consumes one mine press and rejects repeats, aiming keys, and held input', () => {
+test('Space Bomber consumes one mine press and rejects repeats and held input', () => {
   const h = mineHarness();
   try {
-    for (const code of ['KeyA', 'ArrowRight', 'ShiftLeft']) h.keys.get('keydown')!({ code, preventDefault() { throw Error('unexpected control'); } });
+    for (const code of ['ShiftLeft']) h.keys.get('keydown')!({ code, preventDefault() { throw Error('unexpected control'); } });
     assert.deepEqual(h.input.read(), { placing: false });
     for (const code of ['Space', 'Enter']) {
       h.keys.get('keydown')!({ code, repeat: false, preventDefault() {} });
@@ -184,5 +184,36 @@ test('Space Bomber quick pointer taps survive release; holds, cancellation, paus
     assert.equal(h.input.read().placing, false);
     h.pointers.get('pointerdown')!({ ...e, pointerType: 'mouse', button: 0 });
     assert.equal(h.input.read().placing, true);
+  } finally { h.restore(); }
+});
+
+test('Space Bomber canvas previews hover and drag, launches on release, and clears cancelled gestures', () => {
+  const h = mineHarness();
+  try {
+    const e = {pointerId:2,pointerType:'mouse',button:0,clientX:130,clientY:220,preventDefault(){}};
+    h.surface.get('pointermove')!(e);
+    assert.deepEqual(h.input.read(), {placing:false,aim:{x:240,y:400}});
+    h.surface.get('pointerdown')!(e); assert.equal(h.input.read().placing,false);
+    h.surface.get('pointerup')!(e); h.surface.get('lostpointercapture')!(e);
+    assert.deepEqual(h.input.read(), {placing:true,aim:{x:240,y:400},launch:{x:240,y:400}});
+    assert.equal(h.input.read().placing,false);
+    for (const event of ['pointercancel','lostpointercapture']) {
+      h.surface.get('pointerdown')!({...e,pointerType:'touch'});
+      h.surface.get(event)!(e); h.surface.get('pointerup')!(e);
+      assert.deepEqual(h.input.read(),{placing:false});
+    }
+    h.surface.get('pointerdown')!(e); h.input.enable(false); h.input.enable(true);
+    h.surface.get('pointerup')!(e); assert.deepEqual(h.input.read(),{placing:false});
+    h.keys.get('keydown')!({code:'KeyA',preventDefault(){}});
+    assert.deepEqual(h.input.read(),{placing:false,turn:1});
+    h.keys.get('keydown')!({code:'ArrowRight',preventDefault(){}});
+    assert.deepEqual(h.input.read(),{placing:false});
+    h.keys.get('keydown')!({code:'KeyS',preventDefault(){}});
+    assert.equal(h.input.read().straight,true);
+    h.keys.get('keyup')!({code:'KeyS'});
+    h.keys.get('keydown')!({code:'ArrowDown',preventDefault(){}});
+    h.keys.get('keyup')!({code:'ArrowDown'});
+    assert.equal(h.input.read().straight,true, 'quick straight-aft taps survive release');
+    assert.equal(h.input.read().straight,undefined);
   } finally { h.restore(); }
 });

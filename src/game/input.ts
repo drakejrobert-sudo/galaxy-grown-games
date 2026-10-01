@@ -1,4 +1,4 @@
-import type { LifeSupportRoute, SpaceLifeInput } from './rules';
+import type { LifeSupportRoute, SpaceLifeInput, SpaceBattleBomberInput } from './rules';
 
 export function createInput(surface: HTMLElement) {
   const keys = new Set<string>();
@@ -158,16 +158,39 @@ export function createBomberInput(_surface: HTMLElement, action: HTMLElement) {
 }
 
 /** Mine-only pursuit: every press is a single attempt, never held or banked. */
-export function createSpaceBomberInput(action: HTMLElement) {
+export function createSpaceBomberInput(surface: HTMLElement, action: HTMLElement) {
   const keys = new Set<string>();
   const held = new Set<number>();
   const queued = new Set<number>();
-  let keyboardQueued = false, enabled = false;
-  const clear = () => { keys.clear(); held.clear(); queued.clear(); keyboardQueued = false; };
+  let keyboardQueued = false, straightQueued = false, enabled = false;
+  let gesture: number | null = null;
+  let aim: { x: number; y: number } | undefined;
+  let launch: typeof aim;
+  const clear = () => { keys.clear(); held.clear(); queued.clear(); keyboardQueued = false; straightQueued = false; gesture = null; aim = undefined; launch = undefined; };
+  const point = (e: PointerEvent) => {
+    const box = surface.querySelector('canvas')?.getBoundingClientRect();
+    return box && box.width && box.height ? { x: (e.clientX - box.left) / box.width * 480, y: (e.clientY - box.top) / box.height * 560 } : undefined;
+  };
+  surface.addEventListener('pointerdown', e => {
+    if (!enabled || gesture !== null || (e.pointerType === 'mouse' && e.button !== 0)) return;
+    e.preventDefault(); gesture = e.pointerId; aim = point(e); surface.setPointerCapture?.(gesture);
+  });
+  surface.addEventListener('pointermove', e => {
+    if (enabled && (e.pointerId === gesture || e.pointerType === 'mouse' && gesture === null)) { aim = point(e); }
+  });
+  surface.addEventListener('pointerup', e => {
+    if (!enabled || e.pointerId !== gesture || (e.pointerType === 'mouse' && e.button !== 0)) return;
+    e.preventDefault(); launch = point(e); aim = launch; gesture = null;
+  });
+  for (const event of ['pointercancel', 'lostpointercapture']) surface.addEventListener(event, ((e: PointerEvent) => {
+    if (e.pointerId === gesture) { gesture = null; aim = undefined; launch = undefined; }
+  }) as EventListener);
   window.addEventListener('keydown', e => {
-    if (!enabled || !['Space', 'Enter'].includes(e.code)) return;
+    if (!enabled || !['Space', 'Enter', 'ArrowLeft', 'ArrowRight', 'ArrowDown', 'KeyA', 'KeyD', 'KeyS'].includes(e.code)) return;
     e.preventDefault();
-    if (!e.repeat && !keys.has(e.code)) keyboardQueued = true;
+    if (!['Space', 'Enter'].includes(e.code)) aim = undefined;
+    if (['ArrowDown', 'KeyS'].includes(e.code)) straightQueued = true;
+    if (['Space', 'Enter'].includes(e.code) && !e.repeat && !keys.has(e.code)) keyboardQueued = true;
     keys.add(e.code);
   });
   window.addEventListener('keyup', e => keys.delete(e.code));
@@ -185,9 +208,14 @@ export function createSpaceBomberInput(action: HTMLElement) {
   return {
     enable(value: boolean) { enabled = value; clear(); },
     read() {
-      const placing = keyboardQueued || queued.size > 0;
-      keyboardQueued = false; queued.clear();
-      return { placing };
+      const input: SpaceBattleBomberInput = { placing: keyboardQueued || queued.size > 0 || launch !== undefined };
+      if (aim) input.aim = aim;
+      if (launch) input.launch = launch;
+      const turn = Number(keys.has('ArrowLeft') || keys.has('KeyA')) - Number(keys.has('ArrowRight') || keys.has('KeyD'));
+      if (turn) input.turn = turn;
+      if (straightQueued || keys.has('ArrowDown') || keys.has('KeyS')) input.straight = true;
+      keyboardQueued = false; straightQueued = false; queued.clear(); launch = undefined;
+      return input;
     },
   };
 }

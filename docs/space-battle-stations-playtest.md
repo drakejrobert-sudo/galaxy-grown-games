@@ -39,3 +39,7 @@ Engineering validation: all 125 tests and the production build passed (existing 
 Desktop Chrome actual-shell checks at 1100/390/320px verified y = 140, keyboard release at y = 174, positive full-width canvas bounds, no horizontal overflow, readable ship/mine/pursuer artwork, external action placement, and pause/resume. Screenshots were inspected; no browser page/console errors were reported. Physical iPhone/iPad Safari and owner judgment of the increased mine-timing window remain pending under #39.
 
 - [ ] After review/merge and successful automatic deployment, test mine timing on desktop and iPhone/iPad Safari across difficulties, including Natural 1. Confirm the higher ship gives enough useful approach time and the mine preview stays readable throughout the weave.
+
+## Aft-launcher follow-up
+
+The fixed-drop Bomber evidence above describes the earlier redesign. See [aimed aft launcher validation](space-bomber-aft-launcher-playtest.md) for the approved directional launch and harmless clean-pass change. Life Support mechanics and calibration gates remain unchanged.

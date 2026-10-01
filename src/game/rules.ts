@@ -821,6 +821,9 @@ export const SPACE_BATTLE_BOMBER_TUNING: Record<Difficulty, SpaceBattleBomberTun
 };
 export const SPACE_BOMBER_MINE_COOLDOWN = 0.85;
 export const SPACE_BOMBER_MINE_ARM_TIME = 0.2;
+export const SPACE_BOMBER_LAUNCH_DISTANCE = 100;
+export const SPACE_BOMBER_AIM_SPEED = 120 * Math.PI / 180;
+export const SPACE_BOMBER_PASS_TIME = 0.3;
 export const SPACE_BOMBER_MINE_LIFETIME = 4.5;
 export const SPACE_BOMBER_BLAST_RADIUS = 58;
 export const SPACE_BOMBER_PLAYER_RADIUS = 13;
@@ -831,10 +834,43 @@ export interface SpaceBomberEnemy {
   warningRemaining: number;
 }
 /** One frame's mine press, consumed even if the weapon is cooling down. */
-export interface SpaceBattleBomberInput { placing: boolean }
+export interface SpaceBattleBomberInput {
+  placing: boolean;
+  aim?: { x: number; y: number };
+  launch?: { x: number; y: number };
+  turn?: number;
+  straight?: boolean;
+}
+export interface SpaceBomberMine extends Mine {
+  flight?: { x: number; y: number; targetX: number; targetY: number; remaining: number };
+}
+export interface SpaceBomberPass extends SpaceBomberEnemy { remaining: number; side: -1 | 1 }
+export function spaceBomberLanding(ship: { x: number; y: number; aimAngle: number }) {
+  const rack = mineDropPosition(ship);
+  const angle = Math.max(0, Math.min(Math.PI, ship.aimAngle));
+  return { x: rack.x + Math.cos(angle) * SPACE_BOMBER_LAUNCH_DISTANCE,
+    y: rack.y + Math.sin(angle) * SPACE_BOMBER_LAUNCH_DISTANCE };
+}
+function aftAngle(point: { x: number; y: number }, ship: { x: number; y: number }): number | null {
+  const rack = mineDropPosition(ship), dx = point.x - rack.x, dy = point.y - rack.y;
+  if (!Number.isFinite(dx) || !Number.isFinite(dy) || dy < 0) return null;
+  return dx === 0 && dy === 0 ? Math.PI / 2 : Math.atan2(dy, dx);
+}
+/** First entry of a relative segment into a collision circle, including its start. */
+function circleEntry(x: number, y: number, dx: number, dy: number, radius: number, strict = false): number | null {
+  const c = x * x + y * y - radius * radius;
+  if (strict ? c < 0 : c <= 0) return 0;
+  const a = dx * dx + dy * dy;
+  if (a === 0) return null;
+  const b = 2 * (x * dx + y * dy), discriminant = b * b - 4 * a * c;
+  if (strict ? discriminant <= 0 : discriminant < 0) return null;
+  const t = (-b - Math.sqrt(discriminant)) / (2 * a);
+  return t >= 0 && (strict ? t < 1 : t <= 1) ? t : null;
+}
 export interface SpaceBattleBomberState {
   x: number;
   y: number;
+  aimAngle: number;
   elapsed: number;
   hull: number;
   hits: number;
@@ -844,7 +880,8 @@ export interface SpaceBattleBomberState {
   invulnerable: number;
   pursuerSpawnIn: number;
   enemies: SpaceBomberEnemy[];
-  mines: Mine[];
+  mines: SpaceBomberMine[];
+  passes: SpaceBomberPass[];
   explosions: Explosion[];
   nextId: number;
   impactFlash: number;
@@ -859,10 +896,10 @@ export function spaceBomberBlastRadius(config: FlightConfig): number {
 export function createSpaceBattleBomber(): SpaceBattleBomberState {
   return {
     // Upper-quarter station leaves room to read pursuers and lay mines. Provisional tuning.
-    x: WIDTH / 2, y: HEIGHT * 0.25, elapsed: 0, hull: 3, hits: 0, destroyed: 0,
+    x: WIDTH / 2, y: HEIGHT * 0.25, aimAngle: Math.PI / 2, elapsed: 0, hull: 3, hits: 0, destroyed: 0,
     minesPlaced: 0, mineCooldown: 0,
     invulnerable: 0, pursuerSpawnIn: 1.1,
-    enemies: [], mines: [], explosions: [], nextId: 1,
+    enemies: [], mines: [], passes: [], explosions: [], nextId: 1,
     impactFlash: 0, finished: false,
   };
 }
@@ -878,72 +915,135 @@ export function stepSpaceBattleBomber(
   dt = Math.min(Math.max(dt, 0), 0.05, DURATION - s.elapsed);
   if (dt <= 0) return;
   const tuning = SPACE_BATTLE_BOMBER_TUNING[difficultyFor(config.total)];
+  const oldShipX = s.x, oldGrace = s.invulnerable;
+  const previousMines = new Set(s.mines.map(mine => mine.id));
   s.elapsed += dt;
   s.invulnerable = Math.max(0, s.invulnerable - dt);
   s.mineCooldown = Math.max(0, s.mineCooldown - dt);
   s.impactFlash = Math.max(0, s.impactFlash - dt);
   for (const explosion of s.explosions) explosion.remaining -= dt;
   s.explosions = s.explosions.filter(explosion => explosion.remaining > 0);
+  for (const pass of s.passes) {
+    pass.x += pass.side * 180 * dt; pass.y -= pass.speed * dt; pass.remaining -= dt;
+  }
+  s.passes = s.passes.filter(pass => pass.remaining > 0);
 
   s.x = automaticShipX(s.elapsed);
-  if (input.placing && s.mineCooldown <= 0) {
-    s.mines.push({
-      id: s.nextId++, ...mineDropPosition(s), blastRadius: spaceBomberBlastRadius(config),
+  if (input.aim) s.aimAngle = aftAngle(input.aim, s) ?? s.aimAngle;
+  if (input.straight) s.aimAngle = Math.PI / 2;
+  else if (input.turn) s.aimAngle = Math.max(0, Math.min(Math.PI,
+    s.aimAngle + Math.max(-1, Math.min(1, input.turn)) * SPACE_BOMBER_AIM_SPEED * dt));
+  const releaseAngle = input.launch ? aftAngle(input.launch, s) : s.aimAngle;
+  // A pointer release ahead of the rack is cancelled, not redirected or banked.
+  if (input.placing && releaseAngle !== null && s.mineCooldown <= 0) {
+    s.aimAngle = releaseAngle;
+    const rack = mineDropPosition(s), target = spaceBomberLanding(s);
+    s.mines.push({ id: s.nextId++, ...rack, blastRadius: spaceBomberBlastRadius(config),
       armIn: SPACE_BOMBER_MINE_ARM_TIME, expiresIn: SPACE_BOMBER_MINE_LIFETIME,
-    });
-    s.minesPlaced++;
-    s.mineCooldown = SPACE_BOMBER_MINE_COOLDOWN;
+      flight: { ...rack, targetX: target.x, targetY: target.y, remaining: SPACE_BOMBER_MINE_ARM_TIME } });
+    s.minesPlaced++; s.mineCooldown = SPACE_BOMBER_MINE_COOLDOWN;
   }
 
-  // Each ship commits to the predicted intercept column at its actual spawn time.
-  // Advance existing pursuers first, so a new ship gets no unaccounted extra movement.
-  for (const enemy of s.enemies) {
-    enemy.y -= enemy.speed * dt;
-    enemy.warningRemaining = Math.max(0, enemy.warningRemaining - dt);
-  }
+  // Preserve each entity's exact within-step path, including a fractional spawn.
+  const paths = new Map<number, { y: number; start: number; end: number }>();
+  const advanceEnemy = (enemy: SpaceBomberEnemy, start: number) => {
+    const y = enemy.y;
+    const crossing = y < s.y ? start : enemy.speed > 0 ? start + (y - s.y) / enemy.speed : Infinity;
+    paths.set(enemy.id, { y, start, end: Math.min(dt, crossing) });
+    enemy.y -= enemy.speed * (dt - start);
+    enemy.warningRemaining = Math.max(0, enemy.warningRemaining - (dt - start));
+  };
+  for (const enemy of s.enemies) advanceEnemy(enemy, 0);
   s.pursuerSpawnIn -= dt;
   while (s.pursuerSpawnIn <= 0) {
-    const radius = 16;
-    const speed = tuning.enemySpeed * (0.88 + random() * 0.24);
-    const age = -s.pursuerSpawnIn;
-    const spawnY = HEIGHT + radius + 4;
+    const radius = 16, speed = tuning.enemySpeed * (0.88 + random() * 0.24);
+    const age = -s.pursuerSpawnIn, spawnY = HEIGHT + radius + 4;
     const interceptTime = s.elapsed - age + (spawnY - s.y) / speed;
-    s.enemies.push({ id: s.nextId++, x: automaticShipX(interceptTime),
-      y: spawnY - speed * age, radius, speed, warningRemaining: Math.max(0, 0.8 - age) });
+    const enemy = { id: s.nextId++, x: automaticShipX(interceptTime),
+      y: spawnY, radius, speed, warningRemaining: 0.8 };
+    s.enemies.push(enemy); advanceEnemy(enemy, dt - age);
     s.pursuerSpawnIn += tuning.pursuerSpawnEvery;
   }
-  for (const mine of s.mines) { mine.armIn -= dt; mine.expiresIn -= dt; }
-
-  const destroyedIds = new Set<number>();
-  const detonatedMines = new Set<number>();
+  const enemyY = (enemy: SpaceBomberEnemy, time: number) => {
+    const path = paths.get(enemy.id)!;
+    return path.y - enemy.speed * (time - path.start);
+  };
+  const contacts: { time: number; mine: SpaceBomberMine; enemy: SpaceBomberEnemy }[] = [];
   for (const mine of s.mines) {
-    if (mine.armIn > 0 || mine.expiresIn <= 0) continue;
-    if (s.enemies.some(enemy => !destroyedIds.has(enemy.id)
-      && Math.hypot(enemy.x - mine.x, enemy.y - mine.y) <= enemy.radius + 8)) {
-      detonatedMines.add(mine.id);
-      s.explosions.push({ x: mine.x, y: mine.y, radius: mine.blastRadius, remaining: 0.28 });
-      for (const enemy of s.enemies) {
-        if (Math.hypot(enemy.x - mine.x, enemy.y - mine.y) <= mine.blastRadius) destroyedIds.add(enemy.id);
+    // New launches occur at the end of this step; their flight/arming clock starts next step.
+    if (!previousMines.has(mine.id)) continue;
+    const armsAt = mine.armIn <= dt + 1e-9 ? Math.min(dt, Math.max(0, mine.armIn)) : mine.armIn;
+    const expiresAt = mine.expiresIn;
+    if (mine.flight) {
+      const flight = mine.flight;
+      flight.remaining = Math.max(0, flight.remaining - dt);
+      const progress = 1 - flight.remaining / SPACE_BOMBER_MINE_ARM_TIME;
+      mine.x = flight.x + (flight.targetX - flight.x) * progress;
+      mine.y = flight.y + (flight.targetY - flight.y) * progress;
+      if (flight.remaining <= 1e-9) { mine.x = flight.targetX; mine.y = flight.targetY; delete mine.flight; }
+    }
+    mine.armIn = Math.max(0, armsAt - dt); mine.expiresIn -= dt;
+    if (armsAt > dt || mine.flight) continue;
+    // Once armed the mine is stationary. Sweep only its live, armed interval.
+    for (const enemy of s.enemies) {
+      const path = paths.get(enemy.id)!;
+      if (path.y < s.y) continue;
+      const start = Math.max(armsAt, path.start), end = Math.min(dt, expiresAt, path.end);
+      if (start > end || start >= expiresAt) continue;
+      const y0 = enemyY(enemy, start), y1 = enemyY(enemy, end);
+      const entry = circleEntry(enemy.x - mine.x, y0 - mine.y, 0, y1 - y0, enemy.radius + 8);
+      if (entry === null) continue;
+      const time = start + entry * (end - start);
+      if (time < expiresAt) contacts.push({ time, mine, enemy });
+    }
+  }
+  contacts.sort((a, b) => a.time - b.time || a.mine.id - b.mine.id || a.enemy.id - b.enemy.id);
+  const destroyedIds = new Set<number>(), detonatedMines = new Set<number>();
+  for (const { time, mine, enemy } of contacts) {
+    if (detonatedMines.has(mine.id) || destroyedIds.has(enemy.id)) continue;
+    detonatedMines.add(mine.id);
+    s.explosions.push({ x: mine.x, y: mine.y, radius: mine.blastRadius, remaining: 0.28 - (dt - time) });
+    for (const candidate of s.enemies) {
+      const path = paths.get(candidate.id)!;
+      if (path.y >= s.y && time >= path.start && time <= path.end &&
+        Math.hypot(candidate.x - mine.x, enemyY(candidate, time) - mine.y) <= mine.blastRadius) {
+        destroyedIds.add(candidate.id);
       }
     }
   }
   s.destroyed += destroyedIds.size;
-  s.enemies = s.enemies.filter(enemy => !destroyedIds.has(enemy.id));
   s.mines = s.mines.filter(mine => mine.expiresIn > 0 && !detonatedMines.has(mine.id));
-
-  const colliding = s.enemies.filter(enemy =>
-    Math.hypot(enemy.x - s.x, enemy.y - s.y) < enemy.radius + SPACE_BOMBER_PLAYER_RADIUS);
-  if (colliding.length) {
-    if (s.invulnerable <= 0) {
-      s.hits++;
-      s.hull = Math.max(0, s.hull - 1);
-      s.invulnerable = SPACE_BOMBER_COLLISION_GRACE;
-      s.impactFlash = 0.18;
-    }
-    const collidedIds = new Set(colliding.map(enemy => enemy.id));
-    s.enemies = s.enemies.filter(enemy => !collidedIds.has(enemy.id));
+  // Mine defense has priority over ship damage, as in the existing Bomber rules.
+  const colliding: { enemy: SpaceBomberEnemy; time: number }[] = [];
+  for (const enemy of s.enemies) {
+    if (destroyedIds.has(enemy.id)) continue;
+    const path = paths.get(enemy.id)!;
+    if (path.y < s.y || path.end < path.start) continue;
+    const shipAt = (time: number) => oldShipX + (s.x - oldShipX) * time / dt;
+    const y0 = enemyY(enemy, path.start), y1 = enemyY(enemy, path.end);
+    const x0 = enemy.x - shipAt(path.start), x1 = enemy.x - shipAt(path.end);
+    const entry = circleEntry(x0, y0 - s.y, x1 - x0, y1 - y0,
+      enemy.radius + SPACE_BOMBER_PLAYER_RADIUS, true);
+    if (entry !== null) colliding.push({ enemy, time: path.start + entry * (path.end - path.start) });
   }
-  s.enemies = s.enemies.filter(enemy => enemy.y + enemy.radius > -20);
+  colliding.sort((a, b) => a.time - b.time || a.enemy.id - b.enemy.id);
+  const damaging = colliding.find(contact => contact.time >= oldGrace);
+  if (damaging) {
+    s.hits++; s.hull = Math.max(0, s.hull - 1);
+    s.invulnerable = SPACE_BOMBER_COLLISION_GRACE - (dt - damaging.time); s.impactFlash = 0.18;
+  }
+  const collidedIds = new Set(colliding.map(contact => contact.enemy.id));
+  s.enemies = s.enemies.filter(enemy => {
+    if (destroyedIds.has(enemy.id) || collidedIds.has(enemy.id)) return false;
+    if (enemy.y <= s.y) {
+      const path = paths.get(enemy.id)!, remainingStep = dt - path.end;
+      const side = enemy.x < WIDTH / 2 ? -1 : 1;
+      s.passes.push({ ...enemy, x: enemy.x + side * 180 * remainingStep,
+        remaining: SPACE_BOMBER_PASS_TIME - remainingStep, side });
+      return false;
+    }
+    return true;
+  });
   s.finished = s.hull <= 0 || s.elapsed >= DURATION;
 }
 

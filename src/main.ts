@@ -67,7 +67,7 @@ const gunnerInput = createGunnerInput(canvas);
 const spaceGunnerInput = createSpaceGunnerInput(canvas, fireAction);
 const spaceGunnerHelp = 'Ship flies automatically. Touch/mouse aims; touch aim never fires. Hold Fire to shoot. Mouse primary click also fires. Arrow keys / WASD aims; Space / Enter fires.';
 const bomberInput = createBomberInput(canvas, action);
-const spaceBomberInput = createSpaceBomberInput(action);
+const spaceBomberInput = createSpaceBomberInput(canvas, action);
 const lifeSupportInput = createLifeSupportInput(routeButtons);
 const spaceLifeInput = createSpaceLifeInput({ left: get('move-left'), right: get('move-right'), jump: get('jump') });
 let game: Phaser.Game | null = null;
@@ -126,7 +126,7 @@ function refreshSetup() {
       ? selectedSituation === 'Space Battle' ? spaceGunnerHelp : 'Ship flies automatically. Touch: tap, hold, or drag to aim and fire. Mouse: move to aim, then click or hold to fire.'
       : selectedRole === 'Bomber'
         ? selectedSituation === 'Space Battle'
-          ? 'Ship weaves automatically. Pursuers commit to straight approaches from behind. Press Space/Enter or tap Drop mine once per release; time mines to intercept their paths. Wait for the amber ready light.'
+          ? 'Ship weaves automatically. Aim behind the aft rack: tap or drag and release to launch a mine. Mouse hover previews; release launches. Left/Right or A/D rotates aim; Down/S aims straight aft; Space/Enter or Launch mine fires once. Amber means ready. Clean passes are harmless.'
           : 'Ship flies automatically. Time your drops as the ship sweeps across the field. Hold Drop mine, Space, or Enter to release mines directly behind the ship. Only ship collisions cost hull; missed asteroids pass safely.'
         : selectedSituation === 'Space Battle'
           ? 'Move with Left/Right or A/D and jump with Up/W/Space. Stand beside a blue panel for 1.5 seconds to repair it automatically; progress is kept when you move away. Touch uses Left, Right, and Jump.'
@@ -168,7 +168,7 @@ function preparePlayLayout() {
   get('play').setAttribute('data-role', role);
   get('play').setAttribute('data-situation', situation);
   action.hidden = role !== 'Bomber';
-  action.textContent = 'Drop mine';
+  action.textContent = situation === 'Space Battle' && role === 'Bomber' ? 'Launch mine' : 'Drop mine';
   const spaceGunner = situation === 'Space Battle' && role === 'Gunner';
   fireAction.hidden = !spaceGunner;
   fireAction.textContent = 'Fire';
@@ -209,14 +209,14 @@ function launch() {
       ? situation === 'Space Battle' ? spaceGunnerHelp : 'Automatic flight · Touch to aim/fire · Mouse to aim, click to fire'
       : role === 'Bomber'
         ? situation === 'Space Battle'
-          ? 'Automatic weaving · Pursuers approach from behind · Space/Enter or Drop mine: one mine per press · Amber means ready'
+          ? 'Automatic weaving · Aim aft: tap or drag/release · ←/→ or A/D aim · ↓/S straight aft · Space/Enter or Launch mine fires · Amber means ready'
           : 'Automatic flight · Time your mine drops · Space / Enter or Drop mine releases behind ship · Only ship hits cost hull'
         : situation === 'Space Battle'
           ? 'Stomp orange fires; side contact hurts · Blue panels warn then shoot sparks: jump/dodge, stand nearby for 1.5s to repair · Progress is kept · Hearts heal · Avoid overloads'
           : 'Match packet symbols · Left/Right or A/D · 1/2/3 · Tap a system';
   canvas.setAttribute('aria-label', situation === 'Space Battle'
     ? role === 'Gunner' ? `Space battle gunner station. ${spaceGunnerHelp}` : role === 'Bomber'
-      ? 'Space battle bomber station. Ship weaves automatically. Pursuers approach from behind on fixed paths. Press Space or Enter, or tap Drop mine, for one mine per press when ready. Mines drop directly behind the ship.'
+      ? 'Space battle bomber station. Automatic weaving. Tap behind the aft rack or drag and release to launch; mouse hover previews and primary release launches. Left/Right or A/D rotates aim, Down/S selects straight aft. Space/Enter or Launch mine launches once when ready. Clean passes are harmless.'
       : role === 'Life Support'
         ? 'Space battle life support. Move left or right and jump between platforms. Stomp orange fires from above; side contact hurts. Dodge or jump over sparks from blue panels; automatically repair panels by standing nearby for 1.5 seconds; progress is kept when leaving. Touch controls are below the playfield.'
         : 'Space battle pilot station. Collect fuel and evade enemy ships and fire with arrow keys, WASD, or touch.'
@@ -364,7 +364,7 @@ scene.onSpacePilotStep = s => {
   }
 };
 scene.onSpaceBomberStep = s => {
-  action.textContent = s.mineCooldown <= 0 ? 'Drop mine · Ready' : 'Mine cooling';
+  action.textContent = s.mineCooldown <= 0 ? 'Launch mine · Ready' : 'Mine cooling';
   get('time').textContent = `${Math.ceil(DURATION - s.elapsed)}s`;
   get('hull').textContent = `${s.hull} / 3`;
   get('score').textContent = String(spaceBattleBomberScoreFor(s));
