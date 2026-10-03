@@ -374,3 +374,78 @@ Requires Node 22.12+ and the installed tsx loader. The harnesses import bundled 
 - [ ] Record frame intervals and active-wall versus simulation time on a supported device that feels slow. Preserve raw and delivered deltas separately and mark background/pause boundaries; CPU throttling is not device evidence.
 - [ ] All four bands ± Natural 1: judge controls, warning/cooldown fairness and rating outcomes; pause, switch apps, explicitly resume, rotate, retry and manually share a report.
 - [ ] Review the proposed timing policy separately before implementation. Keep #42/#3/#39 open for remaining owner acceptance; this PR grants no merge or manual deployment authorization.
+
+## Bounded frame timing implementation — 2026-10-03
+
+Follow-up to the measurement-only PR #54, based on fresh remote `main` at `40bb312f831f43377639ec8d6cebe8e0d85fc905`. The tested implementation revision is `aab39d9` (the subsequent documentation commit changes only this report). Drake selected explicit pause for active frame gaps greater than 250 ms. This is a gameplay/lifecycle change awaiting PR review and owner/device acceptance.
+
+### Implemented policy
+
+- Simulation reads Phaser 3.90's `game.loop.rawDelta`, before delivered-delta smoothing. Rendering configuration and each rule's defensive 50 ms cap remain unchanged.
+- Positive, finite active intervals through 250 ms advance fully in successive steps of at most 50 ms, at most five steps per frame. There is no accumulator or deferred backlog. Invalid/nonpositive intervals do no simulation work.
+- An interval greater than 250 ms advances nothing and enters the existing explicit pause flow, clears held/queued controls, and displays “Play paused after an interruption. Resume when ready.”
+- Launch, retry, mode change and pause/resume reset timing continuity. The first active update establishes continuity without state advancement or input consumption; this deliberately excludes the boundary interval rather than counting pre-launch/paused time.
+- Queued actions are sampled once. Quick shots, jumps, Space Bomber presses/releases and queued straight-aft resets apply only on the first substep; a cooldown-rejected attempt is discarded. Continuing substeps retain supported held movement, aim and weapon controls. Space Bomber launches remain single attempts even while the button/key is held.
+- Pilot touch direction is recalculated from the current position on each substep using the existing pure input read. Space Bomber pointer coordinates are interpreted once against the rack displayed before advancement; subsequent steps retain angle/range and applicable held keyboard controls.
+- Terminal state stops remaining substeps immediately. HUD/results publish once per advancing frame, including its terminal frame; painting runs once per update. Rule state layouts, tuning, geometry, scoring anchors, difficulty/Natural 1 and dependencies are unchanged.
+
+### Before/after evidence
+
+The pre-change direct-scene baseline below is the controlled measurement recorded above, independent of Phaser filtering. Post-change values were also checked through the actual browser scene at both 1100 px and 390 px in every mode, with delivered delta deliberately set to 1 ms to verify it is ignored.
+
+| Active raw interval | Old direct scene advancement | New advancement | Disposition |
+| --- | --- | --- | --- |
+| 16.67 / 33.33 / 50 ms | Full interval | Full interval | One rule step; seeded comparisons pass |
+| 100 ms | 50 ms | 100 ms | Two steps; 50 ms loss removed |
+| 250 ms | 50 ms | 250 ms | Five steps; 200 ms loss removed |
+| 251 ms | At most 50 ms through rules; Phaser could filter earlier | 0 ms | Explicit interruption pause |
+
+Phaser's earlier isolated-250-ms experiment delivered about 16.67 ms after filtering. Using raw delta prevents that particular pre-rules loss as well. Gaps beyond the approved threshold and launch/resume boundary intervals are deliberately excluded, not advertised as recovered time.
+
+### Automated and browser validation
+
+Environment: macOS ARM64; local Node `v25.9.0`; repository-locked Phaser 3.90/TypeScript/Vite/tsx; bundled Playwright with installed headless desktop Chrome `154.0.8037.93`. Temporary browser tooling and screenshots remain outside shipped source under `/private/tmp/ggg-timing-evidence`; the inspected unminified production build is `/private/tmp/ggg-timing-build`. No dependencies were added or updated.
+
+- **234 tests passed**, production TypeScript/Vite build passed, `git diff --check` passed. The pre-existing Phaser chunk-size warning remains.
+- **320 seeded comparisons**: eight modes × four totals (5, 10, 15, 16) × Natural 1 on/off × five intervals (16.67, 33.33, 50, 100, 250 ms). Each case runs up to six simulated seconds or terminal state. Scene state, RNG draw count and final seed match direct rules using identical substeps/inputs. Tests verify the five-step limit, positive step sizes, input-read counts, one HUD callback and one paint per advancing frame.
+- Additional tests cover the 250/250.001 ms boundary, invalid intervals, startup/resume priming, retry, paused state/input/RNG, all-mode timed completion, fatal Pilot collision, quick versus held shots, cooldown rejection, single Bomber launch/target retention, Pilot touch direction, damage grace, repair progress through pause and one repair award. Existing mechanics, input cancellation, independent ownership, resize and startup regressions remain passing.
+- **16 focused browser cases**: all modes at 1100/390 px, normal CPU. Each advances injected 100/250 ms intervals fully, freezes on 251 ms, resumes explicitly without replaying the gap, and pauses after an actual 320 ms main-thread busy stall through Phaser's live loop. These are controlled behavioral checks, not sustained performance benchmarks; the earlier 96-sample performance investigation remains the measurement baseline.
+- 390 px context has emulated touch. Chrome DevTools touch events exercise simultaneous Space Gunner aim/Fire, aim-only without shooting, independent Fire release, and a quick Space Bomber launch rejected during cooldown without being banked. Desktop mouse covers that Bomber rejection as well.
+- A separate eight-mode browser lifecycle pass exercises sustained applicable controls, manual pause/resize/resume, synthetic window blur, setup/retry at 320 px, mode switching, completion/failure report fixtures and Copy. The fixtures validate reporting paths rather than proving earned gameplay completion.
+- Screenshots were captured for active/paused states at both widths and result screens. The eight narrow active screens and narrow interruption overlay were inspected: readable HUD, unobstructed playfield, accessible controls and readable interruption/Resume content. Both browser suites finish with no application errors; the lifecycle suite also rejects console warnings.
+- The timing harness required two corrected setup retries: explicitly prime a freshly resumed/launched scene before measuring, and target the Fire touch pointer when releasing one of two CDP touches. Those failed assertions were harness setup errors; the final run passes all 16 cases. Sandbox access was required for local Git metadata, preview-server binding and Chrome launch; no repository permission settings were changed.
+
+Reproduce the committed timing, input and lifecycle coverage from this branch:
+
+```sh
+npm ci
+node --import tsx --test tests/frame-timing.test.ts tests/frame-input.test.ts tests/startup.test.ts
+npm test
+npm run build
+git diff --check
+```
+
+To repeat the external browser checks while their temporary harnesses are retained, use the bundled Playwright package and installed Chrome paths in the harnesses:
+
+```sh
+node node_modules/vite/bin/vite.js build --minify false --outDir /private/tmp/ggg-timing-build
+node node_modules/vite/bin/vite.js preview --outDir /private/tmp/ggg-timing-build --host 127.0.0.1 --port 5186
+# In another terminal:
+node /private/tmp/ggg-timing-evidence/qa.cjs
+node /private/tmp/ggg-timing-evidence/timing-qa.cjs
+```
+
+The harness appends a read-only `window.__qa` getter to the served shell bundle. Controlled interval cases temporarily suppress normal scene updates, set `game.loop.rawDelta`, call the real scene update, and restore the raw value. The real-stall cases restore Phaser's cached scene update and busy-wait for 320 ms. JSON summaries (`qa.json`, `timing-qa.json`) and PNGs remain temporary local evidence, not durable artifacts available to other checkouts. The committed tests provide the durable reproduction of the timing contract.
+
+### Compatibility limits and physical Safari checklist
+
+Raw timing replaces smoothed timing and catch-up applies input over additional simulation steps. Existing trajectories, collision outcomes, hazard pressure and scores can therefore differ during jitter/slow frames despite unchanged numeric tuning. State/RNG equivalence is established only for identical substeps and inputs, not arbitrary frame cadences. Five steps bound the work, but this pass does not establish sustained mobile performance or absence of interruption pauses on slower devices. No rendering cache/HUD rewrite or scoring recalibration is justified by the prior profiles.
+
+Before final acceptance on the merged/deployed revision, record dated evidence separately for an actual iPhone and iPad Safari:
+
+- Play every mode across all four bands and Natural 1. Assess timing, hazard fairness, provisional ratings and whether the 250 ms interruption policy pauses too often.
+- Check sustained/quick actions, simultaneous Space Gunner aim/Fire, one-attempt Bomber launches, touch Pilot speed/destination and Life Support jumps/repairs. Pause/resume must retain simulation aim/repair progress and clear stale controls.
+- Switch apps/tabs, lock/unlock, rotate, resize/retry and change modes. Hidden time must not advance play; interruptions require explicit resume; playfields must recover visible nonzero bounds.
+- Check terminal completion/failure, one result report, readable/copyable scores and accessible pause controls in both orientations.
+
+Desktop CPU throttling, narrow viewports, emulated touch and synthetic blur are supporting evidence only. Physical Safari, human gameplay/score acceptance and Drake's final signoff remain pending. Keep #42, #3 and #39 open; this PR uses `Refs` and authorizes no manual deployment.
