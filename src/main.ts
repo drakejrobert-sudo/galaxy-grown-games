@@ -80,7 +80,36 @@ let role: Role = 'Pilot';
 let situation: Situation = 'Asteroid Field';
 let inFlight = false;
 let paused = false;
+let playfieldRefreshFrame: number | null = null;
+function cancelPlayfieldRefresh() {
+  if (playfieldRefreshFrame === null) return;
+  cancelAnimationFrame(playfieldRefreshFrame);
+  playfieldRefreshFrame = null;
+}
+function playfieldIsMeasurable() {
+  if (get('play').hidden) return false;
+  const bounds = canvas.getBoundingClientRect();
+  return bounds.width > 0 && bounds.height > 0;
+}
+function refreshPlayfield() {
+  if (!game || !playfieldIsMeasurable()) return;
+  // refresh() sizes from cached parent bounds before rereading them. Hidden
+  // setup/results can cache zero bounds, so measure the visible layout first.
+  game.scale.getParentBounds();
+  game.scale.refresh();
+}
+function schedulePlayfieldRefresh() {
+  if (!game || !playfieldIsMeasurable() || playfieldRefreshFrame !== null) return;
+  playfieldRefreshFrame = requestAnimationFrame(() => {
+    playfieldRefreshFrame = null;
+    refreshPlayfield();
+  });
+}
+if (typeof ResizeObserver !== 'undefined') {
+  new ResizeObserver(schedulePlayfieldRefresh).observe(canvas);
+}
 function show(section: string) {
+  if (section !== 'play') cancelPlayfieldRefresh();
   for (const id of ['setup', 'play', 'results']) get(id).hidden = id !== section;
 }
 function sizeSummary() {
@@ -179,6 +208,8 @@ function preparePlayLayout() {
   platformControls.hidden = role !== 'Life Support' || situation !== 'Space Battle';
 }
 function launch() {
+  cancelPlayfieldRefresh();
+  refreshPlayfield();
   const startPaused = pauseOnReady || document.hidden;
   launchPending = false;
   pauseOnReady = false;
@@ -288,7 +319,7 @@ get('flight-form').addEventListener('submit', async e => {
     } finally {
       setLoading(false);
     }
-  } else { preparePlayLayout(); show('play'); game.scale.refresh(); launch(); }
+  } else { preparePlayLayout(); show('play'); launch(); }
 });
 function attachSceneCallbacks(scene: FlightScene) {
 scene.onSpaceGunnerStep = s => {

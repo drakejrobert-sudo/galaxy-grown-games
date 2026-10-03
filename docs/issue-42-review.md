@@ -196,3 +196,31 @@ Reduced motion freezes the mode's background decoration, panel lights, scanner, 
 - [ ] True app switching, explicit resume, setup/play rotation, retry, player-earned completion/failure and manual GM sharing; record revision and Drake's judgment in #39.
 
 Setup-time resize recovery, frame-pacing investigation, rating recalibration and issue-checklist cleanup remain separate follow-ups. Keep #42/#39/#3 open. Drake reviews and merges; this PR does not merge or manually deploy.
+
+## Playfield resize recovery
+
+2026-10-02. Base: current main at `755041e`, including merged Asteroid Gunner #51 and Asteroid Life Support #52. Refs #42, #3, #39. This resolves the setup-time resize recovery follow-up; performance and rating investigations remain separate.
+
+### Reproduction and fix
+
+Desktop Chrome baseline: launch at 1100px, pause, return to setup, resize to 320px, wait for Phaser's hidden-parent measurements, then launch again. The hidden parent/display widths were both 0. After retry, the parent recovered to 282px but the displayed canvas stayed **0×0**, even after 800ms. Phaser 3.90's `refresh()` computes display size from cached parent bounds before remeasuring them; its later polling sees the already-recovered parent size and does not repair the zero display size.
+
+The shell now measures visible, positive-size parent bounds with `getParentBounds()` before `refresh()` at scene readiness and every reused launch, after role-specific layout is shown. A canvas-container ResizeObserver coalesces notifications into one animation-frame refresh. Both scheduling and execution reject hidden/zero-size containers; leaving play cancels queued work. Retry, mode switching and results keep the same Phaser game. Logical dimensions remain 480×560. Sizing does not change simulation, controls, retained aim, paused status or explicit resume; existing blur/background pause rules remain.
+
+### Validation
+
+- `npm test`: **216/216 passed**. New regression coverage models Phaser's size-before-remeasure behavior with zero cached bounds; checks all eight mode launches/layouts, deferred readiness, one reused game, notification batching, hidden/zero measurements, queued cancellation, paused state, retained crosshair, unchanged input enable calls, results and retry. Existing deferred-loading/background-pause tests remain passing.
+- `npm run build` and `git diff --check`: passed. Existing deferred Phaser chunk advisory remains: 1,243.71 kB minified / 340.19 kB gzip. No dependencies or build artifacts are committed.
+- Fixed browser reproduction: hidden cache still reaches zero, but retry now produces a **282×329** canvas at the 320px viewport.
+- Desktop Google Chrome via bundled Playwright (Browser plugin unavailable): **98 layout checks** across all eight modes at 1100px, 320px and 390px; setup resize/retry, active and paused resizing, results resize/retry, and Space Gunner → Pilot switching. Verified nonzero canvas bounds, logical size/aspect ratio, parent fit, no horizontal overflow, one reused game, frozen paused state and explicit resume. Bomber and Space Gunner control-rail checks include widths 615/616/617/631/632/633/650px with visible, horizontally reachable action buttons.
+- **12 mouse mapping checks**: both Pilot and Gunner modes at 320/390/1100px after resizing; actual mouse events mapped the selected rendered canvas location to its expected logical coordinates.
+- **15 emulated-touch mapping checks**: both Pilot/Gunner modes and Space Bomber at 320/390/1100px after hidden setup resize/retry. Actual Chrome touch events checked steering, aim/fire versus aim-only, and Bomber aim coordinates. Simulation was temporarily frozen by the external harness for these input inspections; physical touch and gameplay skill are not established.
+- Intended page title/content, no Vite error overlay, and no application console/page errors verified in the desktop loop. Full-shell 390px paused Space Gunner and 320px emulated-touch Asteroid Gunner screenshots captured and inspected. Harnesses, response-only QA getters and screenshots stay outside shipped source.
+- Results checks use controlled terminal-state callbacks, not player-earned complete rounds. Real Safari, physical touch, true app switching, sustained mobile performance and owner acceptance remain unverified.
+
+### Owner playtest checklist
+
+- [ ] Actual iPhone/iPad Safari: launch, pause/back to setup, rotate portrait ↔ landscape, retry and switch each station; canvas remains visible, fitted and correctly targeted.
+- [ ] Rotate during active and paused play, including Bomber/Space Gunner action-rail changes. Pause remains paused until explicit resume; controls remain reachable without accidental scrolling.
+- [ ] Complete/fail real runs, rotate on results, return to setup and retry; manually share the GM report.
+- [ ] Record tested revision and Drake's acceptance in #39. Keep #42/#3/#39 open; Drake reviews and merges the PR.
