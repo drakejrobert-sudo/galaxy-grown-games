@@ -99,8 +99,9 @@
 
 .route-controls button[aria-pressed="true"] {
   border-color: var(--mint);
-  background: #32415e;
-  box-shadow: 0 0 0 2px #79e1ce33;
+  background: #24483f;
+  color: #f0fff9;
+  box-shadow: inset 0 -4px 0 var(--mint), 0 0 0 1px #79e1ce66;
 }
 
 .platform-controls {
@@ -133,8 +134,9 @@
     padding: 8px 4px;
   }
 
-  .route-controls button span,
-  .route-controls button small { display: none; }
+  .route-controls button { gap: 2px; }
+  .route-controls button span { font-size: 16px; }
+  .route-controls button small { font-size: 10px; }
 }
 
 /* Gunner budgets 16px for a desktop scrollbar as well as the 616px rail layout. */
@@ -158,3 +160,12 @@
     box-shadow: none;
   }
 }
+
+/* Routing explanations stay outside the playfield; fixed status space prevents jumps. */
+.routing-info { max-width: 480px; margin: 8px auto 0; }
+.routing-info .help { margin: 8px 0; }
+.routing-status { box-sizing: border-box; height: 5.5em; margin: 0; padding: 8px 10px;
+  font-size: 12px; line-height: 1.5; border-left: 3px solid var(--edge);
+  background: #121c30; color: #c5cde1; }
+.routing-status[data-outcome="correct"] { border-color: var(--mint); color: #baffeb; }
+.routing-status[data-outcome="incorrect"] { border-color: #ff8f6b; color: #ffd4c7; }

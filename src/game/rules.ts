@@ -530,6 +530,13 @@ export interface LifeSupportPacket {
   kind: LifeSupportPacketKind;
 }
 export interface LifeSupportInput { route: LifeSupportRoute }
+export interface LifeSupportRoutingFeedback {
+  kind: LifeSupportPacketKind;
+  expectedRoute: LifeSupportRoute;
+  selectedRoute: LifeSupportRoute;
+  correct: boolean;
+  integrityDelta: number;
+}
 export interface LifeSupportState {
   elapsed: number;
   integrity: number;
@@ -544,6 +551,7 @@ export interface LifeSupportState {
   packets: LifeSupportPacket[];
   finished: boolean;
   lastResult: 'correct' | 'incorrect' | null;
+  routingFeedback: LifeSupportRoutingFeedback | null;
   feedbackTime: number;
 }
 
@@ -568,7 +576,7 @@ export function createLifeSupport(): LifeSupportState {
     elapsed: 0, integrity: LIFE_SUPPORT_MAX_INTEGRITY, routed: 0, mistakes: 0,
     heartsRouted: 0, overloadsRouted: 0, spawnIn: 0.7, spawnIndex: 0,
     nextId: 1, selectedRoute: 'Shields', packets: [], finished: false,
-    lastResult: null, feedbackTime: 0,
+    lastResult: null, feedbackTime: 0, routingFeedback: null,
   };
 }
 
@@ -603,6 +611,7 @@ export function stepLifeSupport(
   for (const packet of s.packets) packet.y += packet.speed * dt;
   const arriving = s.packets.filter(packet => packet.y >= LIFE_SUPPORT_SWITCH_Y);
   for (const packet of arriving) {
+    const integrityBefore = s.integrity;
     if (packet.target === s.selectedRoute) {
       s.routed++;
       if (packet.kind === 'heart') {
@@ -617,6 +626,9 @@ export function stepLifeSupport(
       s.integrity = Math.max(0, s.integrity - (packet.kind === 'overload' ? 2 : 1));
       s.lastResult = 'incorrect';
     }
+    s.routingFeedback = { kind: packet.kind, expectedRoute: packet.target,
+      selectedRoute: s.selectedRoute, correct: packet.target === s.selectedRoute,
+      integrityDelta: s.integrity - integrityBefore };
     s.feedbackTime = 0.22;
   }
   if (arriving.length) {
