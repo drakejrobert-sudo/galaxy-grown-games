@@ -344,6 +344,7 @@ External harnesses and raw records are retained locally under /private/tmp/ggg-p
 From the tested checkout, prepare and serve the external unminified build:
 
 ```sh
+npm ci
 npm run build
 node node_modules/vite/bin/vite.js build --minify false --outDir /private/tmp/ggg-pacing-build
 node node_modules/vite/bin/vite.js preview --host 127.0.0.1 --port 5184 --strictPort --outDir /private/tmp/ggg-pacing-build
@@ -353,7 +354,7 @@ In a separate terminal, using the retained local harnesses:
 
 ```sh
 node /private/tmp/ggg-pacing-evidence/profile.cjs
-node --import /path/to/tsx/dist/loader.mjs /private/tmp/ggg-pacing-evidence/controlled.cjs
+node --import ./node_modules/tsx/dist/loader.mjs /private/tmp/ggg-pacing-evidence/controlled.cjs
 node /private/tmp/ggg-pacing-evidence/phaser-delta.cjs
 node /private/tmp/ggg-pacing-evidence/qa.cjs
 node /private/tmp/ggg-pacing-evidence/summarize.cjs
