@@ -224,3 +224,152 @@ The shell now measures visible, positive-size parent bounds with `getParentBound
 - [ ] Rotate during active and paused play, including Bomber/Space Gunner action-rail changes. Pause remains paused until explicit resume; controls remain reachable without accidental scrolling.
 - [ ] Complete/fail real runs, rotate on results, return to setup and retry; manually share the GM report.
 - [ ] Record tested revision and Drake's acceptance in #39. Keep #42/#3/#39 open; Drake reviews and merges the PR.
+
+
+## Frame-pacing investigation — 2026-10-03
+
+Tested base: `996cef1` (merged #53). Refs #42, #3, #39. **96 browser samples / 57,678 active updates** show no loss at the rules cap on this desktop. One **316.6 ms raw frame** was filtered by Phaser to **16.67 ms**, losing approximately 300 ms before the rules ran. Controlled slow-frame cases confirm both timing layers. This documentation-only pass changes no production timing, inputs, scoring, dependencies or APIs.
+
+### Measurement method
+
+Chrome 154.0.8037.93, headless desktop ARM64 macOS; Node 22.19.0, Phaser 3.90.0 and Vite 7.3.6. Browser plugin unavailable; bundled Playwright used. External unminified production build served at localhost:5184/galaxy-grown-games/. The normal minified production build is validated separately. These results do not measure the live deployed bundle, physical Safari or mobile rendering headroom.
+
+Eight modes × widths 1100/390 × CPU rates 1/4 × three samples, each at least 10,000 ms of active raw rAF time. Sequential contexts avoid simultaneous game workloads. Height 1100, desktop device scale factor 1, no mobile emulation in the timing matrix. Hard/check 5, Natural 1 off, default motion preference. The controlled matrix separately covers all bands and Natural 1. Wait for Phaser's 120-frame startup cooldown; omit loading/setup/paused intervals. Continue a mode across samples, retry via the real shell when it ends, and reset interval continuity at retries. Warmup deaths precede samples and are excluded from their retry counts.
+
+Every 500 ms scripted keyboard events alternate Pilot left/right every 2 seconds, press Bomber Space, cycle Asteroid Life routes and alternate Space Life movement with a jump every second. Gunner uses real Playwright mouse down per launch, then synthetic mouse aim moves toward the lowest current target. This creates repeatable control workloads, not player skill or physical touch evidence. Random hazards are unseeded in live browser samples. The deterministic VM checks use seed 42 separately.
+
+The browser intercepts only the index JS response to append a read-only getter for the existing scene/game; no checkout or build file is rewritten. Wrap existing scene update, paint and HUD callbacks with performance.now(), invoking each original once with its original receiver/arguments. Phaser caches scene.update at boot: assign the same observer to scene.sys.sceneUpdate. Read input only through the original update. Record game.loop.rawDelta (rAF timestamp interval), delivered delta, change in selected state's elapsed, total update duration, paint duration and HUD callback duration. Also record performance.now() arrival intervals. Do not add Math.random calls. Buffer rows in memory and extract outside measured update execution.
+
+Timer granularity is approximately 0.1 ms. Update includes simulation, HUD, command-building and wrapper overhead; paint measures Graphics command rebuilding, not later Canvas rasterization/compositing. HUD includes synchronous DOM writes; deferred layout/paint can happen afterward. Quantiles are pooled across three samples per configuration. Signed Phaser gap = raw minus delivered; it can be negative at a sample boundary as smoothing redistributes time. Rules cap loss excludes terminal frames; round-end clipping is reported separately. Small floating-point differences round to zero.
+
+
+### Live browser measurements
+
+Each row pools three active-play samples. Width/CPU is CSS viewport width and requested CDP CPU rate. Frames/retries excludes warmup retries. Timing cells are **median/p95 milliseconds**; values rounded to zero are below timer resolution, not free work. Raw is the rAF timestamp interval; arrival is the observer's performance.now() interval (first update of each active segment excluded). These are scheduling observations, not measurements of screen presentation. Update includes HUD and paint; do not add these columns together. CPU-throttled timings must not be interpreted as an improvement: contexts ran in fixed order, JIT/scheduling differ and timer precision is coarse; this is not a randomized paired optimization benchmark.
+
+| Mode | Width/CPU | Frames/retries | Raw | Arrival | Delivered | Update | HUD | Paint commands | >50 ms raw/delivered |
+| --- | --- | ---: | --- | --- | --- | --- | --- | --- | ---: |
+| Asteroid/Pilot | 1100/1× | 1803/4 | 16.7/16.7 | 16.7/16.8 | 16.67/16.67 | 0.3/0.4 | 0/0.1 | 0.2/0.3 | 0/0 |
+| Asteroid/Gunner | 1100/1× | 1803/5 | 16.7/16.8 | 16.7/17.9 | 16.67/16.67 | 0.3/0.4 | 0/0.1 | 0.2/0.3 | 0/0 |
+| Asteroid/Bomber | 1100/1× | 1803/1 | 16.7/16.7 | 16.7/18.3 | 16.67/16.67 | 0.3/0.4 | 0/0.1 | 0.2/0.3 | 0/0 |
+| Asteroid/Life Support | 1100/1× | 1803/3 | 16.7/16.7 | 16.7/17.4 | 16.67/16.67 | 0.3/0.4 | 0.1/0.1 | 0.2/0.3 | 0/0 |
+| Space Battle/Pilot | 1100/1× | 1803/3 | 16.7/16.8 | 16.7/18.4 | 16.67/16.67 | 0.4/0.5 | 0/0.1 | 0.3/0.4 | 0/0 |
+| Space Battle/Gunner | 1100/1× | 1803/1 | 16.7/16.7 | 16.7/17.2 | 16.67/16.67 | 0.3/0.4 | 0/0.1 | 0.2/0.3 | 0/0 |
+| Space Battle/Bomber | 1100/1× | 1803/2 | 16.7/16.7 | 16.7/17.6 | 16.67/16.67 | 0.4/0.6 | 0/0.1 | 0.3/0.4 | 0/0 |
+| Space Battle/Life Support | 1100/1× | 1803/1 | 16.7/16.8 | 16.7/16.9 | 16.67/16.67 | 0.3/0.4 | 0/0.1 | 0.2/0.3 | 0/0 |
+| Asteroid/Pilot | 1100/4× | 1803/4 | 16.7/16.7 | 16.7/17.4 | 16.67/16.67 | 0/0.3 | 0/0.1 | 0/0.2 | 0/0 |
+| Asteroid/Gunner | 1100/4× | 1803/5 | 16.7/16.8 | 16.7/18.2 | 16.67/16.67 | 0/0.5 | 0/0.1 | 0/0.3 | 0/0 |
+| Asteroid/Bomber | 1100/4× | 1803/0 | 16.7/16.7 | 16.7/17.8 | 16.67/16.67 | 0.1/0.4 | 0/0.1 | 0/0.3 | 0/0 |
+| Asteroid/Life Support | 1100/4× | 1803/3 | 16.7/16.8 | 16.7/18.3 | 16.67/16.67 | 0.1/0.4 | 0/0.1 | 0/0.2 | 0/0 |
+| Space Battle/Pilot | 1100/4× | 1803/3 | 16.7/16.8 | 16.7/17.4 | 16.67/16.67 | 0.1/0.5 | 0/0.1 | 0.1/0.4 | 0/0 |
+| Space Battle/Gunner | 1100/4× | 1803/1 | 16.7/16.7 | 16.7/18.3 | 16.67/16.67 | 0/0.3 | 0/0.1 | 0/0.3 | 0/0 |
+| Space Battle/Bomber | 1100/4× | 1803/3 | 16.7/16.7 | 16.7/18.1 | 16.67/16.67 | 0.1/0.4 | 0/0.1 | 0/0.3 | 0/0 |
+| Space Battle/Life Support | 1100/4× | 1803/1 | 16.7/16.8 | 16.7/17.7 | 16.67/16.67 | 0/0.4 | 0/0.1 | 0/0.3 | 0/0 |
+| Asteroid/Pilot | 390/1× | 1803/4 | 16.7/16.8 | 16.7/16.8 | 16.67/16.67 | 0.3/0.4 | 0/0.1 | 0.2/0.3 | 0/0 |
+| Asteroid/Gunner | 390/1× | 1803/5 | 16.7/16.7 | 16.7/18.2 | 16.67/16.67 | 0.2/0.4 | 0/0.1 | 0.2/0.3 | 0/0 |
+| Asteroid/Bomber | 390/1× | 1785/1 | 16.7/16.7 | 16.7/17.5 | 16.67/16.67 | 0.3/0.4 | 0/0.1 | 0.2/0.3 | 1/0 |
+| Asteroid/Life Support | 390/1× | 1803/4 | 16.7/16.8 | 16.7/17.1 | 16.67/16.67 | 0.3/0.4 | 0/0.1 | 0.2/0.3 | 0/0 |
+| Space Battle/Pilot | 390/1× | 1803/3 | 16.7/16.8 | 16.7/17.2 | 16.67/16.67 | 0.4/0.5 | 0/0.1 | 0.3/0.4 | 0/0 |
+| Space Battle/Gunner | 390/1× | 1803/1 | 16.7/16.7 | 16.7/17.3 | 16.67/16.67 | 0.3/0.4 | 0/0.1 | 0.2/0.3 | 0/0 |
+| Space Battle/Bomber | 390/1× | 1803/2 | 16.7/16.7 | 16.7/16.9 | 16.67/16.67 | 0.4/0.5 | 0/0.1 | 0.3/0.4 | 0/0 |
+| Space Battle/Life Support | 390/1× | 1803/2 | 16.7/16.7 | 16.7/17.2 | 16.67/16.67 | 0.3/0.4 | 0/0.1 | 0.2/0.3 | 0/0 |
+| Asteroid/Pilot | 390/4× | 1803/4 | 16.7/16.7 | 16.7/17.6 | 16.67/16.67 | 0.1/0.5 | 0/0.1 | 0/0.4 | 0/0 |
+| Asteroid/Gunner | 390/4× | 1803/5 | 16.7/16.8 | 16.7/17.3 | 16.67/16.67 | 0.1/0.4 | 0/0.1 | 0/0.3 | 0/0 |
+| Asteroid/Bomber | 390/4× | 1803/0 | 16.7/16.7 | 16.7/17.5 | 16.67/16.67 | 0.1/0.4 | 0/0.1 | 0/0.3 | 0/0 |
+| Asteroid/Life Support | 390/4× | 1803/3 | 16.7/16.7 | 16.7/17.2 | 16.67/16.67 | 0.1/0.4 | 0/0.1 | 0/0.3 | 0/0 |
+| Space Battle/Pilot | 390/4× | 1803/2 | 16.7/16.7 | 16.7/17.3 | 16.67/16.67 | 0.1/0.6 | 0/0.1 | 0.1/0.4 | 0/0 |
+| Space Battle/Gunner | 390/4× | 1803/1 | 16.7/16.8 | 16.7/17.2 | 16.67/16.67 | 0.1/0.5 | 0/0.1 | 0/0.3 | 0/0 |
+| Space Battle/Bomber | 390/4× | 1803/2 | 16.7/16.7 | 16.7/17.3 | 16.67/16.67 | 0.1/0.6 | 0/0.1 | 0.1/0.5 | 0/0 |
+| Space Battle/Life Support | 390/4× | 1803/1 | 16.7/16.8 | 16.7/17.9 | 16.67/16.67 | 0.1/0.5 | 0/0.1 | 0/0.4 | 0/0 |
+
+Across the full matrix: **961.561 s raw active time**, approximately **961.258 s delivered and simulated time**, **one raw interval >50 ms**, **zero delivered intervals >50 ms**, and **80 in-sample retries**. Phaser's signed raw-minus-delivered difference totals **303.34 ms**; all but the outlier configuration have combined differences between −0.16 and +0.26 ms. The sum of positive rules-cap residuals is below 0.000001 ms (floating-point error). There is no material terminal-round clipping in these samples.
+
+| Width/CPU (all eight modes) | Raw active (s) | Delivered (s) | Simulated (s) | Signed Phaser gap (ms) | Rules loss, nonterminal (ms) | Terminal clipping (ms) |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| 1100/1× | 240.391 | 240.389 | 240.389 | 1.12 | 0.00 | 0.00 |
+| 1100/4× | 240.391 | 240.390 | 240.390 | 0.90 | 0.00 | 0.00 |
+| 390/1× | 240.390 | 240.090 | 240.090 | 300.38 | 0.00 | 0.00 |
+| 390/4× | 240.390 | 240.389 | 240.389 | 0.94 | 0.00 | 0.00 |
+
+The outlier was **Asteroid Bomber, 390px, 1× CPU, sample 1**: 583 active updates, 10,016.4 ms raw time, 9,716.283 ms delivered/simulated time, 300.117 ms net Phaser gap. At that interval: raw and arrival approximately 316.6 ms, delivered/simulation 16.67 ms, observer update 0.2 ms, HUD 0.1 ms and paint 0.1 ms. Adjacent updates cost 0.1–0.3 ms. No source cause for the stall is established; it could reflect browser/host scheduling or work outside the measured update. Keep this sample rather than removing the outlier. Phaser filtering explains the time loss; measured command rebuilding does not explain the stall.
+
+Pooled update p95 spans 0.3–0.6 ms, HUD p95 0.1 ms and command-building p95 0.2–0.5 ms. The largest update was 11.7 ms, including an 11.5 ms terminal HUD/results callback, in desktop Pilot; maximum command-building duration was 1.5 ms. No sustained CPU-side command-building or HUD bottleneck is established. Canvas rasterization/compositing and slower supported hardware remain unmeasured.
+
+### Source findings
+
+FlightScene.update passes Phaser's delivered delta/1000 once to the selected rule function, once to the existing HUD callback, then rebuilds Graphics. Every rule function caps nonnegative dt at 0.05 and remaining round time. Thus direct 100 ms scene updates advance 50 ms; direct 250 ms updates advance 50 ms. The loss is persistent: no accumulator or subsequent catch-up exists.
+
+Phaser default smoothStep is true, deltaHistory 10, target 60 FPS, min 5 FPS (200 ms cutoff), panicMax 120. During startup/focus cooldown, raw delta is limited to the target interval. After cooldown, raw intervals above 200 ms are replaced by a history slot before the 10-frame average. A single 250 ms stall therefore need not deliver 250 ms to the scene. A substep loop using only smoothed delta would not recover time already filtered by Phaser.
+
+
+### Controlled timing and observer checks
+
+Run the actual scene/rules with a no-op Graphics adapter and seed 42. Compare uninstrumented and identically instrumented scenes after every update: all eight state objects, RNG draws/final seed, input-read counts and HUD callback counts. **320 paired runs and 320,337 active updates passed**: eight modes × totals 5/10/15/16 × Natural 1 off/on × five cadence scenarios. Inputs are deterministic held movement/firing, periodic mine/jump attempts and route/aim changes; they are synthetic, not browser/device controls. Each run stops at its first terminal state. Pause at update 60 advances no state and reads no input; three further terminal updates leave state, RNG and reads unchanged.
+
+| Direct scene-update scenario | Configurations | Rules cap loss |
+| --- | ---: | --- |
+| Steady 16.67 ms | 64 | Zero, excluding normal final-round clipping |
+| Steady 33.33 ms | 64 | Zero, excluding normal final-round clipping |
+| Steady 50 ms | 64 | Zero, excluding normal final-round clipping |
+| Steady 100 ms | 64 | 50 ms per update; total 6.9–60.05 s until terminal, depending on run |
+| 16.67 ms with one 250 ms update at index 120 | 64 | Exactly 200 ms per run; no later catch-up |
+
+These direct scene updates bypass Phaser so the rules layer can be isolated. To isolate Phaser separately, extract and execute the installed 3.90.0 TimeStep.smoothDelta function with its real defaults (10 initial history slots of 16.667 ms, min cutoff 200 ms, in focus). Below uses 300 raw intervals; all steady scenarios begin with cooldown already zero. The initial history causes the reported transition gap; the final delivered delta shows steady state.
+
+| Raw scenario | Raw time (s) | Delivered (s) | Capped simulation budget (s) | Phaser gap (ms) | Rules budget loss (ms) | Last/stall delivered (ms) |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| 300 × 16.67 ms | 5.001 | 5.001 | 5.001 | 0.015 | 0 | 16.67 |
+| 300 × 33.33 ms | 9.999 | 9.924 | 9.924 | 74.985 | 0 | 33.33 |
+| 300 × 50 ms | 15.000 | 14.850 | 14.850 | 150 | 0 | 50 |
+| 300 × 100 ms | 30.000 | 29.625 | 14.950 | 375 | 14,675 | 100 |
+| 300 × 250 ms | 75.000 | 5.000 | 5.000 | 70,000 | 0 | 16.667 |
+| 299 × 16.667 ms + one 250 ms stall at index 120 | 5.233 | 5.000 | 5.000 | 233.333 | 0 | 16.667 |
+
+The isolated stall result also matches when initial cooldown is 120. These are executable algorithm checks, not observed device frame traces. The capped budget column applies min(delivered, 50); it is not a player-earned full game. They show why fixing only the 50 ms cap cannot recover Phaser-filtered time.
+
+### Follow-up proposal (for review, not implemented)
+
+Retain gameplay and renderer behavior for this measurement PR. No caching or HUD rewrite is justified by source density alone. Obtain supported slow-device traces before calling desktop headroom a device pass.
+
+If owner review prioritizes the reproducible time-loss case, make one separate bounded timing PR: use raw active-frame delta rather than Phaser smoothing for simulation; keep existing rule-step guards and integrate up to 250 ms in substeps no larger than 50 ms (maximum five steps). No retained backlog across frames. A raw interval above 250 ms should advance nothing, clear queued/held actions and use the existing pause overlay with a short interruption reason and explicit Resume. 250 ms is a proposed safety threshold requiring owner review, not established balance tuning. Do not change global Phaser smoothStep/render scheduling speculatively.
+
+Separate held input from consumed actions before substeps: held movement/weapon actions continue, but jump, single mine launch, queued quick shot, straight-aft selection and pointer release occur only once. Resolve Space Bomber world-point preview/release against the displayed pre-step rack; retain the resulting aim/range for remaining substeps. Recompute Pilot destination steering from current position through the pure steering path. Keep aim-only Space Gunner touch and all speed/cooldown constraints. A cooldown-rejected one-shot is discarded, never banked.
+
+On pause/background/setup/retry/resume, reset timing continuity and discard any unprocessed time/input; never catch up a hidden-tab interval. On completion/fatal state, stop substeps immediately; notify the HUD/results once and paint once per rendered update. Preserve duration caps, collision ordering/grace and source-owned hazard rules. Normal deltas <=50 ms retain one rule invocation. Larger deltas can change collision, spawn and scoring trajectories versus today's slowed simulation; require seeded comparisons, one-shot regressions and owner/device checks rather than claiming universal FPS-independent equivalence. Leave live anchors and tuning unchanged; review changed outcomes separately.
+
+### Reproduction and evidence retention
+
+External harnesses and raw records are retained locally under /private/tmp/ggg-pacing-evidence, outside shipped source. They are not required for normal development or CI. Use profile.cjs for browser samples, controlled.cjs for paired scene/state checks, phaser-delta.cjs for the installed smoothDelta function and qa.cjs for shell checks. Run summarize.cjs after profiling to pool raw rows. Do not run builds/tests or other benchmark workloads concurrently with profiles. The methodology above specifies the same measurement independently of the local harness lifetime.
+
+From the tested checkout, prepare and serve the external unminified build:
+
+```sh
+npm run build
+node node_modules/vite/bin/vite.js build --minify false --outDir /private/tmp/ggg-pacing-build
+node node_modules/vite/bin/vite.js preview --host 127.0.0.1 --port 5184 --strictPort --outDir /private/tmp/ggg-pacing-build
+```
+
+In a separate terminal, using the retained local harnesses:
+
+```sh
+node /private/tmp/ggg-pacing-evidence/profile.cjs
+node --import /path/to/tsx/dist/loader.mjs /private/tmp/ggg-pacing-evidence/controlled.cjs
+node /private/tmp/ggg-pacing-evidence/phaser-delta.cjs
+node /private/tmp/ggg-pacing-evidence/qa.cjs
+node /private/tmp/ggg-pacing-evidence/summarize.cjs
+```
+
+Requires Node 22.12+ and the installed tsx loader. The harnesses import bundled Playwright, use installed desktop Chrome and point at the isolated checkout/build paths; adapt those local paths to repeat on another machine. `profile.cjs` resumes existing `profiles.json`, so archive that file and its raw records before a fresh matrix. Only the local evidence directory contains these scripts: they are not published repository tools. Record the new environment and revision. For independent reproduction without that directory, use the observation recipe and input/sample protocol above; instantiate the scene with the no-op Graphics adapter used by `tests/rendering.test.ts`, inject seed-42 RNG into each rule call, and compare every state/read/RNG count after each cadence update until terminal state.
+
+
+### Validation and owner checklist
+
+- `npm test`: **216/216 passed**; ordinary TypeScript/Vite minified production build passed; `git diff --check` passed before delivery. Existing Phaser large-chunk advisory remains (1,243.71 kB minified / 340.19 kB gzip). No generated builds/dependencies/harnesses/traces are committed.
+- Desktop Chrome QA through the external profiling build: all eight modes launched; actual keyboard/mouse and route-button actions changed state; pause froze state across resize to 390px, explicit resume advanced it, synthetic blur required resume, setup resize/retry to 320px recovered positive canvas bounds, mode switching worked and results/Copy were exercised. Page identity, meaningful content, absence of Vite overlay, console/page health and horizontal overflow passed. No application warnings/errors in the completed profiling or QA runs.
+- Completed/failed reports used terminal fixtures through the actual callbacks. They are not earned full-round success or owner balance evidence. Live timing samples include natural failures and retries; 390px is desktop layout, not touch emulation. Actual iPhone/iPad Safari, physical multitouch, true app switching, supported-device performance and owner acceptance remain pending. Representative 390px Gunner/Life Support live screenshots and a copied Gunner report were inspected; external screenshots are retained locally.
+- A profiling startup wait timed out once before the Space Life samples. A fresh diagnostic launch succeeded without application errors; the harness now brings the page forward and explicitly resumes a paused launch before sampling. Completed sample data was retained. An initial QA assertion read Copy status before its asynchronous callback resolved; waiting for the status fixed the harness check. These are harness corrections, not repository fixes or established gameplay defects.
+
+- [ ] Real iPhone/iPad Safari: all eight modes at supported orientations, sustained play through completion/failure, readable effects, reachable controls and no accidental scrolling; record model, OS, browser and tested revision.
+- [ ] Record frame intervals and active-wall versus simulation time on a supported device that feels slow. Preserve raw and delivered deltas separately and mark background/pause boundaries; CPU throttling is not device evidence.
+- [ ] All four bands ± Natural 1: judge controls, warning/cooldown fairness and rating outcomes; pause, switch apps, explicitly resume, rotate, retry and manually share a report.
+- [ ] Review the proposed timing policy separately before implementation. Keep #42/#3/#39 open for remaining owner acceptance; this PR grants no merge or manual deployment authorization.
