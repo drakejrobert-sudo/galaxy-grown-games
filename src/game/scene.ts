@@ -124,7 +124,7 @@ export class FlightScene extends Phaser.Scene {
       : this.role === 'Pilot' ? this.flight.elapsed
         : this.role === 'Gunner' ? this.gunner.elapsed
           : this.role === 'Bomber' ? this.bomber.elapsed : this.lifeSupport.elapsed;
-    this.paintBackground(g, this.role === 'Pilot' || this.role === 'Bomber' || (this.situation === 'Asteroid Field' && this.role === 'Gunner') ? this.decorativeTime(elapsed) : elapsed);
+    this.paintBackground(g, this.role === 'Pilot' || this.role === 'Bomber' || (this.situation === 'Asteroid Field' && (this.role === 'Gunner' || this.role === 'Life Support')) ? this.decorativeTime(elapsed) : elapsed);
     if (this.situation === 'Space Battle') {
       if (this.role === 'Life Support') this.paintSpaceLifeMode(g);
       else if (this.role === 'Gunner') this.paintSpaceGunnerMode(g);
@@ -1004,8 +1004,9 @@ export class FlightScene extends Phaser.Scene {
 
   private paintLifeSupportMode(g: Phaser.GameObjects.Graphics) {
     const s = this.lifeSupport;
-    const feedbackColor = s.lastResult === 'correct' ? 0x79e1ce : 0xff715b;
-    this.paintLifeSupportPanel(g, s.elapsed);
+    const feedbackColor = s.routingFeedback?.correct ? 0x79e1ce : 0xff715b;
+    const time = this.decorativeTime(s.elapsed);
+    this.paintLifeSupportPanel(g, time);
 
     // Packet conduit: layered walls, regular braces, and a moving scanner pulse.
     g.fillStyle(0x111d31, 0.99); g.fillRoundedRect(WIDTH / 2 - 55, 76, 110, LIFE_SUPPORT_SWITCH_Y - 88, 18);
@@ -1017,7 +1018,7 @@ export class FlightScene extends Phaser.Scene {
       g.fillStyle(0x293c58); g.fillRoundedRect(WIDTH / 2 - 48, y, 96, 5, 2);
       g.fillStyle(0x7188a4, 0.6); g.fillCircle(WIDTH / 2 - 42, y + 2.5, 1.5); g.fillCircle(WIDTH / 2 + 42, y + 2.5, 1.5);
     }
-    const scannerY = 88 + (s.elapsed * 72) % Math.max(1, LIFE_SUPPORT_SWITCH_Y - 110);
+    const scannerY = 88 + (time * 72) % Math.max(1, LIFE_SUPPORT_SWITCH_Y - 110);
     g.lineStyle(7, 0x79e1ce, 0.06); g.lineBetween(WIDTH / 2 - 43, scannerY, WIDTH / 2 + 43, scannerY);
     g.lineStyle(1, 0xbafff2, 0.5); g.lineBetween(WIDTH / 2 - 40, scannerY, WIDTH / 2 + 40, scannerY);
 
@@ -1032,7 +1033,9 @@ export class FlightScene extends Phaser.Scene {
       g.lineBetween(WIDTH / 2, LIFE_SUPPORT_SWITCH_Y, x, 472);
 
       if (selected) {
-        const flow = (s.elapsed * 1.15 + routeIndex * 0.19) % 1;
+        g.lineStyle(2, 0xf0fff9, 0.9);
+        g.lineBetween(WIDTH / 2, LIFE_SUPPORT_SWITCH_Y, x, 472);
+        const flow = (time * 1.15 + routeIndex * 0.19) % 1;
         const flowX = WIDTH / 2 + (x - WIDTH / 2) * flow;
         const flowY = LIFE_SUPPORT_SWITCH_Y + (472 - LIFE_SUPPORT_SWITCH_Y) * flow;
         g.fillStyle(color, 0.18); g.fillCircle(flowX, flowY, 9);
@@ -1046,6 +1049,10 @@ export class FlightScene extends Phaser.Scene {
       g.fillStyle(color, selected ? 0.9 : 0.35); g.fillRoundedRect(x - 31, 469, 62, 4, 2);
       for (const dx of [-43, 43]) for (const dy of [10, 71]) {
         g.fillStyle(0x7890a9, 0.72); g.fillCircle(x + dx, 458 + dy, 2);
+      }
+      if (selected) {
+        g.lineStyle(2, 0xf0fff9, 0.95); g.strokeRoundedRect(x - 48, 462, 96, 74, 8);
+        g.fillStyle(0xf0fff9); g.fillTriangle(x - 6, 449, x + 6, 449, x, 456);
       }
       this.paintLifeSupportSymbol(g, { kind: 'power', target: route }, x, 501, 0.92);
       g.lineStyle(1, color, 0.35); g.lineBetween(x - 23, 526, x + 23, 526);
@@ -1073,24 +1080,43 @@ export class FlightScene extends Phaser.Scene {
     g.fillStyle(0xeaf7ff); g.fillCircle(WIDTH / 2, LIFE_SUPPORT_SWITCH_Y, 5);
 
     for (const packet of s.packets) {
-      const pulse = 0.75 + Math.sin(s.elapsed * 10 + packet.id) * 0.12;
-      const packetColor = packet.kind === 'overload' ? 0xff8f6b : this.lifeSupportRouteColor(packet.target);
-      for (let trail = 3; trail > 0; trail--) {
-        g.fillStyle(packetColor, 0.035 * (4 - trail)); g.fillCircle(packet.x, packet.y - trail * 11, 5 + trail);
+      const { x, y } = packet;
+      const color = packet.kind === 'heart' ? 0x79e1ce
+        : packet.kind === 'overload' ? 0xff8f6b : this.lifeSupportRouteColor(packet.target);
+      const pulse = 0.88 + Math.sin(time * 10 + packet.id) * 0.06;
+      g.fillStyle(color, 0.07); g.fillCircle(x, y, 27);
+      g.fillStyle(0x0c1729, 0.99); g.lineStyle(2, color, pulse);
+      if (packet.kind === 'heart') {
+        g.fillRoundedRect(x - 22, y - 22, 44, 44, 15);
+        g.strokeRoundedRect(x - 22, y - 22, 44, 44, 15);
+      } else if (packet.kind === 'overload') {
+        // Four beveled corners distinguish overloads even without color.
+        g.fillPoints([{x:x-13,y:y-22},{x:x+13,y:y-22},{x:x+22,y:y-13},
+          {x:x+22,y:y+13},{x:x+13,y:y+22},{x:x-13,y:y+22},
+          {x:x-22,y:y+13},{x:x-22,y:y-13}], true);
+        g.strokePoints([{x:x-13,y:y-22},{x:x+13,y:y-22},{x:x+22,y:y-13},
+          {x:x+22,y:y+13},{x:x+13,y:y+22},{x:x-13,y:y+22},
+          {x:x-22,y:y+13},{x:x-22,y:y-13}], true);
+      } else {
+        g.fillRoundedRect(x - 22, y - 22, 44, 44, 5);
+        g.strokeRoundedRect(x - 22, y - 22, 44, 44, 5);
       }
-      g.fillStyle(packetColor, 0.07); g.fillCircle(packet.x, packet.y, 31);
-      g.fillStyle(0x1d2942, 0.98); g.lineStyle(2, this.lifeSupportRouteColor(packet.target), pulse);
-      g.fillCircle(packet.x, packet.y, 22); g.strokeCircle(packet.x, packet.y, 22);
-      for (const rotation of [0, Math.PI / 2, Math.PI, Math.PI * 1.5]) {
-        g.fillStyle(0x91a8c1, 0.8);
-        g.fillRoundedRect(packet.x + Math.cos(rotation) * 22 - 3, packet.y + Math.sin(rotation) * 22 - 2, 6, 4, 1);
-      }
-      this.paintLifeSupportSymbol(g, packet, packet.x, packet.y, 0.75);
+      this.paintLifeSupportSymbol(g, packet, x, y, 1);
     }
 
-    if (s.feedbackTime > 0) {
-      g.fillStyle(feedbackColor, 0.06 + s.feedbackTime * 0.26); g.fillRect(16, 15, WIDTH - 32, HEIGHT - 30);
-      g.lineStyle(5, feedbackColor, 0.35 + s.feedbackTime * 0.4); g.strokeRoundedRect(17, 16, WIDTH - 34, HEIGHT - 32, 20);
+    if (s.feedbackTime > 0 && s.routingFeedback) {
+      const x = this.lifeSupportRouteX(s.routingFeedback.selectedRoute);
+      const alpha = Math.min(1, s.feedbackTime / 0.22);
+      g.lineStyle(3, feedbackColor, alpha);
+      g.strokeCircle(WIDTH / 2, LIFE_SUPPORT_SWITCH_Y, 38);
+      g.strokeRoundedRect(x - 52, 458, 104, 82, 14);
+      // Check/cross marks communicate the outcome without relying on color.
+      g.lineStyle(3, feedbackColor, alpha);
+      if (s.routingFeedback.correct) {
+        g.lineBetween(x - 7, 482, x - 2, 487); g.lineBetween(x - 2, 487, x + 8, 478);
+      } else {
+        g.lineBetween(x - 6, 479, x + 6, 487); g.lineBetween(x + 6, 479, x - 6, 487);
+      }
     }
   }
 }

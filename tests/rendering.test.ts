@@ -283,3 +283,50 @@ test('Asteroid Gunner reduced motion freezes decoration and feedback geometry wh
       : assert.equal(v, laterGeometry[i][j])));
   }
 });
+
+function routingFixture(scene: any) {
+  scene.situation = 'Asteroid Field'; scene.role = 'Life Support';
+  Object.assign(scene.lifeSupport, { elapsed: 8, selectedRoute: 'Shields', feedbackTime: .12,
+    routingFeedback: { kind: 'heart', expectedRoute: 'Shields', selectedRoute: 'Shields', correct: true, integrityDelta: 1 },
+    packets: [
+      { id: 1, x: 240, y: 125, speed: 100, target: 'Thrusters', kind: 'power' },
+      { id: 2, x: 240, y: 215, speed: 100, target: 'Shields', kind: 'heart' },
+      { id: 3, x: 240, y: 305, speed: 100, target: 'Guns', kind: 'overload' },
+    ] });
+}
+
+test('routing packets have distinct housings and only the selected bay has a steady marker', () => {
+  const h = harness(); routingFixture(h.scene);
+  for (const [route, x] of [['Thrusters', 92], ['Shields', 240], ['Guns', 388]] as const) {
+    h.scene.lifeSupport.selectedRoute = route; h.paint();
+    assert.ok(h.commands.some(c => c[0] === 'strokeRoundedRect' && c[1] === 218 && c[2] === 103 && c[5] === 5));
+    assert.ok(h.commands.some(c => c[0] === 'strokeRoundedRect' && c[1] === 218 && c[2] === 193 && c[5] === 15));
+    assert.ok(h.commands.some(c => c[0] === 'strokePoints'));
+    assert.ok(h.commands.some(c => c[0] === 'strokeRoundedRect' && c[1] === x - 48 && c[2] === 462));
+    assert.equal(h.commands.filter(c => c[0] === 'fillTriangle' && c[2] === 449).length, 1);
+    assert.ok(!h.commands.some(c => c[0] === 'fillRect' && c[1] === 16 && c[2] === 15), 'no full-playfield flash');
+  }
+});
+
+test('routing outcome is localized to its recorded bay even after selection changes', () => {
+  const h = harness(); routingFixture(h.scene);
+  for (const correct of [true, false]) {
+    h.scene.lifeSupport.routingFeedback.correct = correct;
+    h.scene.lifeSupport.selectedRoute = 'Guns'; h.paint();
+    assert.ok(h.commands.some(c => c[0] === 'strokeCircle' && c[1] === 240 && c[2] === 405 && c[3] === 38));
+    assert.ok(h.commands.some(c => c[0] === 'lineBetween' && c[1] === (correct ? 233 : 234) && c[2] === (correct ? 482 : 479)));
+  }
+  h.scene.lifeSupport.feedbackTime = 0; h.paint();
+  assert.ok(!h.commands.some(c => c[0] === 'strokeCircle' && c[3] === 38));
+});
+
+test('routing renderer freezes decoration with reduced motion and never mutates frozen state', () => {
+  const h = harness(); routingFixture(h.scene); h.setReduced(true);
+  h.paint(); const before = structuredClone(h.commands);
+  h.scene.lifeSupport.elapsed = 27; h.paint();
+  assert.deepEqual(structuredClone(h.commands), before, 'background, panel lights, scanner, flow and pulses freeze');
+  freeze(h.scene.lifeSupport);
+  h.scene.activeFlight = false; h.paint();
+  const paused = structuredClone(h.commands); h.scene.update(0, 50);
+  assert.deepEqual(structuredClone(h.commands.slice(paused.length)), paused);
+});

@@ -40,6 +40,7 @@ app.innerHTML = `
   <div class="flight-stage"><div class="flight-wrap"><div id="canvas" aria-label="Asteroid field. Steer with arrow keys, WASD, or touch." role="application" tabindex="0"></div><div id="pause-overlay" hidden><h2>Challenge paused</h2><p>Your timer is stopped.</p><button id="resume" class="primary" type="button">Resume challenge</button><button id="abandon" type="button">Back to setup</button></div></div><div id="action-rail" class="action-rail" hidden><button id="fire-action" class="action action-fire" type="button" hidden>Fire</button><button id="action" class="action action-mine" type="button" hidden>Drop mine</button></div></div>
   <div id="route-controls" class="route-controls" aria-label="Life Support routing switch" hidden><button id="route-thrusters" type="button" aria-pressed="false"><span>▲</span>Thrusters<small>1</small></button><button id="route-shields" type="button" aria-pressed="true"><span>●</span>Shields<small>2</small></button><button id="route-guns" type="button" aria-pressed="false"><span>✛</span>Guns<small>3</small></button></div>
   <div id="platform-controls" class="platform-controls" aria-label="Platformer controls" hidden><button id="move-left" type="button">◀ Left</button><button id="move-right" type="button">Right ▶</button><button id="jump" type="button">Jump</button></div>
+  <div id="routing-info" class="routing-info" hidden><p class="help">Match power symbols to their bays. Hearts → Shields: restore up to 1 integrity. Overloads → Guns: a mistake costs 2 integrity; other mistakes cost 1. Packets route when they reach the switch.</p><p id="routing-status" class="routing-status" role="status" aria-live="polite" aria-atomic="true"></p></div>
   <p id="play-help" class="help center">Avoid asteroids · Arrow keys / WASD · Hold and drag to steer</p>
 </section>
 <section id="results" class="panel results" hidden>
@@ -130,7 +131,7 @@ function refreshSetup() {
           : 'Ship flies automatically. Time your drops as the ship sweeps across the field. Hold Drop mine, Space, or Enter to release mines directly behind the ship. Only ship collisions cost hull; missed asteroids pass safely.'
         : selectedSituation === 'Space Battle'
           ? 'Move with Left/Right or A/D and jump with Up/W/Space. Stand beside a blue panel for 1.5 seconds to repair it automatically; progress is kept when you move away. Touch uses Left, Right, and Jump.'
-          : 'Use Left/Right or A/D to turn the routing switch. Use 1, 2, or 3 to choose a system directly. Touch players can tap a system button.';
+          : 'Use Left/Right or A/D to turn the routing switch. Use 1, 2, or 3 to choose a system directly. Touch players can tap a system button. Match power symbols to bays; hearts go to Shields and overloads to Guns. Packets route at the switch.';
   get('error').textContent = '';
 }
 total.addEventListener('input', refreshSetup); natural.addEventListener('change', refreshSetup);
@@ -174,6 +175,7 @@ function preparePlayLayout() {
   fireAction.textContent = 'Fire';
   actionRail.hidden = role !== 'Bomber' && !spaceGunner;
   routeControls.hidden = role !== 'Life Support' || situation !== 'Asteroid Field';
+  get('routing-info').hidden = routeControls.hidden;
   platformControls.hidden = role !== 'Life Support' || situation !== 'Space Battle';
 }
 function launch() {
@@ -182,6 +184,9 @@ function launch() {
   pauseOnReady = false;
   scene!.begin(config, situation, role);
   lifeSupportInput.reset();
+  get('routing-status').textContent = 'Waiting for a packet · Selected: Shields';
+  get('routing-status').setAttribute('data-outcome', 'waiting');
+  routeButtons.forEach((button, index) => button.setAttribute('aria-pressed', String(index === 1)));
   input.enable(role === 'Pilot');
   spaceGunnerInput.enable(situation === 'Space Battle' && role === 'Gunner');
   gunnerInput.enable(situation === 'Asteroid Field' && role === 'Gunner');
@@ -342,6 +347,17 @@ scene.onLifeSupportStep = s => {
   get('score').textContent = String(lifeSupportScoreFor(s));
   const routes = ['Thrusters', 'Shields', 'Guns'];
   routeButtons.forEach((button, index) => button.setAttribute('aria-pressed', String(routes[index] === s.selectedRoute)));
+  const feedback = s.routingFeedback;
+  const packetName = feedback?.kind === 'heart' ? 'Heart' : feedback?.kind === 'overload' ? 'Overload' : 'Power';
+  const delta = feedback ? `Integrity ${feedback.integrityDelta > 0 ? '+' : ''}${feedback.integrityDelta}` : '';
+  const message = feedback
+    ? feedback.correct
+      ? `${packetName} → ${feedback.selectedRoute} · ${feedback.kind === 'heart' && feedback.integrityDelta === 0 ? 'Already full · ' : ''}${delta}`
+      : `${packetName} misrouted to ${feedback.selectedRoute} · Needed ${feedback.expectedRoute} · ${delta}`
+    : `Waiting for a packet · Selected: ${s.selectedRoute}`;
+  const status = get('routing-status');
+  if (status.textContent !== message) status.textContent = message;
+  status.setAttribute('data-outcome', feedback ? feedback.correct ? 'correct' : 'incorrect' : 'waiting');
   if (s.finished) {
     inFlight = false; input.enable(false); gunnerInput.enable(false); spaceGunnerInput.enable(false); bomberInput.enable(false); spaceBomberInput.enable(false); lifeSupportInput.enable(false); show('results');
     get('outcome').textContent = s.integrity > 0 ? 'Systems stabilized.' : 'Systems failed.';

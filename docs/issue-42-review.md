@@ -151,3 +151,48 @@ Asteroid Gunner decoration follows simulation time and freezes during pause/comp
 - [ ] Record tested revision and Drake's gameplay/presentation judgment in #39; keep #42 open for remaining upgrades, including Asteroid Life Support.
 
 Real iPhone/iPad Safari, physical touch, rotation, true app switching, owner balance/presentation acceptance and sustained mobile performance remain unverified. Setup-time resize recovery and rating calibration remain separate follow-ups. Drake reviews and merges; no manual deployment or issue closure is performed.
+
+## Asteroid Field Life Support routing clarity
+
+2026-10-02. Base: main `faae4a6`. Refs #42, #39, #3. This completes the remaining dedicated mode-presentation pass; owner acceptance and the parent's other follow-ups remain pending.
+
+### Current eight-mode disposition
+
+| Mode | Delivered enhancement / remaining review |
+| --- | --- |
+| Asteroid Pilot | Ship/rock/warning/protection polish in #45; real-device steering and fairness acceptance pending. |
+| Asteroid Gunner | Targeting, armor, cooldown and outcome polish in #51; physical touch and owner acceptance pending. |
+| Asteroid Bomber | Mine/ship/hazard polish in #45; owner timing and device review pending. |
+| Asteroid Life Support | This pass: packet recognition, selected routing, instructions and localized outcome feedback; owner readability and routing-pressure review pending. |
+| Space Pilot | Fuel/shot/ship polish in #45; owner fuel urgency, steering and rating review pending. |
+| Space Bomber | Presentation in #45, current mine-only controls and launcher follow-ups in #47/#49/#50; current device/gameplay acceptance pending. |
+| Space Gunner | Hull/armor/warning/projectile polish in #43; real multitouch and owner acceptance pending. |
+| Space Life Support | Interior/crew polish in #43, hazards in #44, automatic repair in #47; current device/fairness acceptance and separate rating-saturation review pending. |
+
+### Behavior and interfaces
+
+Power packets use square-corner housings, hearts use rounded housings, and overloads use beveled housings. Larger symbols, dark backing and restrained glows replace busy trails/hardware. The player-selected conduit/bay has a steady light outline and marker; route buttons retain labels, symbols, shortcuts, focus and `aria-pressed` at narrow widths. No next-packet target hint is added.
+
+Guidance outside the canvas explains matching, hearts → Shields, overloads → Guns, integrity consequences and routing at the switch. A fixed-height polite status region describes the latest outcome and actual integrity delta; a full-integrity heart says “Already full.” Mistakes identify the selected and expected bays after arrival. The message persists until the next outcome or retry. Canvas check/cross marks and highlights are localized to the switch and recorded selected bay, replacing the full-playfield flash.
+
+`LifeSupportState.routingFeedback` is nullable cosmetic state: packet kind, expected/selected route, correctness and clamped integrity delta. Arrival processing retains its existing order; the last simultaneous outcome wins. Existing `lastResult` and 0.22-second simulation-time effect lifetime remain. Expiry removes canvas effects without erasing status history. Retry resets history/pressed controls. No new RNG draws, gameplay events or report fields.
+
+Reduced motion freezes the mode's background decoration, panel lights, scanner, packet pulse and selected flow. Packet movement, actual selection and integrity feedback remain functional. Pause/terminal rendering uses frozen simulation state. Inputs, spawn pressure, Natural 1 packet mix, scoring v0.5, live rating anchors, geometry and other modes remain unchanged. No dependencies, artwork downloads, audio or campaign content added.
+
+### Validation
+
+- Automated suite: **214/214 passed**. Added mechanics and renderer regressions plus startup-shell assertions cover ordinary/special successes and mistakes, capped healing/damage, simultaneous arrivals, expiry/history, retry, terminal freeze, selected bays, distinct housings, no broad flash, reduced motion, immutable rendering, finite commands and restored transforms.
+- Production TypeScript/Vite build and `git diff --check` pass. Existing deferred Phaser chunk advisory remains enabled; no threshold adjustment.
+- Temporary comparison against `faae4a6`: **120,000 step calls**, four bands ± Natural 1 and 12 seeds each. Gameplay state matched excluding cosmetic routing feedback, with identical RNG consumption (1,584 draws); terminal calls included. Existing eight-mode seeded calibration regression passes. These synthetic runs do not establish human balance.
+- **14 unaffected renderer fixtures** (seven modes × normal/reduced motion), including populated Gunner armor and Space Life Support pickups, match baseline commands exactly.
+- Desktop Chrome at **1100×1100, 390×1100 and 320×1100**: actual mouse/emulated-touch route buttons, number-key selection, arrow cycling, pause/resume and synthetic blur pause, retry, fixture-based healing/mistakes, completed/failed reports and clipboard Copy. No application console/page errors or horizontal overflow. Outcome combinations fit the reserved 66px status region without shifting following controls.
+- Before/after canvas, 320px/390px shell and reduced-motion screenshots captured and inspected. Temporary harnesses and screenshots remain outside the repository. Browser state injection and a response-only QA getter are harness instrumentation, not shipped code. Terminal reports and isolated arrivals are fixtures, not player-earned full rounds.
+- **240 paired frozen-renderer paints**: command-rebuild medians rounded to 0ms at Chrome timer granularity; both p95 approximately 0.1ms. Excludes later Canvas rasterization and does not establish mobile FPS or sustained device headroom.
+
+### Remaining owner checks
+
+- [ ] Actual iPhone/iPad Safari portrait/landscape: recognize power/heart/overload packets, selected bay, outcome and symbols; reach all buttons and Pause; assess performance and reduced motion.
+- [ ] Four bands ± Natural 1: route packets with physical touch and desktop controls; judge readability and fairness without assuming synthetic calibration is acceptance.
+- [ ] True app switching, explicit resume, setup/play rotation, retry, player-earned completion/failure and manual GM sharing; record revision and Drake's judgment in #39.
+
+Setup-time resize recovery, frame-pacing investigation, rating recalibration and issue-checklist cleanup remain separate follow-ups. Keep #42/#39/#3 open. Drake reviews and merges; this PR does not merge or manually deploy.
