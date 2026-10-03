@@ -1,5 +1,7 @@
 import type { LifeSupportRoute, SpaceLifeInput, SpaceBattleBomberInput } from './rules';
 
+export interface InputFrame<T> { first: T; continued: T }
+
 export function createInput(surface: HTMLElement) {
   const keys = new Set<string>();
   let touch: { x: number; y: number } | null = null;
@@ -69,6 +71,11 @@ export function createGunnerInput(surface: HTMLElement) {
   window.addEventListener('blur', clear);
   return {
     enable(value: boolean) { enabled = value; clear(); },
+    readFrame() {
+      const held = pointer !== null;
+      const first = this.read();
+      return { first, continued: { ...first, firing: held } };
+    },
     read() {
       const firing = queuedShot || pointer !== null;
       queuedShot = false;
@@ -109,6 +116,10 @@ export function createSpaceLifeInput(buttons: Record<'left' | 'right' | 'jump', 
   }
   return {
     enable(value: boolean) { enabled = value; clear(); },
+    readFrame(): InputFrame<SpaceLifeInput> {
+      const first = this.read();
+      return { first, continued: { ...first, jump: false } };
+    },
     read(): SpaceLifeInput {
       const held = (action: keyof typeof buttons) => [...pointers.values()].includes(action);
       const x = Number(held('right') || keys.has('ArrowRight') || keys.has('KeyD'))
@@ -149,6 +160,11 @@ export function createBomberInput(_surface: HTMLElement, action: HTMLElement) {
   }
   return {
     enable(value: boolean) { enabled = value; clear(); },
+    readFrame() {
+      const held = pointer !== null || keys.size > 0;
+      const first = this.read();
+      return { first, continued: { ...first, placing: held } };
+    },
     read() {
       const placing = queuedMine || pointer !== null || keys.size > 0;
       queuedMine = false;
@@ -207,6 +223,15 @@ export function createSpaceBomberInput(surface: HTMLElement, action: HTMLElement
   });
   return {
     enable(value: boolean) { enabled = value; clear(); },
+    readFrame(): InputFrame<SpaceBattleBomberInput> {
+      const straightHeld = keys.has('ArrowDown') || keys.has('KeyS');
+      const first = this.read();
+      // World coordinates and release/press attempts belong only to the displayed frame.
+      const continued: SpaceBattleBomberInput = { placing: false };
+      if (first.turn) continued.turn = first.turn;
+      if (straightHeld) continued.straight = true;
+      return { first, continued };
+    },
     read() {
       const input: SpaceBattleBomberInput = { placing: keyboardQueued || queued.size > 0 || launch !== undefined };
       if (aim) input.aim = aim;
@@ -318,6 +343,11 @@ export function createSpaceGunnerInput(surface: HTMLElement, fireAction: HTMLEle
   window.addEventListener('blur', clear);
   return {
     enable(value: boolean) { enabled = value; clear(); },
+    readFrame() {
+      const heldFiring = held.size > 0 || firing.some(key => keys.has(key));
+      const first = this.read();
+      return { first, continued: { ...first, firing: heldFiring } };
+    },
     read() {
       const result = {
         x: Number(keys.has('ArrowRight') || keys.has('KeyD')) - Number(keys.has('ArrowLeft') || keys.has('KeyA')),

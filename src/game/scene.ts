@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import type { InputFrame } from './input';
 import {
   createSpaceGunner, stepSpaceGunner, SPACE_GUNNER_DEFENSE_LINE, type SpaceGunnerInput, type SpaceGunnerState, type SpaceGunnerAttacker,
   gunnerTargetAt, gunnerFireEvery, GUNNER_SHOT_FEEDBACK_SECONDS, type GunnerShotFeedback,
@@ -23,7 +24,14 @@ export class FlightScene extends Phaser.Scene {
   spacePilot = createSpaceBattlePilot();
   spaceBomber = createSpaceBattleBomber();
   spaceLife = createSpaceLifeSupport();
-  activeFlight = false;
+  private playing = false;
+  private timingPrimed = false;
+  get activeFlight() { return this.playing; }
+  set activeFlight(value: boolean) {
+    if (value !== this.playing) this.timingPrimed = false;
+    this.playing = value;
+  }
+  onTimingInterruption: () => void = () => {};
   role: Role = 'Pilot';
   situation: Situation = 'Asteroid Field';
   config: FlightConfig = { total: 10, naturalOne: false };
@@ -36,12 +44,12 @@ export class FlightScene extends Phaser.Scene {
     return this.reducedMotion?.matches ? 0 : elapsed;
   }
   readInput: (x: number, y: number) => { x: number; y: number } = () => ({ x: 0, y: 0 });
-  readSpaceGunnerInput: () => SpaceGunnerInput = () => ({ x: 0, y: 0, firing: false });
-  readGunnerInput: () => GunnerInput = () => ({ firing: false });
-  readBomberInput: () => BomberInput = () => ({ x: 0, y: 0, placing: false });
+  readSpaceGunnerFrame: () => InputFrame<SpaceGunnerInput> = () => ({ first: { x: 0, y: 0, firing: false }, continued: { x: 0, y: 0, firing: false } });
+  readGunnerFrame: () => InputFrame<GunnerInput> = () => ({ first: { firing: false }, continued: { firing: false } });
+  readBomberFrame: () => InputFrame<BomberInput> = () => ({ first: { x: 0, y: 0, placing: false }, continued: { x: 0, y: 0, placing: false } });
   readLifeSupportInput: () => LifeSupportInput = () => ({ route: 'Shields' });
-  readSpaceBomberInput: () => SpaceBattleBomberInput = () => ({ placing: false });
-  readSpaceLifeInput: () => SpaceLifeInput = () => ({ x: 0, jump: false });
+  readSpaceBomberFrame: () => InputFrame<SpaceBattleBomberInput> = () => ({ first: { placing: false }, continued: { placing: false } });
+  readSpaceLifeFrame: () => InputFrame<SpaceLifeInput> = () => ({ first: { x: 0, jump: false }, continued: { x: 0, jump: false } });
   onFlightStep: (state: FlightState) => void = () => {};
   onSpaceGunnerStep: (state: SpaceGunnerState) => void = () => {};
   onGunnerStep: (state: GunnerState) => void = () => {};
@@ -70,50 +78,66 @@ export class FlightScene extends Phaser.Scene {
     this.spacePilot = createSpaceBattlePilot();
     this.spaceBomber = createSpaceBattleBomber();
     this.spaceLife = createSpaceLifeSupport();
+    this.timingPrimed = false;
     this.activeFlight = true;
   }
 
-  update(_time: number, delta: number) {
+  update(_time: number, _delta: number) {
     if (!this.graphics) return;
     if (this.activeFlight) {
-      if (this.situation === 'Space Battle') {
-        if (this.role === 'Life Support') {
-          stepSpaceLifeSupport(this.spaceLife, this.config, this.readSpaceLifeInput(), delta / 1000);
-          if (this.spaceLife.finished) this.activeFlight = false;
-          this.onSpaceLifeStep(this.spaceLife);
-        } else if (this.role === 'Gunner') {
-          stepSpaceGunner(this.spaceGunner, this.config, this.readSpaceGunnerInput(), delta / 1000);
-          if (this.spaceGunner.finished) this.activeFlight = false;
-          this.onSpaceGunnerStep(this.spaceGunner);
-        } else if (this.role === 'Bomber') {
-          stepSpaceBattleBomber(this.spaceBomber, this.config,
-            this.readSpaceBomberInput(), delta / 1000);
-          if (this.spaceBomber.finished) this.activeFlight = false;
-          this.onSpaceBomberStep(this.spaceBomber);
+      // Phaser's delivered delta is smoothed/clamped; simulation needs active wall time.
+      const milliseconds = this.game.loop.rawDelta;
+      if (!this.timingPrimed) {
+        this.timingPrimed = true;
+      } else if (Number.isFinite(milliseconds) && milliseconds > 0) {
+        if (milliseconds > 250) {
+          this.activeFlight = false;
+          this.onTimingInterruption();
         } else {
-          stepSpaceBattlePilot(this.spacePilot, this.config, this.readInput(this.spacePilot.x, this.spacePilot.y), delta / 1000);
-          if (this.spacePilot.finished) this.activeFlight = false;
-          this.onSpacePilotStep(this.spacePilot);
+          this.advanceFrame(milliseconds);
         }
-      } else if (this.role === 'Pilot') {
-        stepFlight(this.flight, this.config, this.readInput(this.flight.x, this.flight.y), delta / 1000);
-        if (this.flight.finished) this.activeFlight = false;
-        this.onFlightStep(this.flight);
-      } else if (this.role === 'Gunner') {
-        stepGunner(this.gunner, this.config, this.readGunnerInput(), delta / 1000);
-        if (this.gunner.finished) this.activeFlight = false;
-        this.onGunnerStep(this.gunner);
-      } else if (this.role === 'Bomber') {
-        stepBomber(this.bomber, this.config, this.readBomberInput(), delta / 1000);
-        if (this.bomber.finished) this.activeFlight = false;
-        this.onBomberStep(this.bomber);
-      } else {
-        stepLifeSupport(this.lifeSupport, this.config, this.readLifeSupportInput(), delta / 1000);
-        if (this.lifeSupport.finished) this.activeFlight = false;
-        this.onLifeSupportStep(this.lifeSupport);
       }
     }
     this.paint();
+  }
+
+  private advanceFrame(milliseconds: number) {
+    const space = this.situation === 'Space Battle';
+    const state = space
+      ? this.role === 'Pilot' ? this.spacePilot : this.role === 'Gunner' ? this.spaceGunner
+        : this.role === 'Bomber' ? this.spaceBomber : this.spaceLife
+      : this.role === 'Pilot' ? this.flight : this.role === 'Gunner' ? this.gunner
+        : this.role === 'Bomber' ? this.bomber : this.lifeSupport;
+    if (state.finished) { this.activeFlight = false; return; }
+    // Snapshot destructive reads once. Pilot's direction read is pure and position-dependent.
+    const frame = this.role === 'Gunner' ? space ? this.readSpaceGunnerFrame() : this.readGunnerFrame()
+      : this.role === 'Bomber' ? space ? this.readSpaceBomberFrame() : this.readBomberFrame()
+        : space && this.role === 'Life Support' ? this.readSpaceLifeFrame() : null;
+    const route = !space && this.role === 'Life Support' ? this.readLifeSupportInput() : null;
+    const count = Math.ceil(milliseconds / 50);
+    for (let index = 0; index < count; index++) {
+      const seconds = Math.min(50, milliseconds - index * 50) / 1000;
+      const input = index === 0 ? frame?.first : frame?.continued;
+      if (space) {
+        if (this.role === 'Life Support') stepSpaceLifeSupport(this.spaceLife, this.config, input as SpaceLifeInput, seconds);
+        else if (this.role === 'Gunner') stepSpaceGunner(this.spaceGunner, this.config, input as SpaceGunnerInput, seconds);
+        else if (this.role === 'Bomber') stepSpaceBattleBomber(this.spaceBomber, this.config, input as SpaceBattleBomberInput, seconds);
+        else stepSpaceBattlePilot(this.spacePilot, this.config, this.readInput(this.spacePilot.x, this.spacePilot.y), seconds);
+      } else if (this.role === 'Pilot') stepFlight(this.flight, this.config, this.readInput(this.flight.x, this.flight.y), seconds);
+      else if (this.role === 'Gunner') stepGunner(this.gunner, this.config, input as GunnerInput, seconds);
+      else if (this.role === 'Bomber') stepBomber(this.bomber, this.config, input as BomberInput, seconds);
+      else stepLifeSupport(this.lifeSupport, this.config, route!, seconds);
+      if (state.finished) { this.activeFlight = false; break; }
+    }
+    if (space) {
+      if (this.role === 'Life Support') this.onSpaceLifeStep(this.spaceLife);
+      else if (this.role === 'Gunner') this.onSpaceGunnerStep(this.spaceGunner);
+      else if (this.role === 'Bomber') this.onSpaceBomberStep(this.spaceBomber);
+      else this.onSpacePilotStep(this.spacePilot);
+    } else if (this.role === 'Pilot') this.onFlightStep(this.flight);
+    else if (this.role === 'Gunner') this.onGunnerStep(this.gunner);
+    else if (this.role === 'Bomber') this.onBomberStep(this.bomber);
+    else this.onLifeSupportStep(this.lifeSupport);
   }
 
   private paint() {
