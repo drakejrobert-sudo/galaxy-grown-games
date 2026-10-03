@@ -11,6 +11,7 @@ test('deferred first launch recovers from load failure, starts once, and retry r
   function element(id: string): any {
     if (!elements.has(id)) elements.set(id, { hidden: false, value: '', checked: false,
       textContent: '', listeners: new Map(), attributes: new Map(), style: {}, scrollHeight: 260,
+      getBoundingClientRect: () => ({ width: 480, height: 560 }),
       focus() {}, select() { this.selected = true; },
       setAttribute(name: string, value: string) { this.attributes.set(name, value); },
       replaceChildren() {},
@@ -26,7 +27,7 @@ test('deferred first launch recovers from load failure, starts once, and retry r
   // Like Phaser, scene plugins are absent before Game initializes the scene.
   class Scene {}
   class Game {
-    scale = { refresh: () => {
+    scale = { getParentBounds() {}, refresh: () => {
       const selectedRole = element('role').value;
       assert.equal(element('play').attributes.get('data-role'), selectedRole);
       assert.equal(element('action-rail').hidden, selectedRole !== 'Bomber' && !(selectedRole === 'Gunner' && element('situation').value === 'Space Battle'));
@@ -304,6 +305,7 @@ test('a deferred launch stays paused after switching away until explicit resume'
     function element(id: string): any {
       if (!elements.has(id)) elements.set(id, { hidden: false, value: '', checked: false,
         textContent: '', listeners: new Map(), attributes: new Map(), focus() {}, replaceChildren() {},
+        getBoundingClientRect: () => ({ width: 480, height: 560 }),
         setAttribute(name: string, value: string) { this.attributes.set(name, value); },
         addEventListener(type: string, listener: Function) { this.listeners.set(type, listener); },
       });
@@ -311,7 +313,7 @@ test('a deferred launch stays paused after switching away until explicit resume'
     }
     class Scene {}
     class Game {
-      scale = { refresh() {} };
+      scale = { getParentBounds() {}, refresh() {} };
       constructor(config: any) {
         scene = config.scene[0];
         scene.add = { graphics: () => graphics };
