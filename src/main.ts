@@ -37,7 +37,7 @@ app.innerHTML = `
   <div class="play-heading"><div><p id="mode-label" class="eyebrow">ASTEROID FIELD / PILOT</p><h2 id="mode-heading">Keep your hull intact.</h2></div><div class="play-actions"><button id="pause" type="button">Pause</button></div></div>
   <div class="hud"><div><span>TIME LEFT</span><strong id="time">60s</strong></div><div><span id="health-label">HULL</span><strong id="hull">3 / 3</strong></div><div id="fuel-wrap" hidden><span>FUEL</span><strong id="fuel">18.0s</strong></div><div><span>SCORE</span><strong id="score">300</strong></div></div>
   <p id="flight-status" class="flight-status"></p>
-  <div class="flight-stage"><div class="flight-wrap"><div id="canvas" aria-label="Asteroid field. Steer with arrow keys, WASD, or touch." role="application" tabindex="0"></div><div id="pause-overlay" hidden><h2>Challenge paused</h2><p>Your timer is stopped.</p><button id="resume" class="primary" type="button">Resume challenge</button><button id="abandon" type="button">Back to setup</button></div></div><div id="action-rail" class="action-rail" hidden><button id="fire-action" class="action action-fire" type="button" hidden>Fire</button><button id="action" class="action action-mine" type="button" hidden>Drop mine</button></div></div>
+  <div class="flight-stage"><div class="flight-wrap"><div id="canvas" aria-label="Asteroid field. Steer with arrow keys, WASD, or touch." role="application" tabindex="0"></div><div id="pause-overlay" hidden><h2>Challenge paused</h2><p id="pause-reason">Your timer is stopped.</p><button id="resume" class="primary" type="button">Resume challenge</button><button id="abandon" type="button">Back to setup</button></div></div><div id="action-rail" class="action-rail" hidden><button id="fire-action" class="action action-fire" type="button" hidden>Fire</button><button id="action" class="action action-mine" type="button" hidden>Drop mine</button></div></div>
   <div id="route-controls" class="route-controls" aria-label="Life Support routing switch" hidden><button id="route-thrusters" type="button" aria-pressed="false"><span>▲</span>Thrusters<small>1</small></button><button id="route-shields" type="button" aria-pressed="true"><span>●</span>Shields<small>2</small></button><button id="route-guns" type="button" aria-pressed="false"><span>✛</span>Guns<small>3</small></button></div>
   <div id="platform-controls" class="platform-controls" aria-label="Platformer controls" hidden><button id="move-left" type="button">◀ Left</button><button id="move-right" type="button">Right ▶</button><button id="jump" type="button">Jump</button></div>
   <div id="routing-info" class="routing-info" hidden><p class="help">Match power symbols to their bays. Hearts → Shields: restore up to 1 integrity. Overloads → Guns: a mistake costs 2 integrity; other mistakes cost 1. Packets route when they reach the switch.</p><p id="routing-status" class="routing-status" role="status" aria-live="polite" aria-atomic="true"></p></div>
@@ -166,7 +166,7 @@ function refreshSetup() {
 total.addEventListener('input', refreshSetup); natural.addEventListener('change', refreshSetup);
 roleSelect.addEventListener('change', refreshSetup);
 situationSelect.addEventListener('change', refreshSetup);
-function setPaused(value: boolean) {
+function setPaused(value: boolean, interrupted = false) {
   if (!inFlight) return;
   paused = value; scene!.activeFlight = !value;
   input.enable(!value && role === 'Pilot');
@@ -176,6 +176,8 @@ function setPaused(value: boolean) {
   spaceBomberInput.enable(!value && situation === 'Space Battle' && role === 'Bomber');
   lifeSupportInput.enable(!value && situation === 'Asteroid Field' && role === 'Life Support');
   spaceLifeInput.enable(!value && situation === 'Space Battle' && role === 'Life Support');
+  get('pause-reason').textContent = interrupted
+    ? 'Play paused after an interruption. Resume when ready.' : 'Your timer is stopped.';
   get('pause-overlay').hidden = !value;
   get('pause').textContent = value ? 'Resume' : 'Pause';
   if (value) get('resume').focus(); else get('canvas').focus();
@@ -291,13 +293,14 @@ get('flight-form').addEventListener('submit', async e => {
       const { Phaser, FlightScene } = await import('./game/runtime');
       if (!scene) {
         scene = new FlightScene('flight');
+        scene.onTimingInterruption = () => setPaused(true, true);
         scene.readInput = input.read;
-        scene.readGunnerInput = gunnerInput.read;
-        scene.readSpaceGunnerInput = spaceGunnerInput.read;
-        scene.readBomberInput = bomberInput.read;
-        scene.readSpaceBomberInput = spaceBomberInput.read;
+        scene.readGunnerFrame = () => gunnerInput.readFrame();
+        scene.readSpaceGunnerFrame = () => spaceGunnerInput.readFrame();
+        scene.readBomberFrame = () => bomberInput.readFrame();
+        scene.readSpaceBomberFrame = () => spaceBomberInput.readFrame();
         scene.readLifeSupportInput = lifeSupportInput.read;
-        scene.readSpaceLifeInput = spaceLifeInput.read;
+        scene.readSpaceLifeFrame = () => spaceLifeInput.readFrame();
         attachSceneCallbacks(scene);
       }
       preparePlayLayout();

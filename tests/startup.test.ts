@@ -5,6 +5,18 @@ import { runInNewContext } from 'node:vm';
 import ts from 'typescript';
 import * as rules from '../src/game/rules.ts';
 
+function tick(scene: any, milliseconds: number) {
+  scene.game.loop.rawDelta = milliseconds;
+  if (scene.activeFlight && !scene.timingPrimed) scene.update(0, milliseconds);
+  scene.update(0, milliseconds);
+}
+function inputModule(factories: Record<string, Function>) {
+  return Object.fromEntries(Object.entries(factories).map(([name, factory]) => [name, (...args: unknown[]) => {
+    const input = factory(...args);
+    return { ...input, readFrame() { const first = input.read(); return { first, continued: first }; } };
+  }]));
+}
+
 test('deferred first launch recovers from load failure, starts once, and retry reuses game', async () => {
   const elements = new Map<string, any>();
   const windowListeners = new Map<string, Function>();
@@ -27,6 +39,7 @@ test('deferred first launch recovers from load failure, starts once, and retry r
   // Like Phaser, scene plugins are absent before Game initializes the scene.
   class Scene {}
   class Game {
+    loop = { rawDelta: 16 };
     scale = { getParentBounds() {}, refresh: () => {
       const selectedRole = element('role').value;
       assert.equal(element('play').attributes.get('data-role'), selectedRole);
@@ -37,6 +50,7 @@ test('deferred first launch recovers from load failure, starts once, and retry r
       if (gameShouldFail) throw new Error('renderer unavailable');
       gameCount++;
       readyScene = config.scene[0];
+      readyScene.game = this;
       assert.equal(readyScene.events, undefined);
       readyScene.add = { graphics: () => graphics };
       readyScene.events = {};
@@ -50,7 +64,7 @@ test('deferred first launch recovers from load failure, starts once, and retry r
       compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, esModuleInterop: true },
     }).outputText;
     runInNewContext(js, { exports, require: (name: string) => {
-      assert.ok(name in modules, `Unexpected import: ${name}`); return modules[name];
+      assert.ok(name in modules, `Unexpected import: ${name}`); return name === './game/input' ? inputModule(modules[name]) : modules[name];
     }, console, ...globals });
     return exports as any;
   }
@@ -112,30 +126,41 @@ test('deferred first launch recovers from load failure, starts once, and retry r
   assert.equal(element('load-status').textContent, '');
   assert.match(element('flight-status').textContent, /Very Easy.*Natural 1/);
   const oldX = readyScene.flight.x;
-  readyScene.update(0, 16);
+  tick(readyScene, 16);
   assert.ok(readyScene.flight.x > oldX); assert.ok(readyScene.flight.elapsed > 0);
+  const beforeInterruption = JSON.stringify(readyScene.flight);
+  tick(readyScene, 251);
+  assert.equal(JSON.stringify(readyScene.flight), beforeInterruption);
+  assert.equal(element('pause-overlay').hidden, false);
+  assert.equal(inputEnabled, false);
+  assert.equal(element('pause-reason').textContent, 'Play paused after an interruption. Resume when ready.');
+  element('resume').listeners.get('click')();
+  readyScene.game.loop.rawDelta = 5000; readyScene.update(0, 16);
+  assert.equal(JSON.stringify(readyScene.flight), beforeInterruption);
+  assert.equal(element('pause-reason').textContent, 'Your timer is stopped.');
+
   element('pause').listeners.get('click')();
-  const elapsed = readyScene.flight.elapsed; readyScene.update(0, 16);
+  const elapsed = readyScene.flight.elapsed; tick(readyScene, 16);
   assert.equal(readyScene.flight.elapsed, elapsed); assert.equal(inputEnabled, false);
-  element('resume').listeners.get('click')(); readyScene.update(0, 16);
+  element('resume').listeners.get('click')(); tick(readyScene, 16);
   assert.ok(readyScene.flight.elapsed > elapsed);
   element('abandon').listeners.get('click')();
   element('role').value = 'Gunner'; await submit();
   assert.equal(gameCount, 1); assert.equal(readyScene.gunner.elapsed, 0);
   assert.equal(inputEnabled, false); assert.equal(gunnerInputEnabled, true);
-  readyScene.update(0, 16); assert.ok(readyScene.gunner.elapsed > 0);
+  tick(readyScene, 16); assert.ok(readyScene.gunner.elapsed > 0);
   assert.match(element('flight-status').textContent, /Very Easy.*overheated gun/);
   element('abandon').listeners.get('click')();
   element('role').value = 'Bomber'; await submit();
   assert.equal(gameCount, 1); assert.equal(bomberInputEnabled, true);
-  readyScene.update(0, 16); assert.ok(readyScene.bomber.elapsed > 0);
+  tick(readyScene, 16); assert.ok(readyScene.bomber.elapsed > 0);
   assert.equal(readyScene.bomber.minesPlaced, 1);
   assert.equal(readyScene.bomber.x, rules.automaticShipX(readyScene.bomber.elapsed));
   assert.equal(readyScene.bomber.mines[0].x, readyScene.bomber.x);
   assert.match(element('play-help').textContent, /Time your mine drops/);
   element('pause').listeners.get('click')();
   const pausedBomber = JSON.stringify(readyScene.bomber);
-  readyScene.update(0, 50);
+  tick(readyScene, 50);
   assert.equal(JSON.stringify(readyScene.bomber), pausedBomber);
   assert.equal(bomberInputEnabled, false);
   element('resume').listeners.get('click')();
@@ -155,18 +180,18 @@ test('deferred first launch recovers from load failure, starts once, and retry r
   assert.equal(element('route-shields').attributes.get('aria-pressed'), 'true');
   readyScene.lifeSupport.spawnIn = 100;
   readyScene.lifeSupport.packets = [{id:1,x:240,y:404,speed:100,target:'Shields',kind:'power'}];
-  readyScene.update(0, 16); assert.equal(readyScene.lifeSupport.routed, 1);
+  tick(readyScene, 16); assert.equal(readyScene.lifeSupport.routed, 1);
   assert.match(element('routing-status').textContent, /Power → Shields.*Integrity 0/);
   readyScene.lifeSupport.packets = [{id:2,x:240,y:404,speed:100,target:'Guns',kind:'overload'}];
-  readyScene.update(0, 16);
+  tick(readyScene, 16);
   assert.match(element('routing-status').textContent, /misrouted to Shields.*Needed Guns.*Integrity -2/);
   assert.equal(element('routing-status').attributes.get('data-outcome'), 'incorrect');
   readyScene.lifeSupport.packets = [{id:3,x:240,y:404,speed:100,target:'Shields',kind:'heart'}];
-  readyScene.update(0, 16);
+  tick(readyScene, 16);
   assert.match(element('routing-status').textContent, /Heart → Shields.*Integrity \+1/);
   readyScene.lifeSupport.integrity = 5;
   readyScene.lifeSupport.packets = [{id:4,x:240,y:404,speed:100,target:'Shields',kind:'heart'}];
-  readyScene.update(0, 16);
+  tick(readyScene, 16);
   assert.match(element('routing-status').textContent, /Already full.*Integrity 0/);
   element('abandon').listeners.get('click')(); await submit();
   assert.match(element('routing-status').textContent, /Waiting for a packet.*Shields/);
@@ -188,10 +213,10 @@ test('deferred first launch recovers from load failure, starts once, and retry r
   assert.equal(element('action-rail').hidden, false); assert.equal(scaleRefreshRailStates.at(-1), false);
   assert.equal(element('fuel-wrap').hidden, true);
   readyScene.spaceGunner.spawnIn = 100;
-  readyScene.update(0, 50); assert.equal(readyScene.spaceGunner.shots, 1);
+  tick(readyScene, 50); assert.equal(readyScene.spaceGunner.shots, 1);
   element('pause').listeners.get('click')();
   const frozenGunner = JSON.stringify(readyScene.spaceGunner);
-  readyScene.update(0, 50); assert.equal(JSON.stringify(readyScene.spaceGunner), frozenGunner);
+  tick(readyScene, 50); assert.equal(JSON.stringify(readyScene.spaceGunner), frozenGunner);
   assert.equal(spaceGunnerInputEnabled, false);
   element('resume').listeners.get('click')(); assert.equal(spaceGunnerInputEnabled, true);
   windowListeners.get('blur')!(); assert.equal(spaceGunnerInputEnabled, false);
@@ -213,27 +238,27 @@ test('deferred first launch recovers from load failure, starts once, and retry r
   await submit();
   assert.equal(gameCount, 1); assert.equal(readyScene.situation, 'Space Battle');
   assert.equal(inputEnabled, true); assert.equal(gunnerInputEnabled, false);
-  readyScene.update(0, 16); assert.ok(readyScene.spacePilot.elapsed > 0);
+  tick(readyScene, 16); assert.ok(readyScene.spacePilot.elapsed > 0);
   assert.match(element('mode-label').textContent, /SPACE BATTLE \/ PILOT/);
   readyScene.spacePilot.enemies = [{id:1,x:120,y:120,radius:16,speed:100,vx:10,shotIn:1}];
   readyScene.spacePilot.shots = [{x:130,y:150,vx:30,vy:100,radius:5}];
   readyScene.spacePilot.fuelCells = [{id:2,x:220,y:180,radius:11,speed:90,value:8}];
   readyScene.activeFlight = false;
   const beforePaint = JSON.stringify(readyScene.spacePilot);
-  readyScene.update(0, 16);
+  tick(readyScene, 16);
   assert.equal(JSON.stringify(readyScene.spacePilot), beforePaint);
   element('abandon').listeners.get('click')(); element('role').value = 'Bomber'; await submit();
   assert.equal(spaceBomberInputEnabled, true); assert.equal(inputEnabled, false);
   assert.equal(element('fire-action').hidden, true); assert.equal(element('action').hidden, false);
   assert.equal(element('fuel-wrap').hidden, true);
-  readyScene.update(0, 16); assert.ok(readyScene.spaceBomber.elapsed > 0);
+  tick(readyScene, 16); assert.ok(readyScene.spaceBomber.elapsed > 0);
   assert.equal(readyScene.spaceBomber.minesPlaced, 1);
   assert.match(element('mode-label').textContent, /SPACE BATTLE \/ BOMBER/);
   assert.match(element('play-help').textContent, /Automatic weaving/);
   assert.equal(readyScene.spaceBomber.x, rules.automaticShipX(readyScene.spaceBomber.elapsed));
   element('pause').listeners.get('click')();
   const pausedSpaceBomber = JSON.stringify(readyScene.spaceBomber);
-  readyScene.update(0, 50);
+  tick(readyScene, 50);
   assert.equal(JSON.stringify(readyScene.spaceBomber), pausedSpaceBomber);
   assert.equal(spaceBomberInputEnabled, false);
   element('resume').listeners.get('click')();
@@ -264,21 +289,21 @@ test('deferred first launch recovers from load failure, starts once, and retry r
   assert.equal(element('health-label').textContent, 'INTEGRITY');
   readyScene.spaceLife.fireIn = readyScene.spaceLife.iconIn = 100;
   readyScene.spaceLife.fires = [{ id: 1, x: 150, y: 520, kind: 'electrical', remaining: 8, sparkIn: 100 }];
-  readyScene.update(0, 16);
+  tick(readyScene, 16);
   assert.equal(readyScene.spaceLife.electricalRepaired, 0);
   assert.ok(readyScene.spaceLife.fires[0].repairProgress > 0);
   const partial = JSON.stringify(readyScene.spaceLife);
-  element('pause').listeners.get('click')(); readyScene.update(0, 50);
+  element('pause').listeners.get('click')(); tick(readyScene, 50);
   assert.equal(JSON.stringify(readyScene.spaceLife), partial);
   element('resume').listeners.get('click')();
-  for (let i = 0; i < 30; i++) readyScene.update(0, 50);
+  for (let i = 0; i < 30; i++) tick(readyScene, 50);
   assert.equal(readyScene.spaceLife.electricalRepaired, 1);
   readyScene.spaceLife.sparks = [{ id: 5, x: 260, y: 506, vx: -165, remaining: 3 }];
   readyScene.spaceLife.fires = [{ id: 6, x: 395, y: 520, kind: 'electrical', remaining: 6, sparkIn: .4 },
     { id: 7, x: 85, y: 520, kind: 'ordinary', remaining: 6, arming: .3 }];
   element('pause').listeners.get('click')();
   const pausedSpaceLife = JSON.stringify(readyScene.spaceLife);
-  readyScene.update(0, 50);
+  tick(readyScene, 50);
   assert.equal(JSON.stringify(readyScene.spaceLife), pausedSpaceLife);
   assert.equal(spaceLifeInputEnabled, false);
   element('resume').listeners.get('click')();
@@ -313,9 +338,11 @@ test('a deferred launch stays paused after switching away until explicit resume'
     }
     class Scene {}
     class Game {
+      loop = { rawDelta: 16 };
       scale = { getParentBounds() {}, refresh() {} };
       constructor(config: any) {
         scene = config.scene[0];
+        scene.game = this;
         scene.add = { graphics: () => graphics };
         scene.events = {};
         // Phaser boot is deliberately delayed until the test calls scene.create().
@@ -329,7 +356,7 @@ test('a deferred launch stays paused after switching away until explicit resume'
       }).outputText;
       runInNewContext(js, { exports, require: (name: string) => {
         assert.ok(name in modules, `Unexpected import: ${name}`);
-        return modules[name];
+        return name === './game/input' ? inputModule(modules[name]) : modules[name];
       }, console: { error() {} }, ...globals });
       return exports;
     }
@@ -381,13 +408,13 @@ test('a deferred launch stays paused after switching away until explicit resume'
     assert.equal(page.scene.activeFlight, false, awayDuring);
     assert.equal(page.inputEnabled, false, awayDuring);
     assert.equal(page.element('pause-overlay').hidden, false, awayDuring);
-    page.scene.update(0, 16);
+    tick(page.scene, 16);
     assert.equal((spaceGunner ? page.scene.spaceGunner : page.scene.flight).elapsed, 0, awayDuring);
     page.setHidden(false);
     page.element('resume').listeners.get('click')();
     assert.equal(page.scene.activeFlight, true, awayDuring);
     assert.equal(page.inputEnabled, true, awayDuring);
-    page.scene.update(0, 16);
+    tick(page.scene, 16);
     assert.ok((spaceGunner ? page.scene.spaceGunner : page.scene.flight).elapsed > 0, awayDuring);
   }
 
