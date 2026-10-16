@@ -86,6 +86,32 @@ test('deferred first launch recovers from load failure, starts once, and retry r
     } } }, console: { error() {} },
   });
   element('situation').value = 'Asteroid Field'; element('role').value = 'Pilot';
+
+  const expectedRolls = [
+    ['Pilot', 'Dexterity (Acrobatics)'],
+    ['Gunner', 'Dexterity-based ranged attack'],
+    ['Bomber', 'Intelligence (Investigation)'],
+    ['Life Support', 'Intelligence (Arcana)'],
+  ];
+  for (const [role, modifier] of expectedRolls) {
+    element('role').value = role;
+    element('role').listeners.get('change')();
+    const help = element('total-help').textContent;
+    assert.ok(help.includes(modifier));
+    assert.match(help, /Roll once before starting: 1d20/);
+    assert.match(help, /proficiency only once/);
+    assert.match(help, /Negative totals are allowed/);
+    assert.match(help, /Natural 1 separately if the d20 shows 1/);
+    element('situation').value = 'Space Battle';
+    element('situation').listeners.get('change')();
+    assert.equal(element('total-help').textContent,
+      'Roll the check your GM requests, add your modifiers, and enter the total here. Negative totals are allowed.');
+    element('situation').value = 'Asteroid Field';
+    element('situation').listeners.get('change')();
+    assert.equal(element('total-help').textContent, help);
+  }
+  element('role').value = 'Pilot';
+  element('role').listeners.get('change')();
   element('total').value = '17'; element('natural-one').checked = true;
   const submit = () => element('flight-form').listeners.get('submit')({ preventDefault() {} });
   await submit();
