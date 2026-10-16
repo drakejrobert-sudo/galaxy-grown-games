@@ -75,7 +75,7 @@ function run(mode: ScoreMode, config: FlightConfig, profile: Profile, seed: numb
   if (mode === 'asteroid-bomber') {
     const s = createBomber();
     while (!s.finished) stepBomber(s, config,
-      { x: 0, y: 0, placing: profile === 'engaged' || (profile === 'routine' && Math.floor(s.elapsed * 2) % 2 === 0) },
+      { placing: s.cooldown <= 0 && (profile === 'engaged' || (profile === 'routine' && Math.floor(s.elapsed * 2) % 2 === 0)) },
       step, random);
     return bomberScoreFor(s);
   }

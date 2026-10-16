@@ -38,7 +38,7 @@ export class FlightScene extends Phaser.Scene {
   readInput: (x: number, y: number) => { x: number; y: number } = () => ({ x: 0, y: 0 });
   readSpaceGunnerInput: () => SpaceGunnerInput = () => ({ x: 0, y: 0, firing: false });
   readGunnerInput: () => GunnerInput = () => ({ firing: false });
-  readBomberInput: () => BomberInput = () => ({ x: 0, y: 0, placing: false });
+  readBomberInput: () => BomberInput = () => ({ placing: false });
   readLifeSupportInput: () => LifeSupportInput = () => ({ route: 'Shields' });
   readSpaceBomberInput: () => SpaceBattleBomberInput = () => ({ placing: false });
   readSpaceLifeInput: () => SpaceLifeInput = () => ({ x: 0, jump: false });
@@ -745,11 +745,12 @@ export class FlightScene extends Phaser.Scene {
 
   private paintBomberMode(g: Phaser.GameObjects.Graphics) {
     const s = this.bomber;
-    const drop = mineDropPosition(s);
-    this.paintWeaponTarget(g, drop.x, drop.y, bomberBlastRadius(this.config), 0xffca83, s.cooldown <= 0);
+    const rack = mineDropPosition(s), landing = spaceBomberLanding(s);
+    g.lineStyle(2, 0xffca83, .65); g.lineBetween(rack.x, rack.y, landing.x, landing.y);
+    this.paintWeaponTarget(g, landing.x, landing.y, bomberBlastRadius(this.config), 0xffca83, s.cooldown <= 0);
     if (s.impactFlash) { g.fillStyle(0xff715b, 0.14); g.fillRect(9, 9, WIDTH - 18, HEIGHT - 18); }
     for (const explosion of s.explosions) this.paintMineExplosion(g, explosion);
-    for (const mine of s.mines) this.paintMine(g, mine, s.elapsed, BOMBER_MINE_LIFETIME);
+    for (const mine of s.mines) this.paintMine(g, mine, s.elapsed, BOMBER_MINE_LIFETIME, !!mine.flight);
     for (const asteroid of s.asteroids) this.paintAsteroid(g, asteroid, false, false, -1);
     g.lineStyle(1, 0x79e1ce, 0.18); g.lineBetween(12, s.y + 34, WIDTH - 12, s.y + 34);
     this.paintPlayerShip(g, s.x, s.y, s.elapsed, false);

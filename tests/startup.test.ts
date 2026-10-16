@@ -157,8 +157,9 @@ test('deferred first launch recovers from load failure, starts once, and retry r
   readyScene.update(0, 16); assert.ok(readyScene.bomber.elapsed > 0);
   assert.equal(readyScene.bomber.minesPlaced, 1);
   assert.equal(readyScene.bomber.x, rules.automaticShipX(readyScene.bomber.elapsed));
-  assert.equal(readyScene.bomber.mines[0].x, readyScene.bomber.x);
-  assert.match(element('play-help').textContent, /Time your mine drops/);
+  assert.equal(readyScene.bomber.mines[0].x, 240);
+  assert.equal(readyScene.bomber.mines[0].y, 105 + 34 + 8);
+  assert.match(element('play-help').textContent, /Tap\/drag-release aft/);
   element('pause').listeners.get('click')();
   const pausedBomber = JSON.stringify(readyScene.bomber);
   readyScene.update(0, 50);

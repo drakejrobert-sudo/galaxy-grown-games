@@ -120,42 +120,8 @@ export function createSpaceLifeInput(buttons: Record<'left' | 'right' | 'jump', 
   };
 }
 
-/** Asteroid Bomber only times releases; flight and the aft drop point are automatic. */
-export function createBomberInput(_surface: HTMLElement, action: HTMLElement) {
-  const keys = new Set<string>();
-  let pointer: number | null = null;
-  let queuedMine = false;
-  let enabled = false;
-  const clear = () => { keys.clear(); pointer = null; queuedMine = false; };
-  window.addEventListener('keydown', e => {
-    if (!enabled || !['Space', 'Enter'].includes(e.code)) return;
-    e.preventDefault();
-    if (!keys.has(e.code)) queuedMine = true;
-    keys.add(e.code);
-  });
-  window.addEventListener('keyup', e => keys.delete(e.code));
-  window.addEventListener('blur', clear);
-  action.addEventListener('pointerdown', e => {
-    if (!enabled || pointer !== null) return;
-    e.preventDefault(); pointer = e.pointerId; queuedMine = true;
-    action.setPointerCapture?.(pointer);
-  });
-  for (const event of ['pointerup', 'pointercancel', 'lostpointercapture']) {
-    action.addEventListener(event, ((e: PointerEvent) => {
-      if (e.pointerId !== pointer) return;
-      pointer = null;
-      if (event !== 'pointerup') queuedMine = false;
-    }) as EventListener);
-  }
-  return {
-    enable(value: boolean) { enabled = value; clear(); },
-    read() {
-      const placing = queuedMine || pointer !== null || keys.size > 0;
-      queuedMine = false;
-      return { x: 0, y: 0, placing };
-    },
-  };
-}
+/** Both Bomber modes share the same aft launcher controls. */
+export const createBomberInput = createSpaceBomberInput;
 
 /** Mine-only pursuit: every press is a single attempt, never held or banked. */
 export function createSpaceBomberInput(surface: HTMLElement, action: HTMLElement) {

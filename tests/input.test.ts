@@ -70,36 +70,6 @@ test('gunner mouse input follows hover and preserves a quick click until simulat
   } finally { globalThis.window = oldWindow; }
 });
 
-test('asteroid bomber only times mine releases and ignores aiming controls', () => {
-  const oldWindow = globalThis.window;
-  const windowListeners = new Map<string, Function>(), actions = new Map<string, Function>();
-  globalThis.window = {addEventListener:(type:string, listener:Function)=>windowListeners.set(type,listener)} as any;
-  try {
-    const surface = {addEventListener() { throw new Error('Asteroid Bomber must not bind aim controls'); }} as any;
-    const action = {addEventListener:(type:string, listener:Function)=>actions.set(type,listener),setPointerCapture() {}} as any;
-    const input = createBomberInput(surface,action); input.enable(true);
-    windowListeners.get('keydown')!({code:'KeyD',preventDefault() {throw new Error('steering key consumed');}});
-    assert.deepEqual(input.read(),{x:0,y:0,placing:false});
-    windowListeners.get('keydown')!({code:'Space',preventDefault() {}});
-    assert.equal(input.read().placing,true);
-    windowListeners.get('keyup')!({code:'Space'});
-    assert.equal(input.read().placing,false);
-    actions.get('pointerdown')!({pointerId:1,preventDefault() {}});
-    actions.get('pointerup')!({pointerId:1});
-    assert.equal(input.read().placing,true);
-    assert.equal(input.read().placing,false);
-    actions.get('pointerdown')!({pointerId:2,preventDefault() {}});
-    actions.get('pointercancel')!({pointerId:2});
-    assert.equal(input.read().placing,false);
-    actions.get('pointerdown')!({pointerId:3,preventDefault() {}});
-    input.enable(false); input.enable(true);
-    assert.equal(input.read().placing,false);
-    windowListeners.get('keydown')!({code:'Enter',preventDefault() {}});
-    windowListeners.get('blur')!();
-    assert.equal(input.read().placing,false);
-  } finally {globalThis.window=oldWindow;}
-});
-
 test('life support switch supports cycling, direct keyboard selection, and touch buttons', () => {
   const windowListeners = new Map<string, Function>();
   const buttonListeners = Array.from({length: 3}, () => new Map<string, Function>());
@@ -134,16 +104,17 @@ test('life support switch supports cycling, direct keyboard selection, and touch
 });
 
 
-function mineHarness() {
+function mineHarness(factory = createSpaceBomberInput) {
   const oldWindow = globalThis.window;
   const keys = new Map<string, Function>(), pointers = new Map<string, Function>(), surface = new Map<string, Function>();
   globalThis.window = { addEventListener: (name: string, fn: Function) => keys.set(name, fn) } as any;
-  const input = createSpaceBomberInput({ addEventListener: (name: string, fn: Function) => surface.set(name, fn), setPointerCapture() {}, querySelector: () => ({ getBoundingClientRect: () => ({left:10,top:20,width:240,height:280}) }) } as any, { addEventListener: (name: string, fn: Function) => pointers.set(name, fn), setPointerCapture() {} } as any);
+  const input = factory({ addEventListener: (name: string, fn: Function) => surface.set(name, fn), setPointerCapture() {}, querySelector: () => ({ getBoundingClientRect: () => ({left:10,top:20,width:240,height:280}) }) } as any, { addEventListener: (name: string, fn: Function) => pointers.set(name, fn), setPointerCapture() {} } as any);
   input.enable(true);
   return { input, keys, pointers, surface, restore: () => { globalThis.window = oldWindow; } };
 }
-test('Space Bomber consumes one mine press and rejects repeats and held input', () => {
-  const h = mineHarness();
+for (const [name, factory] of [['Asteroid', createBomberInput], ['Space', createSpaceBomberInput]] as const) {
+test(name + ' Bomber consumes one mine press and rejects repeats and held input', () => {
+  const h = mineHarness(factory);
   try {
     for (const code of ['ShiftLeft']) h.keys.get('keydown')!({ code, preventDefault() { throw Error('unexpected control'); } });
     assert.deepEqual(h.input.read(), { placing: false });
@@ -163,8 +134,8 @@ test('Space Bomber consumes one mine press and rejects repeats and held input', 
     assert.equal(h.input.read().placing, false); // Held key after resume cannot fire.
   } finally { h.restore(); }
 });
-test('Space Bomber quick pointer taps survive release; holds, cancellation, pause and blur never fire stale mines', () => {
-  const h = mineHarness();
+test(name + ' Bomber quick pointer taps survive release; holds, cancellation, pause and blur never fire stale mines', () => {
+  const h = mineHarness(factory);
   try {
     const e = { pointerId: 7, pointerType: 'touch', preventDefault() {} };
     h.pointers.get('pointerdown')!(e);
@@ -187,8 +158,8 @@ test('Space Bomber quick pointer taps survive release; holds, cancellation, paus
   } finally { h.restore(); }
 });
 
-test('Space Bomber canvas previews hover and drag, launches on release, and clears cancelled gestures', () => {
-  const h = mineHarness();
+test(name + ' Bomber canvas previews hover and drag, launches on release, and clears cancelled gestures', () => {
+  const h = mineHarness(factory);
   try {
     const e = {pointerId:2,pointerType:'mouse',button:0,clientX:130,clientY:220,preventDefault(){}};
     h.surface.get('pointermove')!(e);
@@ -218,8 +189,8 @@ test('Space Bomber canvas previews hover and drag, launches on release, and clea
   } finally { h.restore(); }
 });
 
-test('Space Bomber consumes pointer targets after release/hover and retains active drag previews',()=>{
-  const h=mineHarness();
+test(name + ' Bomber consumes pointer targets after release/hover and retains active drag previews',()=>{
+  const h=mineHarness(factory);
   try {
     const e={pointerId:2,pointerType:'touch',clientX:130,clientY:120,preventDefault(){}};
     h.surface.get('pointerdown')!(e);
@@ -231,3 +202,5 @@ test('Space Bomber consumes pointer targets after release/hover and retains acti
     assert.deepEqual(h.input.read().aim,{x:240,y:200});assert.deepEqual(h.input.read(),{placing:false});
   } finally {h.restore();}
 });
+
+}
