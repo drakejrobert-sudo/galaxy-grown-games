@@ -7,6 +7,19 @@ Asteroid Field / Pilot, Gunner, Bomber, and Life Support, plus Space Battle / Pi
 
 Player link: [play.drakesfood.com](https://play.drakesfood.com/). This HTTPS shortlink redirects to the current GitHub Pages deployment and remains the link to share if the underlying hosting URL changes.
 
+### Asteroid Field rolls
+
+Roll once before starting your Asteroid Field challenge:
+
+| Role | Roll |
+| --- | --- |
+| Pilot | 1d20 + Dexterity (Acrobatics) modifier |
+| Gunner | 1d20 + the character’s Dexterity-based ranged attack modifier |
+| Bomber | 1d20 + Intelligence (Investigation) modifier |
+| Life Support | 1d20 + Intelligence (Arcana) modifier |
+
+Use your character’s relevant modifier, including applicable proficiency only once. Enter the final total, including modifiers; negative totals are allowed. Separately select **I rolled a natural 1** if the d20 shows 1, regardless of the modified total. Space Battle continues to use the check requested by the GM. Difficulty bands, Natural-1 impairments, and provisional scoring are unchanged; players report their rating and band, and the GM decides campaign consequences.
+
 ### Remaining designs and final acceptance
 
 [Issue #11](https://github.com/drakejrobert-sudo/galaxy-grown-games/issues/11) tracks remaining Boarding Party designs and the completed handoff for the [Space Battle Gunner design](docs/space-battle-gunner-design.md) and its separate [implementation issue #38](https://github.com/drakejrobert-sudo/galaxy-grown-games/issues/38). Gunner's core turret-defense activity, keyboard/touch/mouse controls, and half-fire-rate Natural 1 are approved; detailed tuning remains provisional. Boarding Party will compare offensive and defensive concepts before Drake approves a framing and each role's activity/impairment. Boarding Party remains unavailable. Space Battle Gunner is implemented here, with final device and gameplay acceptance pending.

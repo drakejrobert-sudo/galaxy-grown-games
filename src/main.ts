@@ -24,7 +24,7 @@ app.innerHTML = `
     <div class="fields"><label>Situation<select id="situation"><option>Asteroid Field</option><option>Space Battle</option><option disabled>Boarding Party — in design</option></select></label><label>Crew position<select id="role"><option>Pilot</option><option id="role-gunner">Gunner</option><option id="role-bomber">Bomber</option><option id="role-life-support">Life Support</option></select></label></div>
     <label for="total">Check total <span class="muted">including modifiers</span></label>
     <input id="total" name="total" type="text" autocomplete="off" placeholder="Enter your final total" aria-describedby="total-help error" required />
-    <p id="total-help" class="help">Roll the check your GM requests, add your modifiers, and enter the total here. Negative totals are allowed.</p>
+    <p id="total-help" class="help">Roll once before starting: 1d20 + your Dexterity (Acrobatics) modifier. Include applicable proficiency only once; enter the final total. Negative totals are allowed. Select Natural 1 separately if the d20 shows 1.</p>
     <label class="check"><input type="checkbox" id="natural-one" /> I rolled a natural 1</label>
     <div class="readout" aria-live="polite"><span>CHALLENGE DIFFICULTY</span><strong id="difficulty">Awaiting check</strong><p id="impairment">Standard engine</p></div>
     <p id="error" class="error" role="alert"></p>
@@ -141,6 +141,16 @@ function refreshSetup() {
   bomberOption.disabled = false;
   lifeSupportOption.disabled = false;
   const selectedRole = roleSelect.value as Role;
+  const asteroidRolls: Record<Role, string> = {
+    Pilot: 'your Dexterity (Acrobatics) modifier',
+    Gunner: 'your character’s Dexterity-based ranged attack modifier',
+    Bomber: 'your Intelligence (Investigation) modifier',
+    'Life Support': 'your Intelligence (Arcana) modifier',
+  };
+  get('total-help').textContent = selectedSituation === 'Asteroid Field'
+    ? `Roll once before starting: 1d20 + ${asteroidRolls[selectedRole]}. Include applicable proficiency only once; enter the final total. Negative totals are allowed. Select Natural 1 separately if the d20 shows 1.`
+    : 'Roll the check your GM requests, add your modifiers, and enter the total here. Negative totals are allowed.';
+
   get('impairment').textContent = selectedRole === 'Pilot'
     ? natural.checked ? 'Overloaded engine · 60% movement speed (playtest)' : 'Standard engine'
     : selectedRole === 'Gunner'
