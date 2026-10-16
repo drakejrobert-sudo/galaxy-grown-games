@@ -84,3 +84,30 @@ test('a detonated mine and overlapping asteroids score only once', () => {
   assert.equal(s.destroyed, 2); assert.equal(s.explosions.length, 1); assert.equal(s.mines.length, 1);
   advance(s, .1); assert.equal(s.destroyed, 2);
 });
+for (const grace of [0, .5]) {
+  test(`earlier hull contact cannot be scored by a later blast, grace ${grace}`, () => {
+    const s = quiet(); s.invulnerable = grace;
+    s.mines = [{ id: 1, x: 280, y: 105, blastRadius: 66, armIn: .03, expiresIn: 5 }];
+    s.asteroids = [{ id: 90, x: 240, y: 105, radius: 10, speed: 0 },
+      { id: 91, x: 280, y: 105, radius: 10, speed: 0 }];
+    stepBomber(s, config, idle, .05);
+    assert.equal(s.hull, grace ? 3 : 2); assert.equal(s.impacts, grace ? 0 : 1);
+    assert.equal(s.destroyed, 1); assert.equal(s.explosions.length, 1);
+    assert.equal(s.asteroids.length, 0);
+  });
+}
+test('an asteroid removed by earlier hull contact cannot trigger a later mine', () => {
+  const s = quiet();
+  s.mines = [{ id: 1, x: 240, y: 105, blastRadius: 66, armIn: .03, expiresIn: 5 }];
+  s.asteroids = [{ id: 90, x: 240, y: 105, radius: 10, speed: 0 }];
+  stepBomber(s, config, idle, .05);
+  assert.equal(s.hull, 2); assert.equal(s.destroyed, 0);
+  assert.equal(s.explosions.length, 0); assert.equal(s.mines.length, 1);
+});
+test('simultaneous mine and hull contacts retain mine defense priority', () => {
+  const s = quiet();
+  s.mines = [{ id: 1, x: 240, y: 105, blastRadius: 66, armIn: 0, expiresIn: 5 }];
+  s.asteroids = [{ id: 90, x: 240, y: 105, radius: 10, speed: 0 }];
+  stepBomber(s, config, idle, .05);
+  assert.equal(s.hull, 3); assert.equal(s.destroyed, 1); assert.equal(s.mines.length, 0);
+});

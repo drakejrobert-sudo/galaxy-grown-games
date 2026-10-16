@@ -473,35 +473,48 @@ export function stepBomber(
       }
     }
   }
-  contacts.sort((a, b) => a.time - b.time || a.mine.id - b.mine.id || a.asteroid.id - b.asteroid.id);
-  const destroyed = new Set<number>(), detonated = new Set<number>();
-  for (const { time, x, y, mine, asteroid } of contacts) {
-    if (detonated.has(mine.id) || destroyed.has(asteroid.id)) continue;
+  // Merge both swept event streams. Only equal-time contacts give mines priority;
+  // a later explosion cannot undo a hull impact or score an already removed asteroid.
+  type ContactEvent =
+    | { kind: 'mine'; time: number; contact: typeof contacts[number] }
+    | { kind: 'hull'; time: number; id: number };
+  const events: ContactEvent[] = contacts.map(contact => ({ kind: 'mine', time: contact.time, contact }));
+  for (const asteroid of s.asteroids) {
+    const old = paths.get(asteroid.id)!;
+    const entry = circleEntry(old.x - oldShipX, old.y - s.y,
+      asteroid.x - old.x - (s.x - oldShipX), asteroid.y - old.y,
+      asteroid.radius + BOMBER_PLAYER_RADIUS, true);
+    if (entry !== null) events.push({ kind: 'hull', time: entry * dt, id: asteroid.id });
+  }
+  events.sort((a, b) => a.time - b.time
+    || (a.kind === 'mine' ? 0 : 1) - (b.kind === 'mine' ? 0 : 1)
+    || (a.kind === 'mine' ? a.contact.mine.id : a.id) - (b.kind === 'mine' ? b.contact.mine.id : b.id)
+    || (a.kind === 'mine' ? a.contact.asteroid.id : a.id) - (b.kind === 'mine' ? b.contact.asteroid.id : b.id));
+  const destroyed = new Set<number>(), detonated = new Set<number>(), collided = new Set<number>();
+  let damageAllowedAt = oldGrace;
+  for (const event of events) {
+    if (event.kind === 'hull') {
+      if (destroyed.has(event.id) || collided.has(event.id)) continue;
+      collided.add(event.id);
+      if (event.time >= damageAllowedAt) {
+        s.impacts++; s.hull = Math.max(0, s.hull - 1);
+        damageAllowedAt = event.time + BOMBER_COLLISION_GRACE;
+        s.invulnerable = damageAllowedAt - dt; s.impactFlash = .18;
+      }
+      continue;
+    }
+    const { time, x, y, mine, asteroid } = event.contact;
+    if (detonated.has(mine.id) || destroyed.has(asteroid.id) || collided.has(asteroid.id)) continue;
     detonated.add(mine.id); destroyed.add(asteroid.id);
     s.explosions.push({ x, y, radius: mine.blastRadius, remaining: .28 - (dt - time) });
     for (const candidate of s.asteroids) {
+      if (collided.has(candidate.id) || destroyed.has(candidate.id)) continue;
       const position = asteroidAt(candidate, time);
       if (Math.hypot(position.x - x, position.y - y) <= mine.blastRadius + 1e-9) destroyed.add(candidate.id);
     }
   }
   s.destroyed += destroyed.size;
   s.mines = s.mines.filter(mine => mine.expiresIn > 0 && !detonated.has(mine.id));
-  const collisions: { id: number; time: number }[] = [];
-  for (const asteroid of s.asteroids) {
-    if (destroyed.has(asteroid.id)) continue;
-    const old = paths.get(asteroid.id)!;
-    const entry = circleEntry(old.x - oldShipX, old.y - s.y,
-      asteroid.x - old.x - (s.x - oldShipX), asteroid.y - old.y,
-      asteroid.radius + BOMBER_PLAYER_RADIUS, true);
-    if (entry !== null) collisions.push({ id: asteroid.id, time: entry * dt });
-  }
-  collisions.sort((a, b) => a.time - b.time || a.id - b.id);
-  const damaging = collisions.find(contact => contact.time >= oldGrace);
-  if (damaging) {
-    s.impacts++; s.hull = Math.max(0, s.hull - 1);
-    s.invulnerable = BOMBER_COLLISION_GRACE - (dt - damaging.time); s.impactFlash = .18;
-  }
-  const collided = new Set(collisions.map(contact => contact.id));
   s.asteroids = s.asteroids.filter(asteroid => !destroyed.has(asteroid.id) && !collided.has(asteroid.id));
   // Escaping asteroids are safe misses, not ship impacts or scoring events.
   s.asteroids = s.asteroids.filter(asteroid => asteroid.y + asteroid.radius >= -10);
