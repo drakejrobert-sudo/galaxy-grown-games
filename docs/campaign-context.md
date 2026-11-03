@@ -8,7 +8,7 @@ The Grinning Gang is an established antagonistic faction. The Placeless Pub is a
 
 ## Campaign ownership
 
-The separate campaign repository is the authority for setting canon. Its availability must be checked, never assumed. This summary comes from Drake's supplied project context, not a fresh inspection of that repository.
+The [campaign repository](https://github.com/drakejrobert-sudo/galaxy-grown-campaign) is the authority for setting canon. A local checkout may be available at `/Users/drakerobert/projects/tggatgg/dnd_campaign_kdp_scaffold`. Check availability and checkout state rather than assuming it is current. When a task needs campaign details, consult its `CANON.md` and relevant current sources, follow its instructions, and preserve uncommitted work. Report inaccessible sources and uncertainty. This summary comes from Drake's supplied project context, not a fresh inspection of that repository.
 
 Authority: current explicit instructions, campaign CANON.md, dedicated lore/mechanics files, sourced session records, established material, then proposals. Keep global canon, shared world state, party-specific knowledge, and GM-only information separate. Never add secrets to this player-facing codebase.
 
