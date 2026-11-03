@@ -3,9 +3,17 @@ A repository for hosting mini games for the galaxy grown campaign.
 
 ## First playable slice
 
-Asteroid Field / Pilot, Gunner, Bomber, and Life Support, plus Space Battle / Pilot, Gunner, Bomber, and Life Support, are implemented as **prototypes awaiting score calibration**. Other situation/role combinations are visibly disabled. Players enter their GM-requested final skill-check total and a separate Natural 1 flag, play independently, and manually share their rating or score. No campaign data or live multiplayer service is included.
+Asteroid Field / Pilot, Gunner, Bomber, and Life Support, plus Space Battle / Pilot, Gunner, Bomber, and Life Support, are implemented as **prototypes awaiting score calibration**. Other situation/role combinations are visibly disabled. Players enter their GM-requested final skill-check total and a separate Natural 1 flag, play independently, and manually share their rating or score. Flight Deck has no live multiplayer service. The Galaxy Map prototype stores GM-authored campaigns locally in the browser.
 
 Player link: [play.drakesfood.com](https://play.drakesfood.com/). This HTTPS shortlink redirects to the current GitHub Pages deployment and remains the link to share if the underlying hosting URL changes.
+
+## Galaxy Map V1
+
+Open **Galaxy Map** beside Flight Deck to plot connected courses, advance travel under GM control, and pause for random or deliberate encounters. Encounter cards can provide Asteroid Field / Space Battle player links or pause for your already-open Maps VTT. The fictional demo includes planets, a ship, a station and a point of interest.
+
+**GM preparation** offers map/library editors, weighted tables, scheduled encounters and independent named campaign saves. Saves stay in this browser; export JSON backups to keep or move them. Preparation is hidden from presentation, without authentication. Travel steps and Low 10% / Medium 25% / High 50% risk are provisional. The GM decides all outcomes.
+
+See [Galaxy Map setup, saves, and playtest checklist](docs/galaxy-map-v1.md). Actual iPhone/iPad Safari and owner acceptance remain pending.
 
 ### Asteroid Field rolls
 
