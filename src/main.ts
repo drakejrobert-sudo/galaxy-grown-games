@@ -16,6 +16,7 @@ import {
 const app = document.querySelector<HTMLDivElement>('#app')!;
 app.innerHTML = `
 <header><a href="./" class="brand">✦ <span>GALAXY GROWN</span></a><span class="tag">FLIGHT DECK · PROTOTYPE</span></header>
+<nav class="surface-nav" aria-label="App sections"><a href="./">Flight Deck</a><a href="#/map">Galaxy Map ↗</a></nav>
 <main>
 <section id="setup" class="setup">
   <div class="intro"><p class="eyebrow">CREW CHALLENGE 01</p><h1>A steady hand.<br>A galaxy of trouble.</h1><p class="lede">Choose your station, face the danger ahead, and bring your individual score back to the GM.</p><div class="details"><span>60-second challenge</span><span>Role-specific systems</span><span>Solo run</span></div></div>
@@ -55,6 +56,10 @@ const get = <T extends HTMLElement>(id: string) => document.getElementById(id) a
 const total = get<HTMLInputElement>('total'), natural = get<HTMLInputElement>('natural-one');
 const roleSelect = get<HTMLSelectElement>('role');
 const situationSelect = get<HTMLSelectElement>('situation');
+if (typeof location !== 'undefined') {
+  const requested = new URLSearchParams(location.search).get('situation');
+  if (requested === 'asteroid-field' || requested === 'space-battle') situationSelect.value = requested === 'space-battle' ? 'Space Battle' : 'Asteroid Field';
+}
 let scene: FlightScene | null = null;
 const canvas = get('canvas');
 const action = get<HTMLButtonElement>('action');
@@ -176,6 +181,7 @@ function refreshSetup() {
 total.addEventListener('input', refreshSetup); natural.addEventListener('change', refreshSetup);
 roleSelect.addEventListener('change', refreshSetup);
 situationSelect.addEventListener('change', refreshSetup);
+if (typeof location !== 'undefined') refreshSetup();
 function setPaused(value: boolean) {
   if (!inFlight) return;
   paused = value; scene!.activeFlight = !value;
