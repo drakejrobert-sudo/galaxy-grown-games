@@ -6,7 +6,7 @@ export interface Encounter { id: string; title: string; prompt: string; notes: s
 export interface EncounterTable { id: string; name: string; entries: { encounter: string; weight: number }[] }
 export interface Schedule { id: string; leg: number; step: number; encounter: string; consumed: boolean }
 export interface Journey { stops: string[]; leg: number; step: number; active: string | null; arrived: boolean }
-export interface SectorMap { id: string; name: string; description: string; decoration: 'none' | 'orbits'; destinations: Destination[]; routes: Route[]; schedules: Schedule[]; journey: Journey | null; location: string | null; log: string[] }
+export interface SectorMap { id: string; name: string; description: string; decoration: 'none' | 'orbits'; backgroundImage?: string; destinations: Destination[]; routes: Route[]; schedules: Schedule[]; journey: Journey | null; location: string | null; log: string[] }
 export interface Campaign { id: string; name: string; maps: SectorMap[]; activeMap: string; encounters: Encounter[]; tables: EncounterTable[] }
 export interface Archive { version: 2; selected: string; campaigns: Campaign[] }
 export function activeMap(c: Campaign): SectorMap {

@@ -1,3 +1,4 @@
+import { backgroundImageBytes } from './background';
 import { uid, type Archive, type Campaign } from './model';
 export const STORAGE_KEY = 'galaxy-grown-map-v1';
 function check(value: unknown, message: string): asserts value { if (!value) throw Error(message); }
@@ -31,6 +32,7 @@ export function validateArchive(value: unknown): Archive {
     for (const t of c.tables) { check(text(t.name) && t.name.trim(), 'Table needs a name.'); list(t.entries); check(new Set(t.entries.map(e => e.encounter)).size === t.entries.length, 'Duplicate table entry.'); for (const e of t.entries) check(hasEncounter(e.encounter) && integer(e.weight, 1, 1000000), 'Invalid table entry or weight.'); }
     for (const m of c.maps) {
       check(text(m.name) && m.name.trim() && text(m.description) && ['none','orbits'].includes(m.decoration), 'Invalid map metadata.');
+      check(m.backgroundImage === undefined || backgroundImageBytes(m.backgroundImage) !== null, 'Invalid background image. Use an embedded PNG, JPEG or WebP of at most 750 KB.');
       for (const items of [m.destinations, m.routes, m.schedules]) { list(items); unique(items); }
       const hasDestination = (s: unknown) => m.destinations.some(d => d.id === s && d.navigable !== false);
       for (const d of m.destinations) check(text(d.name) && d.name.trim() && text(d.description) && (d.navigable === undefined || typeof d.navigable === 'boolean') && (d.detailMapId === undefined || c.maps.some(target => target.id === d.detailMapId && target.id !== m.id)) && ['planet','ship','station','point','system','star'].includes(d.type) && typeof d.x === 'number' && Number.isFinite(d.x) && d.x >= 40 && d.x <= 860 && typeof d.y === 'number' && Number.isFinite(d.y) && d.y >= 50 && d.y <= 450, 'Invalid destination. Coordinates: X 40–860, Y 50–450.');

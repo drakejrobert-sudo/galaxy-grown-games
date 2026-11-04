@@ -35,9 +35,19 @@ Destination types include **system** and **star**. Set **Travel access** to **Re
 
 Mark speculative routes **Provisional proposal** to label their connections on the map. Their steps and risk remain editable; no table means no random encounter. No campaign geography or private starter package is bundled with the public app. Import private packages yourself and assess whether their visible geography is suitable before presenting to players.
 
+### Optional illustrated backgrounds
+
+In **Maps in this campaign**, use **Upload background** to select a local PNG, JPEG or WebP, or **Remove background** to return to the schematic. Background changes are locked during that map’s journey. Images sit beneath SVG routes, names, selection rings and the travel marker; they do not change destination coordinates or travel rules. With an image, schematic object symbols are hidden and outlines indicate selectable areas. The destination list remains available for touch and keyboard use.
+
+Use text-free artwork aligned to the existing destination positions on a 900×500 logical map. Uploads up to 10 MB and 40 million pixels are fitted without cropping into an 1800×1000 image, with dark padding if proportions differ. Saved artwork is compressed to JPEG at no more than 750 KB. Unsupported, unreadable or excessive files leave the map unchanged. Changing maps during preparation of an upload discards that result rather than applying it to a different map.
+
+Artwork is embedded in the browser save and campaign export; no image URL or public hosting is needed. Existing version 1/2 saves without images retain their schematic appearance. Imports allow embedded PNG/JPEG/WebP only, with the same 750 KB per-image cap. If an embedded image cannot be displayed, the schematic remains usable and preparation offers replacement/removal. Existing quota warnings and export recovery still apply; image-bearing saves consume more browser storage, and the overall 10 MB import limit still applies.
+
+This proof has a single background per map. Per-object images, size/layer controls, zoom and a larger presentation view are tracked in [issue #67](https://github.com/drakejrobert-sudo/galaxy-grown-games/issues/67). Private campaign artwork and proof packages are supplied separately and are not shipped in the app.
+
 ### Save interface
 
-Archive version 2 keeps `selected` and `campaigns`. Each campaign contains `id`, `name`, `activeMap`, `maps`, `encounters` and `tables`. Each map contains `id`, `name`, `description`, `decoration` (`none` or `orbits`), `destinations`, `routes`, `schedules`, `journey`, `location` and `log`. Destination `navigable` defaults to true; optional `detailMapId` refers to a different map inside the same campaign. Route `provisional` defaults to false. Map IDs and entity IDs are local to their campaign/map. Imports assign new campaign IDs and preserve internal map links.
+Archive version 2 keeps `selected` and `campaigns`. Each campaign contains `id`, `name`, `activeMap`, `maps`, `encounters` and `tables`. Each map contains `id`, `name`, `description`, `decoration` (`none` or `orbits`), `destinations`, `routes`, `schedules`, `journey`, `location` and `log`, plus optional embedded `backgroundImage` (a raster data URL). Destination `navigable` defaults to true; optional `detailMapId` refers to a different map inside the same campaign. Route `provisional` defaults to false. Map IDs and entity IDs are local to their campaign/map. Imports assign new campaign IDs and preserve internal map links.
 
 The existing `galaxy-grown-map-v1` storage key is retained for discovery and recovery of installed saves; the payload version is now 2. Invalid imports leave existing saves intact. Corrupt browser data stays untouched until explicit recovery, and failed writes leave an exportable in-memory campaign.
 
@@ -57,10 +67,13 @@ Desktop Chromium engineering checks passed against local Vite development and pr
 
 The linked-map follow-up passes 255 tests and the production build (the same Phaser bundle-size advisory remains). Desktop Chromium at 1440×1000 and emulated touch at 390×844 verified private-file import, detail/back navigation, reference-only markers, preserved paused encounters across views/reload, shared-library locks, a completed journey, metadata editing, referenced-map deletion rejection, export/reimport isolation, rejected malformed imports, and a destination list that stays open across selections. Page identity, meaningful content, absent framework overlays, console/runtime health, screenshots and page-width containment passed. Browser plugin was not available; existing Playwright was used. Private fixtures, screenshots and exports remain outside this checkout; the public diff/build were checked for campaign-specific content. Actual iPhone/iPad Safari remains untested.
 
+The optional-background proof passes 260 tests and the production build, retaining the existing Phaser bundle advisory. Desktop Chromium (1440×1000) and emulated touch (390×844) verified PNG/JPEG/WebP normalization, unchanged saves after unsupported/unreadable replacements, vector layering and keyboard/touch selection, per-map image isolation, travel-time upload locks, reload/arrival, embedded export/reimport and removal. An isolated deliberate corrupt-image check recovered to the schematic; an injected quota failure retained an exportable image-bearing campaign. Main-flow console/runtime, page identity, content, overlays, screenshots and page-width checks passed. Private artwork/proof data and QA artifacts stay outside the checkout. The proof does not establish actual Safari/device acceptance. Refs #67.
+
 Before acceptance, Drake should:
 
 - [ ] Review and merge the PR; verify successful automatic deployment and the deployed revision.
 - [ ] On actual iPhone/iPad Safari and desktop, inspect/select stops, pan the map, plot/replan, and use the editors without clipped controls.
+- [ ] Upload/remove a background, check readable labels and target alignment, then export/reimport the image-bearing campaign on actual Safari devices.
 - [ ] Import a multi-map backup, open a linked detail map and return, verify reference markers cannot be travel stops, and reload a paused journey after switching views. Export/reimport both maps without changing the original campaign.
 - [ ] Schedule a surprise without exposing preparation; trigger random and immediate encounters and verify pause, final-step arrival and explicit resume.
 - [ ] Have the crew open Asteroid Field and Space Battle links on their devices; confirm role selection, roll entry and manual GM reporting.

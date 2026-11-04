@@ -1,3 +1,4 @@
+import { normalizeBackground } from './background';
 import '../style.css';
 import './galaxy.css';
 import { activeMap, blankMap, deleteMap, libraryLocked, switchMap, advance, blankCampaign, challengeLink, demoCampaign, endJourney, insertEncounter, resolveEncounter, routeBetween, routeFor, scheduleEncounter, startJourney, uid, type Archive, type Campaign, type Destination, type Encounter, type EncounterTable, type Route } from './model';
@@ -12,6 +13,9 @@ try { archive = readArchive(localStorage) ?? initial(); }
 catch (e) { archive = initial(); storageProblem = `Saved data could not be loaded: ${message(e)}. Existing storage has been preserved. Import a backup or explicitly replace it in GM preparation.`; recovery = true; }
 function initial(): Archive { const c = demoCampaign(); return { version: 2, selected: c.id, campaigns: [c] }; }
 let preparing = false;
+const failedBackgrounds = new Set<string>();
+const visibleBackground = () => { const image = activeMap(campaign()).backgroundImage; return image && !failedBackgrounds.has(image) ? image : ''; };
+let backgroundRequest = 0;
 let selected = '';
 let destinationListOpen = false;
 let plotted: string[] = [];
@@ -48,6 +52,7 @@ function form(id: string, content: string, button: string) { return `<form id="$
 function activeTravel() { return !!activeMap(campaign()).journey && !activeMap(campaign()).journey!.arrived; }
 function mapSvg() {
   const c = campaign(), j = activeMap(c).journey;
+  const background = visibleBackground();
   const path = activeTravel() ? j!.stops : plotted.length ? plotted : j?.stops ?? [];
   const routeIsPlotted = (r: Route) => path.slice(1).some((s, i) => routeBetween(c, path[i], s)?.id === r.id);
   let marker = '';
@@ -58,9 +63,9 @@ function mapSvg() {
   } else if (activeMap(c).location) {
     const d = activeMap(c).destinations.find(d => d.id === activeMap(c).location)!; marker = `<circle cx="${d.x}" cy="${d.y}" r="31" class="ship-marker"/>`;
   }
-  return `<svg id="sector" viewBox="0 0 900 500" aria-label="${escape(activeMap(c).name)} destinations and travel routes" role="group"><defs><pattern id="stars" width="83" height="73" patternUnits="userSpaceOnUse"><circle cx="12" cy="18" r="1" fill="#91a4ca"/><circle cx="65" cy="53" r=".6" fill="#bba6ff"/></pattern></defs><rect width="900" height="500" fill="url(#stars)"/>${activeMap(c).decoration === 'orbits' ? '<g class="orbit-decoration" aria-hidden="true"><ellipse cx="450" cy="220" rx="330" ry="100"/><ellipse cx="450" cy="220" rx="390" ry="150"/></g>' : ''}
+  return `<svg id="sector" class="${background?'illustrated-map':''}" viewBox="0 0 900 500" aria-label="${escape(activeMap(c).name)} destinations and travel routes" role="group"><defs><pattern id="stars" width="83" height="73" patternUnits="userSpaceOnUse"><circle cx="12" cy="18" r="1" fill="#91a4ca"/><circle cx="65" cy="53" r=".6" fill="#bba6ff"/></pattern></defs><rect width="900" height="500" fill="url(#stars)"/>${background?`<image id="map-background" href="${escape(background)}" x="0" y="0" width="900" height="500" preserveAspectRatio="xMidYMid meet" pointer-events="none" aria-hidden="true"/>`: ''}${activeMap(c).decoration === 'orbits' ? '<g class="orbit-decoration" aria-hidden="true"><ellipse cx="450" cy="220" rx="330" ry="100"/><ellipse cx="450" cy="220" rx="390" ry="150"/></g>' : ''}
   ${activeMap(c).routes.map(r => { const a = activeMap(c).destinations.find(d => d.id === r.from)!, b = activeMap(c).destinations.find(d => d.id === r.to)!; return `<g><line x1="${a.x}" y1="${a.y}" x2="${b.x}" y2="${b.y}" class="${routeIsPlotted(r) ? 'plotted' : 'connection'}"/><text x="${(a.x+b.x)/2}" y="${(a.y+b.y)/2-9}" class="route-label">${r.steps} · ${r.risk}${r.provisional?' · proposal':''}</text></g>`; }).join('')}
-  ${activeMap(c).destinations.map(d => `<g class="destination node-${d.type} ${d.navigable === false ? 'reference-marker' : ''} ${d.id === selected ? 'selected' : ''}" data-destination="${escape(d.id)}" tabindex="0" role="button" aria-label="Select ${escape(d.name)}"><circle cx="${d.x}" cy="${d.y}" r="23"/><text x="${d.x}" y="${d.y+5}" class="node-symbol">${{planet:'●',ship:'▲',station:'◇',point:'✦',system:'◎',star:'☀'}[d.type]}</text><text x="${d.x}" y="${d.y+44}" class="node-label">${escape(d.name)}</text></g>`).join('')}${marker}</svg>`;
+  ${activeMap(c).destinations.map(d => `<g class="destination node-${d.type} ${d.navigable === false ? 'reference-marker' : ''} ${d.id === selected ? 'selected' : ''}" data-destination="${escape(d.id)}" tabindex="0" role="button" aria-label="Select ${escape(d.name)}"><circle cx="${d.x}" cy="${d.y}" r="${background ? ({planet:52,star:43,ship:40,station:30,system:40,point:21}[d.type]) : 23}"/><text x="${d.x}" y="${d.y+5}" class="node-symbol">${{planet:'●',ship:'▲',station:'◇',point:'✦',system:'◎',star:'☀'}[d.type]}</text><text x="${d.x}" y="${d.y+(background ? ({planet:73,star:64,ship:61,station:51,system:61,point:44}[d.type]) : 44)}" class="node-label">${escape(d.name)}</text></g>`).join('')}${marker}</svg>`;
 }
 function journeyPanel() {
   const c = campaign(), j = activeMap(c).journey;
@@ -111,7 +116,7 @@ function mapNavigation() {
 }
 function mapPreparation() {
   const m = activeMap(campaign());
-  return `<section class="panel"><h2>Maps in this campaign</h2>${form('new-map',field('name','New map name','','text','required maxlength="100"'),'Create map')}<fieldset ${activeTravel()?'disabled':''}>${form('map-metadata',field('name','Map name',m.name,'text','required maxlength="100"')+area('description','Map description / limitations',m.description)+select('decoration','Decoration',choices(['none','orbits'],m.decoration)),'Save map details')}</fieldset><button id="delete-map">Delete this map</button><p class="help">Remove incoming destination links before deleting a map. Export includes every map and its journey.</p></section>`;
+  return `<section class="panel"><h2>Maps in this campaign</h2>${form('new-map',field('name','New map name','','text','required maxlength="100"'),'Create map')}<fieldset ${activeTravel()?'disabled':''}>${form('map-metadata',field('name','Map name',m.name,'text','required maxlength="100"')+area('description','Map description / limitations',m.description)+select('decoration','Decoration',choices(['none','orbits'],m.decoration)),'Save map details')}<label>Upload background<input id="background-upload" type="file" accept="image/png,image/jpeg,image/webp"></label><button id="remove-background" ${!m.backgroundImage?'disabled':''}>Remove background</button><p class="help">Use a text-free image aligned to your destinations. Images fit a 9:5 map with padding when needed; exports include the artwork. Uploads: PNG, JPEG or WebP under 10 MB; saved images: up to 750 KB.</p></fieldset><button id="delete-map">Delete this map</button><p class="help">Remove incoming destination links before deleting a map. Export includes every map and its journey.</p></section>`;
 }
 function render() {
   const c = campaign();
@@ -129,6 +134,26 @@ function addStop() {
   plotted.push(selected);status='';render();
 }
 function bind() {
+  document.getElementById('map-background')?.addEventListener('error',e=>{
+    const image=(e.currentTarget as SVGImageElement).getAttribute('href');
+    if(!image)return;
+    failedBackgrounds.add(image);
+    if(activeMap(campaign()).backgroundImage!==image)return;
+    status='Background could not be displayed. The schematic map remains usable; re-upload or remove the image in GM preparation.';
+    render();
+  });
+  document.getElementById('background-upload')?.addEventListener('change',async e=>{
+    const file=(e.target as HTMLInputElement).files?.[0];if(!file)return;
+    const campaignId=campaign().id,mapId=campaign().activeMap,request=++backgroundRequest;
+    try {
+      if(activeTravel())throw Error('End this map’s journey before changing its background.');
+      const image=await normalizeBackground(file);
+      if(request!==backgroundRequest)return;
+      if(campaign().id!==campaignId || campaign().activeMap!==mapId)throw Error('Map changed while preparing the image. Select the intended map and upload again.');
+      change(c=>{if(activeTravel())throw Error('End this map’s journey before changing its background.');failedBackgrounds.delete(image);activeMap(c).backgroundImage=image;});
+    } catch(e) { if(request===backgroundRequest){status=message(e);render();} }
+  });
+  on('remove-background',()=>{backgroundRequest++;change(c=>{if(activeTravel())throw Error('End this map’s journey before changing its background.');delete activeMap(c).backgroundImage;});});
   document.getElementById('destination-picker')?.addEventListener('toggle',e=>{destinationListOpen=(e.currentTarget as HTMLDetailsElement).open;});
   document.getElementById('map-select')?.addEventListener('change',e=>browseMap((e.target as HTMLSelectElement).value));
   document.querySelectorAll<HTMLElement>('[data-open-map]').forEach(el=>el.addEventListener('click',()=>browseMap(el.dataset.openMap!)));
