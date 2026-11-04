@@ -38,7 +38,7 @@ function harness(mode: (typeof modes)[number] = modes[0], config = { total: 10, 
   scene.paint = () => paints++;
   scene[mode[5]] = () => hud++;
   const first = { x: 1, y: 0, firing: true, placing: true, route: 'Shields', jump: true, turn: 1 };
-  const continued = { ...first, placing: mode[2] === 'spaceBomber' ? false : true, jump: false };
+  const continued = { ...first, placing: !['spaceBomber','bomber'].includes(mode[2]), jump: false };
   const readFrame = () => { reads++; return { first, continued }; };
   scene.readInput = () => { reads++; return { x: 1, y: 0 }; };
   scene.readLifeSupportInput = () => { reads++; return { route: 'Shields' }; };
@@ -124,18 +124,18 @@ test('Pilot touch direction is recalculated from each substep position', () => {
   }
 });
 
-test('Space Bomber release uses the displayed rack once and a rejected launch never repeats', () => {
+for (const mode of [modes[2], modes[6]]) test(`${mode[0]} Bomber release uses the displayed rack once and a rejected launch never repeats`, () => {
   for (const cooldown of [0, .075]) {
-    const h = harness(modes[6]); h.tick(16);
-    h.scene.spaceBomber.mineCooldown = cooldown;
-    const rack = rules.mineDropPosition(h.scene.spaceBomber);
+    const h = harness(mode); h.tick(16);
+    h.scene[mode[2]][mode[2] === 'bomber' ? 'cooldown' : 'mineCooldown'] = cooldown;
+    const rack = rules.mineDropPosition(h.scene[mode[2]]);
     h.first.turn = 0; h.continued.turn = 0;
     (h.first as any).aim = { x: rack.x + 60, y: rack.y + 80 };
     (h.first as any).launch = (h.first as any).aim;
     h.tick(100);
-    assert.equal(h.scene.spaceBomber.minesPlaced, cooldown ? 0 : 1);
-    assert.ok(Math.abs(h.scene.spaceBomber.aimDistance - 100) < 1e-12);
-    assert.ok(Math.abs(h.scene.spaceBomber.aimAngle - Math.atan2(80, 60)) < 1e-12);
+    assert.equal(h.scene[mode[2]].minesPlaced, cooldown ? 0 : 1);
+    assert.ok(Math.abs(h.scene[mode[2]].aimDistance - 100) < 1e-12);
+    assert.ok(Math.abs(h.scene[mode[2]].aimAngle - Math.atan2(80, 60)) < 1e-12);
   }
 });
 

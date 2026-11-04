@@ -3,9 +3,30 @@ A repository for hosting mini games for the galaxy grown campaign.
 
 ## First playable slice
 
-Asteroid Field / Pilot, Gunner, Bomber, and Life Support, plus Space Battle / Pilot, Gunner, Bomber, and Life Support, are implemented as **prototypes awaiting score calibration**. Other situation/role combinations are visibly disabled. Players enter their GM-requested final skill-check total and a separate Natural 1 flag, play independently, and manually share their rating or score. No campaign data or live multiplayer service is included.
+Asteroid Field / Pilot, Gunner, Bomber, and Life Support, plus Space Battle / Pilot, Gunner, Bomber, and Life Support, are implemented as **prototypes awaiting score calibration**. Other situation/role combinations are visibly disabled. Players enter their GM-requested final skill-check total and a separate Natural 1 flag, play independently, and manually share their rating or score. Flight Deck has no live multiplayer service. The Galaxy Map prototype stores GM-authored campaigns locally in the browser.
 
 Player link: [play.drakesfood.com](https://play.drakesfood.com/). This HTTPS shortlink redirects to the current GitHub Pages deployment and remains the link to share if the underlying hosting URL changes.
+
+## Galaxy Map V1
+
+Open **Galaxy Map** beside Flight Deck to plot connected courses, advance travel under GM control, and pause for random or deliberate encounters. Encounter cards can provide Asteroid Field / Space Battle player links or pause for your already-open Maps VTT. The fictional demo includes planets, a ship, a station and a point of interest.
+
+**GM preparation** offers linked map/library editors, optional locally uploaded background images, system and star markers, reference-only landmarks, weighted tables, scheduled encounters and independent named campaign saves. Browse regional and detail maps without advancing travel; each map retains its own journey. Version 2 exports include every map and accept migrated version 1 saves. Private campaign maps are imported locally and are not bundled with the public app. Saves stay in this browser; export JSON backups to keep or move them. Preparation is hidden from presentation, without authentication. Travel steps and Low 10% / Medium 25% / High 50% risk are provisional. The GM decides all outcomes.
+
+See [Galaxy Map setup, saves, and playtest checklist](docs/galaxy-map-v1.md). Actual iPhone/iPad Safari and owner acceptance remain pending.
+
+### Asteroid Field rolls
+
+Roll once before starting your Asteroid Field challenge:
+
+| Role | Roll |
+| --- | --- |
+| Pilot | 1d20 + Dexterity (Acrobatics) modifier |
+| Gunner | 1d20 + the character’s Dexterity-based ranged attack modifier |
+| Bomber | 1d20 + Intelligence (Investigation) modifier |
+| Life Support | 1d20 + Intelligence (Arcana) modifier |
+
+Use your character’s relevant modifier, including applicable proficiency only once. Enter the final total, including modifiers; negative totals are allowed. Separately select **I rolled a natural 1** if the d20 shows 1, regardless of the modified total. Space Battle continues to use the check requested by the GM. Difficulty bands, Natural-1 impairments, and provisional scoring are unchanged; players report their rating and band, and the GM decides campaign consequences.
 
 ### Remaining designs and final acceptance
 
@@ -40,9 +61,9 @@ Each finished run now shows a provisional **0–100 rating** and GM advisory ban
 - Gunner flies automatically, with scrolling scenery and a weaving ship-mounted turret. Players control only the weapon. Crossing the defense line still costs hull.
 - Gunner controls: tap, hold, or drag on touch screens; move the mouse to aim and click or hold to fire on computers. Both use the same Pointer Events path, direct reticle placement, and weapon cooldown; Gunner intentionally does not use keyboard reticle movement.
 - Gunner raw score: 100 per destroyed asteroid, rounded survival seconds × 5, and 100 per remaining hull point. Its points are converted to the common rating; raw totals are not directly comparable across modes.
-- Bomber follows an automatic flight course while pursuing asteroids travel upward. Time mine releases with Space/Enter or **Drop mine**. Mines always release 34px directly behind the ship, independent of touch, mouse, or keyboard aiming; Asteroid Bomber has no aiming controls.
-- Up to 616px viewport width, Bomber keeps the full available canvas width and places Drop mine in a separate row immediately below it. The side rail starts only when the full 480px canvas, 90px rail, 10px gap, and page padding fit; wider touch devices use a compact rail.
-- Bomber mines arm after 0.25 seconds, last 5 seconds, and can be placed every 0.65 seconds. Contact detonates a mine and destroys asteroid centers inside its visible blast circle.
+- Asteroid Bomber follows an automatic flight course while pursuing asteroids travel upward. It uses the same aimed aft launcher as Space Battle: rear 180° targeting, 0–100px from the rack 34px behind the ship, defaulting to straight aft at 100px. Touch tap/drag-release and mouse primary release launch; hover previews. Left/Right or A/D rotates at 120°/second; Down/S selects straight aft while retaining range. Space/Enter or **Launch mine** makes one attempt per press; holds never repeat, and cooldown attempts, forward releases and cancelled gestures are discarded.
+- Up to 616px viewport width, Bomber keeps the full available canvas width and places Launch mine in a separate row immediately below it. The side rail starts only when the full 480px canvas, 90px rail, 10px gap, and page padding fit; wider touch devices use a compact rail.
+- Asteroid Bomber mines travel at 500px/second, detonate on contact during travel and otherwise arm upon landing; selecting the rack arms immediately. Mines remain at their landing position, expire five seconds after launch and share a 0.65-second cooldown. The path, landing cross and exact 66px blast circle preview the selected destination. Pause retains aim/range and freezes simulation, clearing gestures and queued launches; retry resets aim/range and flight.
 - Bomber Natural 1 reduces the mine blast radius by `sqrt(0.5)`, so both the drawn target and collision target have exactly half their normal area. The trigger remains a close-contact fuse.
 - Bomber score: 100 per destroyed asteroid, rounded survival seconds × 5, and 100 per remaining hull point. Only direct asteroid–ship collisions cost hull; asteroids that escape off the top are removed without damage or points. Each damaging collision removes one hull point and grants 1.25 seconds of collision grace, including protection from simultaneous hits. The round ends after 60 seconds or when collisions deplete three hull points.
 - Life Support routes falling packets through a three-way switch to matching Thrusters, Shields, or Guns bays. Arrow Left/Right or A/D cycles the switch; 1/2/3 selects a bay directly; touch players tap the three labeled bay controls.
@@ -174,7 +195,7 @@ Harder checks send faster, more frequent pursuing asteroids with stronger inward
 | Medium | 170 | 0.74 | 0.48 |
 | Hard | 200 | 0.58 | 0.58 |
 
-Bomber hazard pressure, blast radius, mine cadence, scoring, collision tolerance, and the 1.25-second collision grace are provisional playtest values. Hold Space/Enter or Drop mine to drop mines directly behind the ship. Mine lifetime dials, ready lights on the ship’s mine racks, and a cyan collision-grace ring provide feedback. All five playable modes share corner hardware and consistent HUD/playfield widths (Bomber includes its reserved control rail on wide screens). The mode still needs human playtesting on touch and desktop controls, especially mine timing as the ship sweeps across the field.
+Bomber hazard pressure, blast radius, mine cadence, scoring, collision tolerance, and the 1.25-second collision grace are provisional playtest values. Tap/drag-release behind the rack, or press Space/Enter or Launch mine, to launch one mine using the previewed direction and range. Mine lifetime dials, ready lights on the ship’s mine racks, and a cyan collision-grace ring provide feedback. All five playable modes share corner hardware and consistent HUD/playfield widths (Bomber includes its reserved control rail on wide screens). The mode still needs human playtesting on touch and desktop controls, especially mine timing as the ship sweeps across the field.
 
 ### Proposed Asteroid Field Life Support balance
 
@@ -193,7 +214,7 @@ Life Support packet timing, five-point integrity pool, two-damage overload mista
 
 Automated regression coverage verifies safe escapes and near misses in all four bands with/without Natural 1, simultaneous collision protection, grace expiry, and later damaging hits. `npm test` passes 37 tests; `npm run build` passes with the existing Phaser bundle-size advisory. The connected preview browser returned `net::ERR_BLOCKED_BY_CLIENT` for the local Vite address; rendered appearance, console health, and real-device interactions are not verified for this refinement.
 
-- On iPhone/iPad Safari and desktop, hold the mine action while the ship flies automatically, let asteroids escape, and confirm only ship collisions reduce hull.
+- On iPhone/iPad Safari and desktop, aim and launch mines with discrete presses while the ship flies automatically, let asteroids escape, and confirm only ship collisions reduce hull.
 - Check the protection ring after a hit, mine lifetime dials, and the smaller Natural-1 blast circle; confirm pause freezes their timing and explicit resume continues it.
 - Check all five playable modes in portrait/landscape: aligned HUD and canvas, readable scores/fuel, reachable Pause, and unobstructed mine/routing controls. Include widths around 616px for the Bomber rail transition.
 - Complete a run, inspect/copy the result report, and retry. Assess whether collision-only damage is now too forgiving before adjusting hazard pressure or score values.
@@ -202,7 +223,7 @@ Automated regression coverage verifies safe escapes and near misses in all four 
 
 Bomber and Gunner players operate weapons; Pilot players steer. Scrolling scenery represents forward travel. Weapon-station ships weave predictably by `120 * sin(elapsed * PI / 4)` pixels around center, without reacting to targeting input. The course now completes a full cycle in eight seconds (formerly about 50 seconds), and weapon-station stars pass at 110–200px/s with light streaks. The course is provisional playtest tuning. Difficulty bands, weapon cooldowns, hazard pressure, natural-1 effects, hull rules, and GM reporting remain unchanged.
 
-- Asteroid Bomber shows an amber mine blast preview fixed behind the ship. Mines release there, stay at their drop location as the ship moves on, arm after the existing delay, and detonate on contact. Players time releases; they cannot place mines remotely.
+- Asteroid Bomber shows an amber aft path, landing cross and exact blast preview up to 100px behind the rack. Mines launch toward that fixed destination and detonate on contact during travel or after landing. Its hazard patterns, 66px blast radius, 0.65-second cooldown and five-second lifetime retain asteroid-specific tuning.
 - Space Battle Bomber shows an amber aft launch path and blast preview at its selected landing point up to 100px away, plus brief bottom-edge pursuit markers. The blast preview uses the exact same natural-1 radius as damage.
 - Gunner retains direct touch/mouse firing, armor, and defense-line mechanics. Its enlarged armored ship has vented engine pods, twin rotating barrels, cooling bands, recoil, muzzle flashes and impact sparks. Extra detail uses bounded procedural drawing without new assets.
 - Pause freezes the course, targets, projectiles, and cooldowns. Resume clears held/queued actions while retaining the simulation’s target. Retry resets the flight and targets.
@@ -214,3 +235,5 @@ The [Life Support hazard pass](docs/issue-42-life-support-hazards.md) records sp
 The aimed aft-launcher follow-up is documented in [Space Bomber engineering playtest](docs/space-bomber-aft-launcher-playtest.md); real Safari and owner acceptance remain pending.
 
 The shorter-placement and in-flight contact follow-up is recorded in [short-launch engineering validation](docs/space-bomber-short-launch-playtest.md).
+
+Asteroid Bomber launcher engineering validation and remaining device checks are recorded in [Asteroid Bomber launcher playtest](docs/asteroid-bomber-launcher-playtest.md).

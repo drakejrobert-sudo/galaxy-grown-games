@@ -23,17 +23,17 @@ test('weapon frame snapshots consume a released tap once and preserve supported 
       control.emit('pointerdown'); if (!held) { control.emit('pointerup'); control.emit('lostpointercapture'); }
       const frame = input.readFrame() as any, property = kind.includes('unner') ? 'firing' : 'placing';
       assert.equal(frame.first[property], true);
-      assert.equal(frame.continued[property], held && kind !== 'spaceBomber');
-      assert.equal((input.readFrame() as any).first[property], held && kind !== 'spaceBomber');
+      assert.equal(frame.continued[property], held && kind.includes('unner'));
+      assert.equal((input.readFrame() as any).first[property], held && kind.includes('unner'));
       input.enable(false); input.enable(true); assert.equal((input.readFrame() as any).first[property], false);
     }
   } finally { globalThis.window = original; }
 });
-test('Space Bomber pointer coordinates and queued straight command occur once, while held reset continues', () => {
+for (const [name, factory] of [['Asteroid Bomber', createBomberInput], ['Space Bomber', createSpaceBomberInput]] as const) test(`${name}: pointer coordinates and queued straight command occur once, while held reset continues`, () => {
   const original = globalThis.window;
   try {
     const win = surface(), playfield = surface(), action = surface(); globalThis.window = win as any;
-    const input = createSpaceBomberInput(playfield as any, action as any); input.enable(true);
+    const input = factory(playfield as any, action as any); input.enable(true);
     playfield.emit('pointerdown'); playfield.emit('pointerup');
     const frame = input.readFrame(); assert.ok(frame.first.aim); assert.ok(frame.first.launch);
     assert.deepEqual(frame.continued, { placing: false });

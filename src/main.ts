@@ -16,6 +16,7 @@ import {
 const app = document.querySelector<HTMLDivElement>('#app')!;
 app.innerHTML = `
 <header><a href="./" class="brand">✦ <span>GALAXY GROWN</span></a><span class="tag">FLIGHT DECK · PROTOTYPE</span></header>
+<nav class="surface-nav" aria-label="App sections"><a href="./">Flight Deck</a><a href="#/map">Galaxy Map ↗</a></nav>
 <main>
 <section id="setup" class="setup">
   <div class="intro"><p class="eyebrow">CREW CHALLENGE 01</p><h1>A steady hand.<br>A galaxy of trouble.</h1><p class="lede">Choose your station, face the danger ahead, and bring your individual score back to the GM.</p><div class="details"><span>60-second challenge</span><span>Role-specific systems</span><span>Solo run</span></div></div>
@@ -24,7 +25,7 @@ app.innerHTML = `
     <div class="fields"><label>Situation<select id="situation"><option>Asteroid Field</option><option>Space Battle</option><option disabled>Boarding Party — in design</option></select></label><label>Crew position<select id="role"><option>Pilot</option><option id="role-gunner">Gunner</option><option id="role-bomber">Bomber</option><option id="role-life-support">Life Support</option></select></label></div>
     <label for="total">Check total <span class="muted">including modifiers</span></label>
     <input id="total" name="total" type="text" autocomplete="off" placeholder="Enter your final total" aria-describedby="total-help error" required />
-    <p id="total-help" class="help">Roll the check your GM requests, add your modifiers, and enter the total here. Negative totals are allowed.</p>
+    <p id="total-help" class="help">Roll once before starting: 1d20 + your Dexterity (Acrobatics) modifier. Include applicable proficiency only once; enter the final total. Negative totals are allowed. Select Natural 1 separately if the d20 shows 1.</p>
     <label class="check"><input type="checkbox" id="natural-one" /> I rolled a natural 1</label>
     <div class="readout" aria-live="polite"><span>CHALLENGE DIFFICULTY</span><strong id="difficulty">Awaiting check</strong><p id="impairment">Standard engine</p></div>
     <p id="error" class="error" role="alert"></p>
@@ -37,7 +38,7 @@ app.innerHTML = `
   <div class="play-heading"><div><p id="mode-label" class="eyebrow">ASTEROID FIELD / PILOT</p><h2 id="mode-heading">Keep your hull intact.</h2></div><div class="play-actions"><button id="pause" type="button">Pause</button></div></div>
   <div class="hud"><div><span>TIME LEFT</span><strong id="time">60s</strong></div><div><span id="health-label">HULL</span><strong id="hull">3 / 3</strong></div><div id="fuel-wrap" hidden><span>FUEL</span><strong id="fuel">18.0s</strong></div><div><span>SCORE</span><strong id="score">300</strong></div></div>
   <p id="flight-status" class="flight-status"></p>
-  <div class="flight-stage"><div class="flight-wrap"><div id="canvas" aria-label="Asteroid field. Steer with arrow keys, WASD, or touch." role="application" tabindex="0"></div><div id="pause-overlay" hidden><h2>Challenge paused</h2><p id="pause-reason">Your timer is stopped.</p><button id="resume" class="primary" type="button">Resume challenge</button><button id="abandon" type="button">Back to setup</button></div></div><div id="action-rail" class="action-rail" hidden><button id="fire-action" class="action action-fire" type="button" hidden>Fire</button><button id="action" class="action action-mine" type="button" hidden>Drop mine</button></div></div>
+  <div class="flight-stage"><div class="flight-wrap"><div id="canvas" aria-label="Asteroid field. Steer with arrow keys, WASD, or touch." role="application" tabindex="0"></div><div id="pause-overlay" hidden><h2>Challenge paused</h2><p id="pause-reason">Your timer is stopped.</p><button id="resume" class="primary" type="button">Resume challenge</button><button id="abandon" type="button">Back to setup</button></div></div><div id="action-rail" class="action-rail" hidden><button id="fire-action" class="action action-fire" type="button" hidden>Fire</button><button id="action" class="action action-mine" type="button" hidden>Launch mine</button></div></div>
   <div id="route-controls" class="route-controls" aria-label="Life Support routing switch" hidden><button id="route-thrusters" type="button" aria-pressed="false"><span>▲</span>Thrusters<small>1</small></button><button id="route-shields" type="button" aria-pressed="true"><span>●</span>Shields<small>2</small></button><button id="route-guns" type="button" aria-pressed="false"><span>✛</span>Guns<small>3</small></button></div>
   <div id="platform-controls" class="platform-controls" aria-label="Platformer controls" hidden><button id="move-left" type="button">◀ Left</button><button id="move-right" type="button">Right ▶</button><button id="jump" type="button">Jump</button></div>
   <div id="routing-info" class="routing-info" hidden><p class="help">Match power symbols to their bays. Hearts → Shields: restore up to 1 integrity. Overloads → Guns: a mistake costs 2 integrity; other mistakes cost 1. Packets route when they reach the switch.</p><p id="routing-status" class="routing-status" role="status" aria-live="polite" aria-atomic="true"></p></div>
@@ -55,6 +56,10 @@ const get = <T extends HTMLElement>(id: string) => document.getElementById(id) a
 const total = get<HTMLInputElement>('total'), natural = get<HTMLInputElement>('natural-one');
 const roleSelect = get<HTMLSelectElement>('role');
 const situationSelect = get<HTMLSelectElement>('situation');
+if (typeof location !== 'undefined') {
+  const requested = new URLSearchParams(location.search).get('situation');
+  if (requested === 'asteroid-field' || requested === 'space-battle') situationSelect.value = requested === 'space-battle' ? 'Space Battle' : 'Asteroid Field';
+}
 let scene: FlightScene | null = null;
 const canvas = get('canvas');
 const action = get<HTMLButtonElement>('action');
@@ -141,6 +146,16 @@ function refreshSetup() {
   bomberOption.disabled = false;
   lifeSupportOption.disabled = false;
   const selectedRole = roleSelect.value as Role;
+  const asteroidRolls: Record<Role, string> = {
+    Pilot: 'your Dexterity (Acrobatics) modifier',
+    Gunner: 'your character’s Dexterity-based ranged attack modifier',
+    Bomber: 'your Intelligence (Investigation) modifier',
+    'Life Support': 'your Intelligence (Arcana) modifier',
+  };
+  get('total-help').textContent = selectedSituation === 'Asteroid Field'
+    ? `Roll once before starting: 1d20 + ${asteroidRolls[selectedRole]}. Include applicable proficiency only once; enter the final total. Negative totals are allowed. Select Natural 1 separately if the d20 shows 1.`
+    : 'Roll the check your GM requests, add your modifiers, and enter the total here. Negative totals are allowed.';
+
   get('impairment').textContent = selectedRole === 'Pilot'
     ? natural.checked ? 'Overloaded engine · 60% movement speed (playtest)' : 'Standard engine'
     : selectedRole === 'Gunner'
@@ -157,7 +172,7 @@ function refreshSetup() {
       : selectedRole === 'Bomber'
         ? selectedSituation === 'Space Battle'
           ? 'Ship weaves automatically. Aim behind the aft rack: tap or drag and release to choose a landing point up to 100px away. Mines also explode on ships during travel. Mouse hover previews; release launches. Left/Right or A/D rotates aim; Down/S aims straight aft; Space/Enter or Launch mine fires once using the previewed direction and distance. Amber means ready. Clean passes are harmless.'
-          : 'Ship flies automatically. Time your drops as the ship sweeps across the field. Hold Drop mine, Space, or Enter to release mines directly behind the ship. Only ship collisions cost hull; missed asteroids pass safely.'
+          : 'Ship flies automatically. Tap behind the aft rack or drag and release to launch up to 100px away. Mouse hover previews; primary release launches. Left/Right or A/D aims; Down/S selects straight aft. Space/Enter or Launch mine fires once per press. Mines explode on asteroids during travel. Only ship collisions cost hull; missed asteroids pass safely.'
         : selectedSituation === 'Space Battle'
           ? 'Move with Left/Right or A/D and jump with Up/W/Space. Stand beside a blue panel for 1.5 seconds to repair it automatically; progress is kept when you move away. Touch uses Left, Right, and Jump.'
           : 'Use Left/Right or A/D to turn the routing switch. Use 1, 2, or 3 to choose a system directly. Touch players can tap a system button. Match power symbols to bays; hearts go to Shields and overloads to Guns. Packets route at the switch.';
@@ -166,6 +181,7 @@ function refreshSetup() {
 total.addEventListener('input', refreshSetup); natural.addEventListener('change', refreshSetup);
 roleSelect.addEventListener('change', refreshSetup);
 situationSelect.addEventListener('change', refreshSetup);
+if (typeof location !== 'undefined') refreshSetup();
 function setPaused(value: boolean, interrupted = false) {
   if (!inFlight) return;
   paused = value; scene!.activeFlight = !value;
@@ -200,7 +216,7 @@ function preparePlayLayout() {
   get('play').setAttribute('data-role', role);
   get('play').setAttribute('data-situation', situation);
   action.hidden = role !== 'Bomber';
-  action.textContent = situation === 'Space Battle' && role === 'Bomber' ? 'Launch mine' : 'Drop mine';
+  action.textContent = 'Launch mine';
   const spaceGunner = situation === 'Space Battle' && role === 'Gunner';
   fireAction.hidden = !spaceGunner;
   fireAction.textContent = 'Fire';
@@ -238,7 +254,7 @@ function launch() {
     ? role === 'Gunner' ? 'Defend the line. Intercept enemy fire.' : role === 'Bomber' ? 'Break the enemy formation.' : role === 'Life Support' ? 'Contain the damage below deck.' : 'Collect fuel. Evade enemy fire.'
     : role === 'Pilot' ? 'Keep your hull intact.'
       : role === 'Gunner' ? 'Clear the path ahead.'
-        : role === 'Bomber' ? 'Lay mines in their path.' : 'Route power to the right system.';
+        : role === 'Bomber' ? 'Launch mines into their path.' : 'Route power to the right system.';
   get('play-help').textContent = role === 'Pilot'
     ? situation === 'Space Battle'
       ? 'Collect fuel cells · Evade ships and fire · Arrow keys / WASD or hold and drag'
@@ -248,7 +264,7 @@ function launch() {
       : role === 'Bomber'
         ? situation === 'Space Battle'
           ? 'Automatic weaving · Tap/drag-release aft: choose range · Mines hit in flight · ←/→ or A/D aim · ↓/S straight aft · Space/Enter or Launch mine fires · Amber means ready'
-          : 'Automatic flight · Time your mine drops · Space / Enter or Drop mine releases behind ship · Only ship hits cost hull'
+          : 'Automatic flight · Tap/drag-release aft: choose range · Mines hit in flight · ←/→ or A/D aim · ↓/S straight aft · Space/Enter or Launch mine fires once'
         : situation === 'Space Battle'
           ? 'Stomp orange fires; side contact hurts · Blue panels warn then shoot sparks: jump/dodge, stand nearby for 1.5s to repair · Progress is kept · Hearts heal · Avoid overloads'
           : 'Match packet symbols · Left/Right or A/D · 1/2/3 · Tap a system';
@@ -260,7 +276,7 @@ function launch() {
         : 'Space battle pilot station. Collect fuel and evade enemy ships and fire with arrow keys, WASD, or touch.'
     : role === 'Pilot' ? 'Asteroid field. Steer with arrow keys, WASD, or touch.'
     : role === 'Gunner' ? 'Asteroid gunner station. Ship flies automatically. Tap, hold, or drag with touch; move a mouse to aim and click or hold to fire.'
-    : role === 'Bomber' ? 'Asteroid bomber station. Ship flies automatically. Time mine releases with Space, Enter, or Drop mine. Mines always drop directly behind the ship.'
+    : role === 'Bomber' ? 'Asteroid bomber station. Automatic flight. Tap behind the aft rack or drag and release to launch up to 100 logical pixels. Mouse hover previews; primary release launches. Left/Right or A/D rotates aim; Down/S selects straight aft. Space/Enter or Launch mine fires once per press. Mines explode on contact during travel.'
     : 'Asteroid Life Support station. Route matching packets with Left and Right, A and D, number keys 1 through 3, or the three touch buttons.');
   const impairment = role === 'Pilot' ? 'overloaded engine'
     : role === 'Gunner' ? 'overheated gun'
@@ -364,6 +380,7 @@ scene.onGunnerStep = s => {
   }
 };
 scene.onBomberStep = s => {
+  action.textContent = s.cooldown <= 0 ? 'Launch mine · Ready' : 'Mine cooling';
   get('time').textContent = `${Math.ceil(DURATION - s.elapsed)}s`;
   get('hull').textContent = `${s.hull} / 3`;
   get('score').textContent = String(bomberScoreFor(s));

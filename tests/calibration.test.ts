@@ -25,6 +25,9 @@ test('seeded calibration preserves unchanged references and records redesigned s
     if (mode === 'space-gunner') {
       assert.deepEqual(SCORE_ANCHORS[mode], { low: 37, high: 5000 });
       assert.deepEqual({ low: Number(low), high: Number(high) }, SCORE_ANCHORS[mode]);
+    } else if (mode === 'asteroid-bomber') {
+      assert.deepEqual(SCORE_ANCHORS[mode], { low: 71, high: 3060 });
+      assert.deepEqual({ low: Number(low), high: Number(high) }, { low: 72, high: 3900 });
     } else if (mode === 'space-bomber') {
       assert.deepEqual(SCORE_ANCHORS[mode], { low: 64, high: 3300 });
       assert.deepEqual([min,low,median,high,max].map(Number), [32,37,367,5100,6100]);

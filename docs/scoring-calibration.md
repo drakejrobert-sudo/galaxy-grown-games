@@ -131,3 +131,7 @@ PR #50 review identified a one-frame delay before newly launched travelling mine
 | Space Battle / Bomber | 288 | 32 | 37 | 367 | 5,100 | 6,100 |
 
 The prior median of 361 remains recorded above. All other Bomber percentiles and the seven other modes reproduce their previous references. Raw scoring and the 64–3,300 live anchors remain unchanged; these synthetic samples do not replace owner gameplay acceptance or human calibration.
+
+## Asteroid Bomber aimed-launcher follow-up
+
+The aimed aft launcher keeps v0.5 rating anchors at 71–3,060 and the existing raw-score formula. The seeded script now makes discrete ready-weapon attempts at the default 100px aft target: routine attempts during its existing alternating half-second windows, engaged whenever ready, passive never. Its 288 outcomes are min 31, 10th percentile 72, median 1,600, 90th percentile 3,900, max 7,200. These are synthetic regression references, not replacement anchors or proof of fair human ratings. All seven other mode distributions remain unchanged. Fresh owner gameplay and rating calibration remain pending under #39.

@@ -449,3 +449,13 @@ Before final acceptance on the merged/deployed revision, record dated evidence s
 - Check terminal completion/failure, one result report, readable/copyable scores and accessible pause controls in both orientations.
 
 Desktop CPU throttling, narrow viewports, emulated touch and synthetic blur are supporting evidence only. Physical Safari, human gameplay/score acceptance and Drake's final signoff remain pending. Keep #42, #3 and #39 open; this PR uses `Refs` and authorizes no manual deployment.
+
+## PR #55 merge refresh — 2026-11-04
+
+Merged current remote main `15c40c6` into the existing bounded-timing review branch without rewriting its history. Conflict resolution retains main’s shared aimed aft launcher for both Bomber modes, current Launch mine labeling, Galaxy Map navigation/prefill initialization and newer rule/scoring changes. Timing snapshots now apply both Bomber modes’ aim/release/press once per displayed frame; later catch-up substeps cannot repeat or bank an attempt.
+
+Updated the committed frame-input/timing fixtures to use each mode’s actual cooldown property and to cover both launchers. All **280 tests pass**, including the 320 seeded state/RNG comparisons, and the production build passes with the existing Phaser large-chunk advisory. `git diff --check` passes. No dependency changes or private campaign content are included.
+
+Existing Playwright Chromium against the isolated local Vite server at `127.0.0.1:5187`, widths 1100 and 390 (1000px height; 390 emulates touch), passed 16 all-mode cases: raw 100/250 ms advancement, zero advancement and explicit interruption pause at 251 ms, resume priming, and subsequent Galaxy Map navigation. Both Bomber modes additionally retain one launch across held-key catch-up frames and discard cooldown-rejected taps. Page identity/content, absent Vite overlays, main-flow console/runtime health and page-level horizontal overflow checks passed. Narrow/desktop interruption screenshots were inspected. This is targeted merge validation; the older full lifecycle/multitouch/results evidence above is historical, not rerun here. Actual iPhone/iPad Safari and owner acceptance remain pending.
+
+Temporary browser instrumentation exposes a response-only scene getter, freezes the regular update callback during controlled intervals, and invokes the real scene update with injected raw deltas. An initial harness retry was necessary because its getter was appended inside Vite’s trailing source-map comment; a newline fixed the harness, without repository changes. Temporary harness/screenshots remain under `/private/tmp/pr55-browser-*` and are not shipped. Refs #42, #3, #39; these issues remain open.
