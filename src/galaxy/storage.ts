@@ -1,4 +1,4 @@
-import type { Archive, Campaign } from './model';
+import { uid, type Archive, type Campaign } from './model';
 export const STORAGE_KEY = 'galaxy-grown-map-v1';
 function check(value: unknown, message: string): asserts value { if (!value) throw Error(message); }
 const text = (v: unknown) => typeof v === 'string' && v.length <= 20000;
@@ -8,42 +8,58 @@ function list(v: unknown): asserts v is Record<string, any>[] { check(Array.isAr
 function unique(items: { id: string }[]) { check(items.every(x => id(x.id)) && new Set(items.map(x => x.id)).size === items.length, 'IDs must be present and unique.'); }
 export function validateArchive(value: unknown): Archive {
   check(value && typeof value === 'object', 'Invalid archive.');
-  const a = value as Archive;
-  check(a.version === 1, 'Unsupported save version.'); list(a.campaigns); check(a.campaigns.length > 0, 'Archive must contain a campaign.'); unique(a.campaigns);
+  // Migration works on a copy: failed imports never mutate caller data or browser storage.
+  const input = structuredClone(value) as Record<string, any>;
+  if (input.version === 1) {
+    list(input.campaigns);
+    input.campaigns = input.campaigns.map(c => ({
+      id: c.id, name: c.name, encounters: c.encounters, tables: c.tables, activeMap: 'legacy-sector',
+      maps: [{ id: 'legacy-sector', name: 'Overview', description: '', decoration: 'none',
+        destinations: c.destinations, routes: c.routes, schedules: c.schedules, journey: c.journey, location: c.location, log: c.log }],
+    }));
+    input.version = 2;
+  }
+  const a = input as Archive;
+  check(a.version === 2, 'Unsupported save version.'); list(a.campaigns); check(a.campaigns.length > 0, 'Archive must contain a campaign.'); unique(a.campaigns);
   check(a.campaigns.some(c => c.id === a.selected), 'Selected campaign is missing.');
   for (const c of a.campaigns) {
     check(text(c.name) && c.name.trim(), 'Campaign needs a name.');
-    for (const items of [c.destinations, c.routes, c.encounters, c.tables, c.schedules]) { list(items); unique(items); }
-    const hasDestination = (s: unknown) => c.destinations.some(d => d.id === s);
+    for (const items of [c.maps, c.encounters, c.tables]) { list(items); unique(items); }
+    check(c.maps.length > 0 && c.maps.some(m => m.id === c.activeMap), 'Selected map is missing.');
     const hasEncounter = (s: unknown) => c.encounters.some(e => e.id === s);
-    for (const d of c.destinations) check(text(d.name) && d.name.trim() && text(d.description) && ['planet','ship','station','point'].includes(d.type) && typeof d.x === 'number' && Number.isFinite(d.x) && d.x >= 40 && d.x <= 860 && typeof d.y === 'number' && Number.isFinite(d.y) && d.y >= 50 && d.y <= 450, 'Invalid destination. Coordinates: X 40–860, Y 50–450.');
     for (const e of c.encounters) check(text(e.title) && e.title.trim() && text(e.prompt) && text(e.notes) && ['narrative','VTT','minigame'].includes(e.type) && ['asteroid-field','space-battle'].includes(e.situation), 'Invalid encounter.');
     for (const t of c.tables) { check(text(t.name) && t.name.trim(), 'Table needs a name.'); list(t.entries); check(new Set(t.entries.map(e => e.encounter)).size === t.entries.length, 'Duplicate table entry.'); for (const e of t.entries) check(hasEncounter(e.encounter) && integer(e.weight, 1, 1000000), 'Invalid table entry or weight.'); }
-    const pairs = new Set<string>();
-    for (const r of c.routes) {
-      check(hasDestination(r.from) && hasDestination(r.to) && r.from !== r.to && integer(r.steps, 1, 1000) && ['Low','Medium','High'].includes(r.risk) && text(r.table), 'Invalid route.');
-      // Missing tables are allowed and shown as warnings, never rolled.
-      const pair = [r.from, r.to].sort().join('|'); check(!pairs.has(pair), 'Duplicate connection.'); pairs.add(pair);
-    }
-    check(c.location === null || hasDestination(c.location), 'Invalid current destination.');
-    check(Array.isArray(c.log) && c.log.length <= 100000 && c.log.every(text), 'Invalid event log.');
-    const j = c.journey;
-    if (j !== null) {
-      check(j && Array.isArray(j.stops) && j.stops.length >= 2 && j.stops.length <= 1000 && j.stops.every(hasDestination), 'Invalid journey stops.');
-      const routes = j.stops.slice(1).map((s, i) => c.routes.find(r => r.from === j.stops[i] && r.to === s || r.to === j.stops[i] && r.from === s));
-      check(routes.every(Boolean), 'Journey contains disconnected stops.');
-      check(integer(j.leg, 0, routes.length - 1) && integer(j.step, 0, routes[j.leg]!.steps) && typeof j.arrived === 'boolean' && (j.active === null || hasEncounter(j.active)), 'Invalid journey progress.');
-      check(!j.arrived || j.leg === routes.length - 1 && j.step === routes[j.leg]!.steps && j.active === null, 'Invalid arrival state.');
-      check(j.step !== routes[j.leg]!.steps || j.arrived || j.active !== null, 'Unresolved travel boundary.');
-      const expectedLocation = j.arrived ? j.stops.at(-1) : j.step === 0 ? j.stops[j.leg] : null;
-      check(c.location === expectedLocation, 'Journey location does not match progress.');
-      const positions = new Set<string>();
-      for (const s of c.schedules) {
-        check(integer(s.leg, 0, routes.length - 1) && integer(s.step, 1, routes[s.leg]!.steps) && hasEncounter(s.encounter) && typeof s.consumed === 'boolean', 'Invalid scheduled encounter.');
-        const key = `${s.leg}:${s.step}`; check(!positions.has(key), 'Duplicate scheduled step.'); positions.add(key);
-        check(s.consumed === (s.leg < j.leg || s.leg === j.leg && s.step <= j.step), 'Invalid schedule progress.');
+    for (const m of c.maps) {
+      check(text(m.name) && m.name.trim() && text(m.description) && ['none','orbits'].includes(m.decoration), 'Invalid map metadata.');
+      for (const items of [m.destinations, m.routes, m.schedules]) { list(items); unique(items); }
+      const hasDestination = (s: unknown) => m.destinations.some(d => d.id === s && d.navigable !== false);
+      for (const d of m.destinations) check(text(d.name) && d.name.trim() && text(d.description) && (d.navigable === undefined || typeof d.navigable === 'boolean') && (d.detailMapId === undefined || c.maps.some(target => target.id === d.detailMapId && target.id !== m.id)) && ['planet','ship','station','point','system','star'].includes(d.type) && typeof d.x === 'number' && Number.isFinite(d.x) && d.x >= 40 && d.x <= 860 && typeof d.y === 'number' && Number.isFinite(d.y) && d.y >= 50 && d.y <= 450, 'Invalid destination. Coordinates: X 40–860, Y 50–450.');
+      const pairs = new Set<string>();
+      for (const r of m.routes) {
+        check(hasDestination(r.from) && hasDestination(r.to) && r.from !== r.to && integer(r.steps, 1, 1000) && ['Low','Medium','High'].includes(r.risk) && text(r.table) && (r.provisional === undefined || typeof r.provisional === 'boolean'), 'Invalid route.');
+        // Missing tables are allowed and shown as warnings, never rolled.
+        const pair = [r.from, r.to].sort().join('|'); check(!pairs.has(pair), 'Duplicate connection.'); pairs.add(pair);
       }
-    } else check(c.schedules.length === 0, 'Schedules require a journey.');
+      check(m.location === null || hasDestination(m.location), 'Invalid current destination.');
+      check(Array.isArray(m.log) && m.log.length <= 100000 && m.log.every(text), 'Invalid event log.');
+      const j = m.journey;
+      if (j !== null) {
+        check(j && Array.isArray(j.stops) && j.stops.length >= 2 && j.stops.length <= 1000 && j.stops.every(hasDestination), 'Invalid journey stops.');
+        const routes = j.stops.slice(1).map((s, i) => m.routes.find(r => r.from === j.stops[i] && r.to === s || r.to === j.stops[i] && r.from === s));
+        check(routes.every(Boolean), 'Journey contains disconnected stops.');
+        check(integer(j.leg, 0, routes.length - 1) && integer(j.step, 0, routes[j.leg]!.steps) && typeof j.arrived === 'boolean' && (j.active === null || hasEncounter(j.active)), 'Invalid journey progress.');
+        check(!j.arrived || j.leg === routes.length - 1 && j.step === routes[j.leg]!.steps && j.active === null, 'Invalid arrival state.');
+        check(j.step !== routes[j.leg]!.steps || j.arrived || j.active !== null, 'Unresolved travel boundary.');
+        const expectedLocation = j.arrived ? j.stops.at(-1) : j.step === 0 ? j.stops[j.leg] : null;
+        check(m.location === expectedLocation, 'Journey location does not match progress.');
+        const positions = new Set<string>();
+        for (const s of m.schedules) {
+          check(integer(s.leg, 0, routes.length - 1) && integer(s.step, 1, routes[s.leg]!.steps) && hasEncounter(s.encounter) && typeof s.consumed === 'boolean', 'Invalid scheduled encounter.');
+          const key = `${s.leg}:${s.step}`; check(!positions.has(key), 'Duplicate scheduled step.'); positions.add(key);
+          check(s.consumed === (s.leg < j.leg || s.leg === j.leg && s.step <= j.step), 'Invalid schedule progress.');
+        }
+      } else check(m.schedules.length === 0, 'Schedules require a journey.');
+    }
   }
   return structuredClone(a);
 }
@@ -51,4 +67,13 @@ export function parseArchive(raw: string) { check(raw.length <= 10000000, 'Save 
 export interface StorageLike { getItem(key: string): string | null; setItem(key: string, value: string): void }
 export function readArchive(storage: StorageLike): Archive | null { const raw = storage.getItem(STORAGE_KEY); return raw === null ? null : parseArchive(raw); }
 export function writeArchive(storage: StorageLike, archive: Archive) { storage.setItem(STORAGE_KEY, JSON.stringify(validateArchive(archive))); }
-export function exportCampaign(c: Campaign): string { return JSON.stringify(validateArchive({ version: 1, selected: c.id, campaigns: [c] }), null, 2); }
+export function exportCampaign(c: Campaign): string { return JSON.stringify(validateArchive({ version: 2, selected: c.id, campaigns: [c] }), null, 2); }
+
+/** IDs inside each campaign are local; only the outer campaign ID needs remapping. */
+export function importCampaigns(archive: Archive, incoming: Archive): Archive {
+  const result = validateArchive(archive);
+  const copies = validateArchive(incoming).campaigns;
+  for (const c of copies) { c.id = uid(); result.campaigns.push(c); }
+  result.selected = copies[0].id;
+  return validateArchive(result);
+}

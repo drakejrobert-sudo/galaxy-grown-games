@@ -11,7 +11,7 @@ Player link: [play.drakesfood.com](https://play.drakesfood.com/). This HTTPS sho
 
 Open **Galaxy Map** beside Flight Deck to plot connected courses, advance travel under GM control, and pause for random or deliberate encounters. Encounter cards can provide Asteroid Field / Space Battle player links or pause for your already-open Maps VTT. The fictional demo includes planets, a ship, a station and a point of interest.
 
-**GM preparation** offers map/library editors, weighted tables, scheduled encounters and independent named campaign saves. Saves stay in this browser; export JSON backups to keep or move them. Preparation is hidden from presentation, without authentication. Travel steps and Low 10% / Medium 25% / High 50% risk are provisional. The GM decides all outcomes.
+**GM preparation** offers linked map/library editors, system and star markers, reference-only landmarks, weighted tables, scheduled encounters and independent named campaign saves. Browse regional and detail maps without advancing travel; each map retains its own journey. Version 2 exports include every map and accept migrated version 1 saves. Private campaign maps are imported locally and are not bundled with the public app. Saves stay in this browser; export JSON backups to keep or move them. Preparation is hidden from presentation, without authentication. Travel steps and Low 10% / Medium 25% / High 50% risk are provisional. The GM decides all outcomes.
 
 See [Galaxy Map setup, saves, and playtest checklist](docs/galaxy-map-v1.md). Actual iPhone/iPad Safari and owner acceptance remain pending.
 
