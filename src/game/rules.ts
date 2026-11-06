@@ -19,7 +19,7 @@ export const SCORE_ANCHORS: Record<ScoreMode, { low: number; high: number }> = {
   'space-gunner': { low: 37, high: 5000 },
   'boarding-pilot': { low: 68, high: 900 },
   'boarding-gunner': { low: 46, high: 3220 },
-  'boarding-bomber': { low: 46, high: 1917 },
+  'boarding-bomber': { low: 46, high: 1454 },
   'boarding-life-support': { low: 61, high: 4900 },
 };
 export interface RatedResult { rating: number; band: ResultBand; capped: boolean }
@@ -1844,6 +1844,55 @@ function recordBoardingInterception(s: BoardingState, id: number) {
   else
     s.probesIntercepted++;
 }
+type BoardingMotionSegment = {
+  start: number;
+  end: number;
+  from: {
+    x: number;
+    y: number;
+  };
+  to: {
+    x: number;
+    y: number;
+  };
+};
+function boardingCarrierPosition(carrier: BoardingCarrier, phase: number) {
+  const closeness = phase < BOARDING_WARNING ? 0 : phase < 4 ? (phase - BOARDING_WARNING) / (4 - BOARDING_WARNING)
+    : phase < 6 ? 1 : phase < 9 ? (9 - phase) / 3 : 0;
+  const staging = carrier.cycle % 2 ? 120 : 360;
+  return { x: phase < 9 ? carrier.startX + (carrier.targetX - carrier.startX) * closeness
+      : carrier.startX + (staging - carrier.startX) * (phase - 9) / 3, y: 500 - closeness * 250 };
+}
+/** Complete each phase before changing clocks. One carrier owns all segments, including shared endpoints. */
+function advanceBoardingCarrier(s: BoardingState, oldTime: number, oldShip: {
+  x: number;
+  y: number;
+}, dt: number): BoardingMotionSegment[] {
+  const carrier = s.carrier, segments: BoardingMotionSegment[] = [];
+  const beginCycle = (cycle: number, time: number) => {
+    const progress = Math.max(0, Math.min(1, (time - oldTime) / dt));
+    const pilotX = oldShip.x + (s.x - oldShip.x) * progress;
+    carrier.cycle = cycle;
+    carrier.startX = carrier.x;
+    carrier.targetX = Math.max(80, Math.min(400, (s.role === 'Pilot' ? pilotX : automaticShipX(time + 4)) + (cycle % 2 ? -45 : 45)));
+  };
+  const initialCycle = Math.floor(oldTime / BOARDING_CYCLE);
+  if (carrier.cycle !== initialCycle)
+    beginCycle(initialCycle, initialCycle * BOARDING_CYCLE);
+  let cursor = oldTime;
+  while (cursor < s.elapsed) {
+    const base = carrier.cycle * BOARDING_CYCLE, cycleEnd = base + BOARDING_CYCLE;
+    const boundary = [BOARDING_WARNING, 4, 6, 9, BOARDING_CYCLE].map(p => base + p).find(t => t > cursor + 1e-9) ?? cycleEnd;
+    const end = Math.min(s.elapsed, boundary);
+    const from = { x: carrier.x, y: carrier.y }, to = boardingCarrierPosition(carrier, end - base);
+    segments.push({ start: Math.max(0, Math.min(dt, cursor - oldTime)), end: Math.max(0, Math.min(dt, end - oldTime)), from, to });
+    Object.assign(carrier, to);
+    cursor = end;
+    if (cursor === cycleEnd)
+      beginCycle(carrier.cycle + 1, cycleEnd);
+  }
+  return segments;
+}
 /** Bounded stepping; all collision events are ordered by their actual contact time. */
 export function stepBoarding(s: BoardingState, config: FlightConfig, input: BoardingInput, dt: number, random: () => number = Math.random): void {
   if (s.finished)
@@ -1905,14 +1954,12 @@ export function stepBoarding(s: BoardingState, config: FlightConfig, input: Boar
     }
   }
   s.explosions = s.explosions.map(e => ({ ...e, remaining: e.remaining - dt })).filter(e => e.remaining > 0);
-  const oldCarrier = { x: s.carrier.x, y: s.carrier.y };
-  const cycle = Math.floor(s.elapsed / BOARDING_CYCLE);
-  if (cycle !== s.carrier.cycle) {
-    s.carrier.cycle = cycle;
-    s.carrier.startX = s.carrier.x;
-    s.carrier.targetX = Math.max(80, Math.min(400, (s.role === 'Pilot' ? s.x : automaticShipX(s.elapsed + 4)) + (cycle % 2 ? -45 : 45)));
-  }
+  const oldTime = s.elapsed, oldCarrier = { x: s.carrier.x, y: s.carrier.y };
   s.elapsed = Math.min(DURATION, s.elapsed + dt);
+  // Snap arithmetic roundoff at cycle endpoints, not legitimate fractional travel time.
+  const nearestCycle = Math.round(s.elapsed / BOARDING_CYCLE) * BOARDING_CYCLE;
+  if (Math.abs(s.elapsed - nearestCycle) < 1e-9)
+    s.elapsed = nearestCycle;
   if (s.role === 'Pilot') {
     const length = Math.max(1, Math.hypot(input.x, input.y)), speed = tuning.moveSpeed * (config.naturalOne ? .6 : 1);
     s.x = Math.max(22, Math.min(458, s.x + input.x / length * speed * dt));
@@ -1920,13 +1967,9 @@ export function stepBoarding(s: BoardingState, config: FlightConfig, input: Boar
   }
   else
     s.x = automaticShipX(s.elapsed);
-  const phase = s.elapsed % BOARDING_CYCLE;
-  const closeness = phase < BOARDING_WARNING ? 0 : phase < 4 ? (phase - BOARDING_WARNING) / (4 - BOARDING_WARNING) : phase < 6 ? 1 : phase < 9 ? (9 - phase) / 3 : 0;
-  const staging = cycle % 2 ? 120 : 360;
-  s.carrier.x = phase < 9 ? s.carrier.startX + (s.carrier.targetX - s.carrier.startX) * closeness
-    : s.carrier.startX + (staging - s.carrier.startX) * (phase - 9) / 3;
-  s.carrier.y = 500 - closeness * 250;
+  const carrierMotion = advanceBoardingCarrier(s, oldTime, oldShip, dt);
   type Path = {
+    segments?: BoardingMotionSegment[];
     id: number;
     radius: number;
     from: {
@@ -1952,10 +1995,19 @@ export function stepBoarding(s: BoardingState, config: FlightConfig, input: Boar
     return { id: p.id, radius: p.radius, from, to: { x: p.x, y: p.y }, start, end: crossing, carrier: false };
   });
   if (s.carrier.hp > 0)
-    paths.push({ id: 0, radius: BOARDING_CARRIER_RADIUS, from: oldCarrier, to: { x: s.carrier.x, y: s.carrier.y }, start: 0, end: dt, carrier: true });
+    paths.push({ id: 0, radius: BOARDING_CARRIER_RADIUS, from: oldCarrier, to: { x: s.carrier.x, y: s.carrier.y }, segments: carrierMotion, start: 0, end: dt, carrier: true });
   const at = (p: Path, t: number) => {
+    if (p.segments?.length) {
+      const segment = p.segments.find(segment => t <= segment.end) ?? p.segments.at(-1)!;
+      const fraction = segment.end > segment.start ? Math.max(0, Math.min(1, (t - segment.start) / (segment.end - segment.start))) : 0;
+      return { x: segment.from.x + (segment.to.x - segment.from.x) * fraction, y: segment.from.y + (segment.to.y - segment.from.y) * fraction };
+    }
     const fraction = dt > p.start ? Math.max(0, (t - p.start) / (dt - p.start)) : 0;
     return { x: p.from.x + (p.to.x - p.from.x) * fraction, y: p.from.y + (p.to.y - p.from.y) * fraction };
+  };
+  const spans = (path: Path, begin: number, end: number) => {
+    const cuts = [begin, ...(path.segments ? path.segments.map(segment => segment.end) : [path.start]).filter(t => t > begin && t < end), end];
+    return cuts.slice(1).map((finish, i) => ({ begin: cuts[i], finish }));
   };
   type Event = {
     time: number;
@@ -1968,9 +2020,14 @@ export function stepBoarding(s: BoardingState, config: FlightConfig, input: Boar
   const events: Event[] = [];
   for (const path of paths) {
     if (s.role === 'Pilot') {
-      const t = circleEntry(path.from.x - oldShip.x, path.from.y - oldShip.y, (path.to.x - path.from.x) - (s.x - oldShip.x), (path.to.y - path.from.y) - (s.y - oldShip.y), path.radius + 13);
-      if (t !== null)
-        events.push({ time: t * dt, kind: 'hull', path });
+      for (const { begin, finish } of spans(path, 0, dt)) {
+        const from = at(path, begin), to = at(path, finish);
+        const shipFrom = { x: oldShip.x + (s.x - oldShip.x) * begin / dt, y: oldShip.y + (s.y - oldShip.y) * begin / dt };
+        const shipTo = { x: oldShip.x + (s.x - oldShip.x) * finish / dt, y: oldShip.y + (s.y - oldShip.y) * finish / dt };
+        const t = circleEntry(from.x - shipFrom.x, from.y - shipFrom.y, to.x - from.x - shipTo.x + shipFrom.x, to.y - from.y - shipTo.y + shipFrom.y, path.radius + 13);
+        if (t !== null)
+          events.push({ time: begin + t * (finish - begin), kind: 'hull', path });
+      }
     }
     else if (!path.carrier && path.to.y - path.radius <= BOARDING_LINE)
       events.push({ time: path.end, kind: 'breach', path });
@@ -1984,7 +2041,7 @@ export function stepBoarding(s: BoardingState, config: FlightConfig, input: Boar
         const end = Math.min(b, path.end, life);
         if (a > end || a >= life)
           continue;
-        for (const [begin, finish] of (path.start > a && path.start < end ? [[a, path.start], [path.start, end]] : [[a, end]])) {
+        for (const { begin, finish } of spans(path, a, end)) {
           const m0 = mineAt(begin), m1 = mineAt(finish), p0 = at(path, begin), p1 = at(path, finish);
           const t = circleEntry(p0.x - m0.x, p0.y - m0.y, p1.x - p0.x - m1.x + m0.x, p1.y - p0.y - m1.y + m0.y, path.radius + 8);
           if (t !== null) {
