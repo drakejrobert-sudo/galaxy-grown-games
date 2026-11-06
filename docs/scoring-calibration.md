@@ -135,3 +135,7 @@ The prior median of 361 remains recorded above. All other Bomber percentiles and
 ## Asteroid Bomber aimed-launcher follow-up
 
 The aimed aft launcher keeps v0.5 rating anchors at 71–3,060 and the existing raw-score formula. The seeded script now makes discrete ready-weapon attempts at the default 100px aft target: routine attempts during its existing alternating half-second windows, engaged whenever ready, passive never. Its 288 outcomes are min 31, 10th percentile 72, median 1,600, 90th percentile 3,900, max 7,200. These are synthetic regression references, not replacement anchors or proof of fair human ratings. All seven other mode distributions remain unchanged. Fresh owner gameplay and rating calibration remain pending under #39.
+
+## Boarding Party addition — v0.6
+
+Four independent Boarding Party station ratings now use separate fixed 10th/90th-percentile anchors from 288 seeded runs each. Pilot: **62–900**, Gunner: **31–3418**, Bomber: **31–4100**, Life Support: **53–4900**. All eight existing live anchors and their synthetic samples remain unchanged; the shared report version advances to v0.6. See [Boarding Party calibration profiles, observed percentiles and owner checklist](boarding-party-playtest.md). These remain synthetic references, not proof of human/device balance.

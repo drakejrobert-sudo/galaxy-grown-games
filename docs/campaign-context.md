@@ -32,3 +32,7 @@ Current Pilot, Gunner, Bomber, and Life Support rounds last 60 seconds, support 
 ## Publication boundary
 
 Home-game history and publishable material are separate. Prefer original graphics and names for new game assets. Do not silently change campaign canon to accommodate publication, and do not assume outside references or homebrew are commercially cleared.
+
+## Boarding Party prototype
+
+Drake approved the repel-boarders framing and four station games on 2026-11-06. Pilot evades a closing carrier/pods, Gunner damages the carrier and intercepts pods, Bomber lays aft mines, and Life Support shoots interior boarders and vents two airlocks. The [design handoff](boarding-party-design.md) owns controls and provisional tuning. Natural 1 applies 60% Pilot movement, half Gunner fire rate, half Bomber blast area, or double Life Support airlock recharge. All runs are independent, with manual GM reports and no automatic campaign consequences. Real-device and gameplay acceptance remain pending.

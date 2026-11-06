@@ -28,7 +28,7 @@ export function validateArchive(value: unknown): Archive {
     for (const items of [c.maps, c.encounters, c.tables]) { list(items); unique(items); }
     check(c.maps.length > 0 && c.maps.some(m => m.id === c.activeMap), 'Selected map is missing.');
     const hasEncounter = (s: unknown) => c.encounters.some(e => e.id === s);
-    for (const e of c.encounters) check(text(e.title) && e.title.trim() && text(e.prompt) && text(e.notes) && ['narrative','VTT','minigame'].includes(e.type) && ['asteroid-field','space-battle'].includes(e.situation), 'Invalid encounter.');
+    for (const e of c.encounters) check(text(e.title) && e.title.trim() && text(e.prompt) && text(e.notes) && ['narrative','VTT','minigame'].includes(e.type) && ['asteroid-field','space-battle','boarding-party'].includes(e.situation), 'Invalid encounter.');
     for (const t of c.tables) { check(text(t.name) && t.name.trim(), 'Table needs a name.'); list(t.entries); check(new Set(t.entries.map(e => e.encounter)).size === t.entries.length, 'Duplicate table entry.'); for (const e of t.entries) check(hasEncounter(e.encounter) && integer(e.weight, 1, 1000000), 'Invalid table entry or weight.'); }
     for (const m of c.maps) {
       check(text(m.name) && m.name.trim() && text(m.description) && ['none','orbits'].includes(m.decoration), 'Invalid map metadata.');

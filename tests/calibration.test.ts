@@ -18,11 +18,13 @@ test('seeded calibration preserves unchanged references and records redesigned s
     cwd: fileURLToPath(new URL('..', import.meta.url)), encoding: 'utf8',
   });
   const rows = output.trim().split('\n');
-  assert.equal(rows.length, 8);
+  assert.equal(rows.length, 12);
   for (const row of rows) {
     const [mode, count, min, low, median, high, max] = row.split('\t');
     assert.equal(Number(count), 288, mode);
-    if (mode === 'space-gunner') {
+    if (mode.startsWith('boarding-')) {
+      assert.deepEqual({ low: Number(low), high: Number(high) }, SCORE_ANCHORS[mode as ScoreMode]);
+    } else if (mode === 'space-gunner') {
       assert.deepEqual(SCORE_ANCHORS[mode], { low: 37, high: 5000 });
       assert.deepEqual({ low: Number(low), high: Number(high) }, SCORE_ANCHORS[mode]);
     } else if (mode === 'asteroid-bomber') {

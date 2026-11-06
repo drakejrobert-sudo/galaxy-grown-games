@@ -71,8 +71,6 @@ The linked implementation issue must require:
 
 Follow [AGENTS.md's code delivery and owner acceptance workflow](../AGENTS.md#code-delivery-and-owner-acceptance). Completed engineering work may be ready for PR review while real-device acceptance is pending; use a draft only for incomplete work or unresolved engineering blockers. After Drake reviews and merges and the automatic deployment succeeds, Drake can perform the real iPhone/iPad Safari touch, rotation, backgrounding, and gameplay/balance checks. Keep #38 open and its applicable #39 acceptance checks pending until Drake explicitly accepts the affected changes and their remaining criteria are satisfied. Desktop/narrow-viewport QA and automated tests do not establish real-device acceptance.
 
-## Boarding Party design sequence
+## Boarding Party design follow-up
 
-After the Gunner handoff, compare two encounter framings for Pilot, Gunner, Bomber, and Life Support: our crew boards another vessel, or our crew repels boarders. For each role, propose the core activity, input actions, failure/end conditions, and Natural 1 adaptation, and explain how it preserves role ownership. Do not assume ship weapons or their impairments translate unchanged to interior combat.
-
-Neither framing nor any Boarding Party role activity is approved. Drake chooses the framing and approves each activity/impairment before implementation issues are created. Keep #11 open until all five designs have that approval and separate implementation issues; final gameplay signoff belongs to the final owner validation tracker.
+Drake selected **our crew repels boarders** and approved all four activities, controls and Natural 1 effects on 2026-11-06. The requested implementation supersedes the earlier pending framing comparison. See [Boarding Party — repel boarders](boarding-party-design.md) for the authoritative handoff and [engineering evidence](boarding-party-playtest.md) for implementation validation and remaining owner checks. Final gameplay/device acceptance remains under #39.
