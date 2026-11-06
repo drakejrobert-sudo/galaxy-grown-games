@@ -256,9 +256,9 @@ test('interrupted exposed attack emits no laser; surviving boarders advance thro
   run(s,.65+BOARDING_TUNING.Medium.attackTime+1.6);assert.equal(s.boarders[0].depth,2);
   assert.ok(BOARDING_DEPTHS[2].scale>BOARDING_DEPTHS[0].scale);assert.ok(BOARDING_DEPTHS[2].laserTime<BOARDING_DEPTHS[0].laserTime);
 });
-test('first-person opening has no boarders for two seconds and never exceeds four active enemies',()=>{
+test('first-person opening has no boarders for two seconds and never exceeds two active enemies',()=>{
   const s=createBoarding('Life Support');run(s,1.95);assert.equal(s.boarders.length,0);run(s,.1);assert.equal(s.boarders.length,1);
-  for(let i=0;i<500&&!s.finished;i++){tick(s);assert.ok(s.boarders.length<=4);}
+  for(let i=0;i<500&&!s.finished;i++){tick(s);assert.ok(s.boarders.length<=2);}
 });
 
 test('warning craft can be destroyed before movement, including a warning expiry inside a swept mine step',()=>{
@@ -266,5 +266,23 @@ test('warning craft can be destroyed before movement, including a warning expiry
     const s=state('Bomber');s.pods=[{...pod(1,240,230,-500),warningRemaining:warning}];
     s.mines=[{id:4,x:240,y:230,armIn:0,expiresIn:4,blastRadius:58}];tick(s);
     assert.equal(s.pods.length,0);assert.equal(s.intercepted,1);assert.equal(s.breaches,0);assert.equal(s.hull,3);
+  }
+});
+
+test('Life Support uses one slot per side, caps at two in every band, and reuses freed slots',()=>{
+  for(const total of [5,10,15,16])for(const naturalOne of [false,true]) {
+    const cfg={total,naturalOne},s=createBoarding('Life Support');
+    for(let i=0;i<400;i++) {
+      s.hull=5;tick(s,{},.05,cfg);
+      assert.ok(s.boarders.length<=2);assert.ok(s.boarders.every(b=>b.slot===0||b.slot===1));
+      assert.equal(new Set(s.boarders.map(b=>b.slot)).size,s.boarders.length);
+    }
+    assert.equal(s.boarders.length,2);
+    for(const side of [0,1]) {
+      const survivor=s.boarders.find(b=>b.slot!==side)!;
+      s.boarders=s.boarders.filter(b=>b.slot!==side);s.spawnIn=0;tick(s,{},.05,cfg);
+      assert.equal(s.boarders.length,2);assert.ok(s.boarders.some(b=>b.id===survivor.id));
+      const replacement=s.boarders.find(b=>b.slot===side)!;assert.equal(replacement.depth,0);assert.equal(replacement.phase,'warning');
+    }
   }
 });

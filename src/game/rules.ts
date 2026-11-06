@@ -1558,7 +1558,8 @@ export function boardingCover(slot: number, depth: number) {
   const d = BOARDING_DEPTHS[depth];
   return { x: 240 + (slot % 2 ? 1 : -1) * (d.spread + (slot >= 2 ? 15 : -15)), y: d.y + (slot >= 2 ? 22 : -12) };
 }
-export const BOARDING_COVER = [0, 1, 2, 3].map(slot => boardingCover(slot, 0));
+export const BOARDING_INTERIOR_SLOTS = [0, 1] as const;
+export const BOARDING_COVER = BOARDING_INTERIOR_SLOTS.map(slot => boardingCover(slot, 0));
 export const BOARDING_AIRLOCKS = [{ x: 20, y: 90, width: 95, height: 380 }, { x: 365, y: 90, width: 95, height: 380 }];
 export interface BoardingPod {
   kind: 'probe' | 'shuttle';
@@ -1851,7 +1852,10 @@ function stepBoardingInterior(s: BoardingState, config: FlightConfig, input: Boa
     return;
   s.spawnIn -= dt;
   while (s.spawnIn <= 0) {
-    const start = Math.floor(random() * 4), slot = [0, 1, 2, 3].map(i => (start + i) % 4).find(slot => !s.boarders.some(b => b.slot === slot));
+    const start = Math.floor(random() * BOARDING_INTERIOR_SLOTS.length);
+    const slot = s.boarders.length < BOARDING_INTERIOR_SLOTS.length
+      ? BOARDING_INTERIOR_SLOTS.map((_, i) => BOARDING_INTERIOR_SLOTS[(start + i) % BOARDING_INTERIOR_SLOTS.length]).find(slot => !s.boarders.some(b => b.slot === slot))
+      : undefined;
     if (slot !== undefined)
       s.boarders.push({ id: s.nextId++, ...boardingCover(slot, 0), depth: 0, slot, phase: 'warning', remaining: BOARDING_COVER_WARNING });
     s.spawnIn += tuning.boarderEvery;

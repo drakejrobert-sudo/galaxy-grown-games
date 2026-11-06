@@ -112,10 +112,28 @@ fs.mkdirSync(out, { recursive: true });
           const scene=qaScene,s=scene.boarding;scene.activeFlight=false;
           s.elapsed=role==='Life Support'?3:4;s.grace=0;s.carrier.x=240;s.carrier.targetX=240;s.carrier.y=250;s.carrier.cycle=0;
           s.pods=[{id:100,kind:'probe',hp:1,maxHp:1,warningRemaining:0,hitFlash:0,x:140,y:340,vx:45,vy:-100,radius:12},{id:101,kind:'shuttle',hp:1,maxHp:2,warningRemaining:.4,hitFlash:.1,x:310,y:420,vx:-55,vy:-80,radius:18}];
-          s.boarders=[{id:102,x:200,y:193,slot:0,depth:0,phase:'exposed',remaining:.4},{id:103,x:415,y:372,slot:3,depth:1,phase:'relocating',remaining:.8},{id:104,x:310,y:288,slot:1,depth:1,phase:'warning',remaining:.4},{id:105,x:125,y:422,slot:2,depth:2,phase:'exposed',remaining:.9}];s.lasers=role==='Life Support'?[{id:106,x:200,y:193,side:0,duration:.9,remaining:.45}]:[];
+          s.boarders=[{id:102,x:155,y:388,slot:0,depth:2,phase:'exposed',remaining:.4},{id:103,x:415,y:337,slot:1,depth:1,phase:'relocating',remaining:.8}];s.lasers=role==='Life Support'?[{id:106,x:200,y:193,side:0,duration:.9,remaining:.45}]:[];
           s.airlocks[0].warning=.4;s.airlocks[1].cooldown=9;s.airlocks[1].warning=null;scene.onBoardingStep(s);scene.paint();
         }, role);
         await page.screenshot({ path: path.join(out, `${role}-${width}.png`), fullPage: true });
+        if (role === 'Life Support') {
+          for (const phase of ['empty','occupied','warning','venting']) {
+            await page.evaluate(phase => {
+              const s=qaScene.boarding;qaScene.activeFlight=false;s.elapsed=10;s.lasers=[];s.ejections=[];s.beamTime=0;s.hitFlash=0;s.impactFlash=0;s.crosshairX=240;s.crosshairY=300;
+              s.airlocks.forEach(l=>{l.warning=null;l.cooldown=0;l.openRemaining=0;});
+              s.boarders=phase==='empty'?[]:[{id:800,x:155,y:388,slot:0,depth:2,phase:'exposed',remaining:.8},{id:801,x:415,y:337,slot:1,depth:1,phase:'relocating',remaining:.8}];
+              if(phase==='warning'){s.airlocks[1].warning=.3;s.airlocks[1].cooldown=7.7;}
+              if(phase==='venting'){
+                s.boarders=s.boarders.slice(0,1);s.airlocks[1].cooldown=7.2;s.airlocks[1].openRemaining=.3;
+                s.ejections=[{x:415,y:337,scale:1,side:1,remaining:.3}];
+              }
+              qaScene.onBoardingStep(s);qaScene.paint();
+            },phase);
+            assert.equal(await page.evaluate(()=>qaScene.labelPool.filter(l=>l.visible).length),0,'no floating corridor text');
+            assert.ok(await page.evaluate(()=>qaScene.boarding.boarders.length<=2));
+            await page.locator('canvas').screenshot({path:path.join(out,`corridor-${phase}-${width}.png`)});
+          }
+        }
         // Finish using a synthetic end-boundary fixture, verify the actual report UI and retry.
         await page.evaluate(() => { const s=qaScene.boarding;s.elapsed=59.98;s.pods=[];s.boarders=[];s.lasers=[];s.carrier.hp=0;s.disabled=true;s.spawnIn=100;qaScene.activeFlight=true; });
         await page.locator('#results:not([hidden])').waitFor();

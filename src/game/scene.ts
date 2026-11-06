@@ -1,7 +1,7 @@
 import Phaser from 'phaser';
 import type { InputFrame } from './input';
 import {
-  createBoarding, stepBoarding, BOARDING_TUNING, BOARDING_DEPTHS, boardingCover, boardingBoarderPose, boardingAirlockTargetActive, BOARDING_AIRLOCK_TARGETS, BOARDING_EJECTION_TIME, BOARDING_VENT_WARNING, difficultyFor, BOARDING_LINE, BOARDING_CYCLE, BOARDING_WARNING, BOARDING_CARRIER_RADIUS, BOARDING_AIRLOCKS, BOARDING_COVER, BOARDING_MINE_LIFETIME, BOARDING_BLAST_RADIUS, type BoardingState, type BoardingInput,
+  createBoarding, stepBoarding, BOARDING_INTERIOR_SLOTS, BOARDING_DEPTHS, boardingCover, boardingBoarderPose, boardingAirlockTargetActive, BOARDING_AIRLOCK_TARGETS, BOARDING_EJECTION_TIME, BOARDING_VENT_WARNING, BOARDING_VENT_RECHARGE, difficultyFor, BOARDING_LINE, BOARDING_CYCLE, BOARDING_WARNING, BOARDING_CARRIER_RADIUS, BOARDING_MINE_LIFETIME, BOARDING_BLAST_RADIUS, type BoardingState, type BoardingInput,
   createSpaceGunner, stepSpaceGunner, SPACE_GUNNER_DEFENSE_LINE, type SpaceGunnerInput, type SpaceGunnerState, type SpaceGunnerAttacker,
   gunnerTargetAt, gunnerFireEvery, GUNNER_SHOT_FEEDBACK_SECONDS, type GunnerShotFeedback,
   createBomber, createFlight, createGunner, createLifeSupport, createSpaceBattleBomber, createSpaceBattlePilot, stepBomber,
@@ -39,6 +39,34 @@ export class FlightScene extends Phaser.Scene {
     return layer;
   }
   private interiorDepth(y: number) { return -1.9 + y / 600; }
+
+  private doorMasks: { shape: Phaser.GameObjects.Graphics; mask: Phaser.Display.Masks.GeometryMask }[] = [];
+  private airlockOutline(side: number) {
+    // Fits the recessed leaf surfaces in the corridor texture, in logical canvas coordinates.
+    return [[12,114],[22,101],[76,141],[90,179],[90,350],[21,395],[12,366]]
+      .map(([x,y]) => ({ x: side ? WIDTH - x : x, y }));
+  }
+
+  private paintAirlockPanels(side: number, opening: number) {
+    if (!this.hasArt('boarding-corridor')) return false;
+    let clip = this.doorMasks[side];
+    if (!clip) {
+      const shape = this.add.graphics().setVisible(false);
+      shape.fillStyle(0xffffff).fillPoints(this.airlockOutline(side), true);
+      clip = this.doorMasks[side] = { shape, mask: shape.createGeometryMask() };
+    }
+    const minX = side ? 390 : 12, maxX = side ? 468 : 90, seam = (minX + maxX) / 2;
+    for (const half of [0,1]) {
+      const slide = (half ? 1 : -1) * 45 * opening;
+      this.drawArt('boarding-corridor', WIDTH / 2 + slide, HEIGHT / 2, WIDTH, HEIGHT, 0, 1, false, -1.94);
+      const panel = this.artPool[this.artUsed - 1];
+      const textureWidth = panel.frame?.realWidth ?? 640, textureHeight = panel.frame?.realHeight ?? 800;
+      const x = half ? seam : minX, width = half ? maxX - seam : seam - minX;
+      panel.setCrop(x / WIDTH * textureWidth, 100 / HEIGHT * textureHeight,
+        width / WIDTH * textureWidth, 296 / HEIGHT * textureHeight).setMask(clip.mask);
+    }
+    return true;
+  }
 
   private paintCargo(x: number, y: number, scale: number) {
     const g = this.interiorLayer(this.interiorDepth(y + 1));
@@ -81,6 +109,8 @@ export class FlightScene extends Phaser.Scene {
     if (!this.hasArt(name)) return false;
     const image = this.artPool[this.artUsed] ?? this.add.image(0, 0, `illustrated-${name}`);
     this.artPool[this.artUsed++] = image;
+    // Images move between pooled roles; never retain a previous door crop or mask.
+    image.setCrop?.(); image.clearMask?.();
     image.setTexture(`illustrated-${name}`).setPosition(x, y).setDisplaySize(width, height)
       .setRotation(rotation).setAlpha(alpha).setDepth(depth).setVisible(true);
     return true;
@@ -258,45 +288,55 @@ export class FlightScene extends Phaser.Scene {
   private paintBoardingMode(g: Phaser.GameObjects.Graphics) {
     const s = this.boarding;
     if (s.role === 'Life Support') {
-      g.fillStyle(0x0a1425, .8); g.fillRoundedRect(12, 14, 456, 52, 6);
-      this.drawLabel('HOLD THE CORRIDOR', 240, 28, 15, '#79e1ce');
-      this.drawLabel(s.elapsed < 5 ? 'Shoot raised rifles • Shoot glowing door targets' : `Shot ${s.shotBoarders} • Ejected ${s.ejected}`, 240, 51, 11);
+      if (s.elapsed < 5) {
+        g.fillStyle(0x0a1425, .8); g.fillRoundedRect(12, 14, 456, 52, 6);
+        this.drawLabel('HOLD THE CORRIDOR', 240, 28, 15, '#79e1ce');
+        this.drawLabel('Shoot raised rifles • Shoot glowing door targets', 240, 51, 11);
+      }
       const doors = this.interiorLayer(-1.95);
-      for (const [i, z] of BOARDING_AIRLOCKS.entries()) {
+      for (const i of [0,1]) {
         const lock = s.airlocks[i], active = boardingAirlockTargetActive(s, i), target = BOARDING_AIRLOCK_TARGETS[i];
         const opening = lock.warning !== null ? (1 - lock.warning / BOARDING_VENT_WARNING) ** 2
           : lock.openRemaining > 0 ? Math.min(1, lock.openRemaining / .12) : 0;
-        const doorX = i ? 399 : 21, doorW = 60, doorY = 150, doorH = 280;
-        doors.fillStyle(0x030912, .92); doors.fillRect(doorX, doorY, doorW, doorH);
-        doors.lineStyle(3, active || opening > 0 ? 0x79e1ce : 0x526776); doors.strokeRect(doorX, doorY, doorW, doorH);
-        for (const half of [0, 1]) {
-          const panelW = doorW / 2 * (1 - opening);
-          const x = half ? doorX + doorW - panelW : doorX;
-          doors.fillStyle(0x263c49, .95); doors.fillRect(x, doorY + 3, panelW, doorH - 6);
-          doors.lineStyle(1, 0x8ba4ad, .65); doors.strokeRect(x, doorY + 3, panelW, doorH - 6);
-          for (const y of [180, 245, 355, 400]) {
-            doors.lineStyle(2, 0x101e2a); doors.lineBetween(x + 2, y, x + Math.max(2, panelW - 2), y);
+        const outline = this.airlockOutline(i);
+        doors.fillStyle(0x03080d); doors.fillPoints(outline, true);
+        if (!this.paintAirlockPanels(i, opening)) {
+          // Perspective fallback with a widening central opening, never a luminous flat rectangle.
+          const shell = this.interiorLayer(-1.94), outer = i ? 468 : 12, inner = i ? 390 : 90;
+          const point = (u: number, v: number) => ({x: outer + (inner - outer) * u,
+            y: (114 + 65 * u) * (1 - v) + (395 - 45 * u) * v});
+          for (const [from,to] of [[0,(1-opening)/2],[1-(1-opening)/2,1]]) {
+            shell.fillStyle(i ? 0x423a31 : 0x4a3b2b);
+            shell.fillPoints([point(from,0),point(to,0),point(to,1),point(from,1)],true);
+            shell.lineStyle(1,0x8c785a,.45);
+            shell.strokePoints([point(from,0),point(to,0),point(to,1),point(from,1)],true);
           }
         }
         if (lock.openRemaining > 0) {
-          const fx = this.interiorLayer(-.55), phase = this.decorativeTime(s.elapsed);
-          for (let n = 0; n < 9; n++) {
-            const t = ((phase * 2 + n / 9) % 1), x = (i ? 330 : 150) + (i ? 120 : -120) * t;
-            const y = 170 + n * 27;
-            fx.lineStyle(1 + t, 0xb9f6ef, .2 + .5 * t);
-            fx.lineBetween(x, y, x + (i ? -20 : 20), y + 6);
+          const fx = this.interiorLayer(-.55), phase = this.decorativeTime(s.elapsed), endX = i ? 430 : 50;
+          for (let n = 0; n < 7; n++) {
+            const t = ((phase * 2 + n / 7) % 1), startX = i ? 355 : 125, startY = 235 + n * 17;
+            const x = startX + (endX - startX) * t, y = startY + (285 - startY) * t;
+            fx.lineStyle(1 + t, 0xb9d9d3, .15 + .4 * t);
+            fx.lineBetween(x, y, x + (i ? -15 : 15), y + (startY - 285) * .08);
           }
         }
-        const color = lock.warning !== null ? 0xffca83 : active ? 0x79ffe1 : 0x526776;
-        g.fillStyle(0x102330, .95); g.fillRoundedRect(target.x - 27, target.y - 30, 54, 60, 6);
-        g.lineStyle(3, color); g.strokeCircle(target.x, target.y, target.radius);
-        g.fillStyle(color, active ? .25 : .08); g.fillCircle(target.x, target.y, target.radius - 3);
-        g.lineStyle(2, color); g.lineBetween(target.x - 10, target.y, target.x + 10, target.y);
-        g.lineBetween(target.x, target.y - 10, target.x, target.y + 10);
-        this.drawLabel(lock.warning !== null ? 'OPENING' : lock.openRemaining > 0 ? 'VENTING' : lock.cooldown > 0 ? `${Math.ceil(lock.cooldown)}s` : active ? 'SHOOT' : 'STANDBY', target.x, target.y + 40, 10, active ? '#79ffe1' : '#c7dce4');
-        this.drawLabel(i ? 'RIGHT AIRLOCK' : 'LEFT AIRLOCK', z.x + z.width / 2, 125, 9);
+        const color = lock.warning !== null ? 0xffca83 : active ? 0x79ffe1 : 0x52606a;
+        // An inset wall control, with readiness light and a quiet segmented recharge gauge.
+        g.fillStyle(0x0d161d, .9); g.fillCircle(target.x, target.y, 26);
+        g.lineStyle(2, 0x6e7779, .7); g.strokeCircle(target.x, target.y, 25);
+        g.fillStyle(color, active ? .3 : .08); g.fillCircle(target.x, target.y, 20);
+        g.lineStyle(active || lock.warning !== null ? 3 : 1, color, active ? 1 : .6);
+        g.strokeCircle(target.x, target.y, active ? target.radius : 18);
+        g.lineBetween(target.x - 8, target.y, target.x + 8, target.y);
+        g.lineBetween(target.x, target.y - 8, target.x, target.y + 8);
+        const recharge = BOARDING_VENT_RECHARGE * (this.config.naturalOne ? 2 : 1);
+        for (let segment = 0; segment < 8; segment++) {
+          g.fillStyle(segment / 8 < 1 - lock.cooldown / recharge ? 0x7bada5 : 0x293638, .85);
+          g.fillRect(target.x - 23 + segment * 6, target.y + 31, 4, 3);
+        }
       }
-      for (let depth = 0; depth < 3; depth++) for (const slot of [0, 1, 2, 3]) {
+      for (let depth = 0; depth < 3; depth++) for (const slot of BOARDING_INTERIOR_SLOTS) {
         const c = boardingCover(slot, depth);
         this.paintCargo(c.x, c.y, BOARDING_DEPTHS[depth].scale);
       }
@@ -326,14 +366,13 @@ export class FlightScene extends Phaser.Scene {
           }
         }
         const radius = BOARDING_DEPTHS[b.depth].radius;
-        this.drawLabel(b.phase === 'relocating' ? 'MOVING' : exposed ? (b.remaining < .5 ? 'FIRING' : 'AIMING') : 'COVERED', b.x, b.y - 72 * scale, 10, exposed ? '#ffba9c' : '#c0cfdf');
         if (exposed) {
           g.lineStyle(1, 0xffca83, .7);
           g.strokeCircle(b.x, b.y, radius);
         }
       }
       for (const e of s.ejections) {
-        const t = 1 - e.remaining / BOARDING_EJECTION_TIME, endX = e.side ? 455 : 25;
+        const t = 1 - e.remaining / BOARDING_EJECTION_TIME, endX = e.side ? 430 : 50;
         const x = e.x + (endX - e.x) * t, y = e.y + (285 - e.y) * t;
         const scale = e.scale * (1 - .85 * t), alpha = 1 - t;
         if (!this.drawArt('boarding-boarder', x, y, 53 * scale, 126 * scale, this.reducedMotion?.matches ? 0 : (e.side ? 1 : -1) * t, alpha, false, -.5)) {
@@ -362,7 +401,6 @@ export class FlightScene extends Phaser.Scene {
       if (s.impactFlash > 0) {
         g.fillStyle(0xff465d, s.impactFlash * .7);
         g.fillRect(s.impactSide ? WIDTH - 55 : 0, 90, 55, 420);
-        this.drawLabel(s.impactSide ? 'HIT FROM RIGHT' : 'HIT FROM LEFT', 240, 82, 12, '#ffb4a2');
       }
     }
     else {

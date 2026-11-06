@@ -27,7 +27,7 @@ Turret cooldowns, three hull, collision grace and the entire aft-launcher contra
 
 ## First-person Life Support
 
-The approved [cargo/airlock follow-up](boarding-cargo-airlocks.md) supersedes the cover presentation and Q/E/button activation below. Current Life Support uses fixed layered cargo and shootable side-door targets during crossing opportunities. The timings and damage rules below remain applicable.
+The approved [cargo/airlock follow-up](boarding-cargo-airlocks.md) supersedes the cover presentation, four-slot population, floating state labels and Q/E/button activation below. Current Life Support uses six fixed cargo stacks, two boarders (one slot per side), nonverbal cues and shootable side-door targets during crossing opportunities. The timings and damage rules below remain applicable.
 
 The player holds one stationary corridor position. A generated corridor, rifle and hostile boarder art replace the overhead icons. Rule-owned depth controls position, scale and target radius; art never defines collision geometry. Cover masks lower bodies, exposed targets have clear aiming/firing cues, incoming lasers have a visible travel path and damage flashes identify their source side. Covered and relocating targets block rifle fire.
 
