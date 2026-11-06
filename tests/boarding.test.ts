@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   createBoarding, stepBoarding, boardingResultText, boardingScoreFor, boardingInAirlock,
-  BOARDING_TUNING, BOARDING_AIM_SPEED, BOARDING_BLAST_RADIUS, BOARDING_VENT_RECHARGE,
+  BOARDING_TUNING, BOARDING_AIM_SPEED, BOARDING_BLAST_RADIUS, BOARDING_VENT_RECHARGE, BOARDING_AIRLOCK_TARGETS, BOARDING_EJECTION_TIME, BOARDING_RELOCATION_TIME, boardingAirlockTargetActive,
   BOARDING_LINE, BOARDING_DEPTHS, boardingCover, BOARDING_DEFENSE_TUNING, BOARDING_LAUNCH_WARNING, BOARDING_MIN_FLIGHT, type BoardingInput, type BoardingState, type BoardingBoarder,
 } from '../src/game/rules.ts';
 const config = { total: 10, naturalOne: false };
@@ -124,32 +124,55 @@ test('airlocks eject covered enemies at warning expiry before a tied attack; no 
 });
 test('airlock zone is evaluated at ejection, including relocation during the warning',()=>{
   const s=state('Life Support');s.boarders=[boarder(1,'relocating',1.4)];
-  tick(s,{ventLeft:true});run(s,.55);assert.equal(s.ejected,1);
+  tick(s,{firing:true,...aimControl(0)});run(s,.55);assert.equal(s.ejected,1);
 });
-test('empty vent consumes charge; unavailable request is discarded and left/right recharge independently',()=>{
-  const s=state('Life Support');tick(s,{ventLeft:true});assert.equal(s.airlocks[0].cooldown,BOARDING_VENT_RECHARGE);
-  assert.equal(s.airlocks[1].cooldown,0);run(s,.6);assert.equal(s.ejected,0);
-  tick(s,{ventLeft:true,ventRight:true});assert.equal(s.airlocks[0].warning,null);assert.notEqual(s.airlocks[1].warning,null);
-  run(s,8);assert.equal(s.airlocks[0].warning,null);assert.equal(s.airlocks[0].cooldown,0);
-  s.airlocks[0].cooldown=.01;tick(s,{ventLeft:true});assert.equal(s.airlocks[0].warning,null);tick(s);assert.equal(s.airlocks[0].warning,null);
+function aimControl(side: number) { const t=BOARDING_AIRLOCK_TARGETS[side];return {aimX:t.x,aimY:t.y}; }
+function crossing(side=0,remaining=BOARDING_RELOCATION_TIME) { return {...boarder(50+side,'relocating',remaining),slot:side}; }
+test('only lit crossing controls activate; rifle cooldown and both independent recharges apply',()=>{
+  const s=state('Life Support');
+  tick(s,{firing:true,...aimControl(0)});assert.equal(s.airlocks[0].cooldown,0);assert.equal(s.shots,1);
+  s.boarders=[crossing()];tick(s,{firing:true,...aimControl(0)});assert.equal(s.airlocks[0].warning,null,'rifle cooling');
+  s.cooldown=0;tick(s,{firing:true,...aimControl(0)});assert.equal(s.airlocks[0].cooldown,8);assert.notEqual(s.airlocks[0].warning,null);
+  assert.equal(s.airlocks[1].cooldown,0);assert.equal(s.shotBoarders,0);assert.equal(s.shots,2);
+  s.boarders.push(crossing(1));s.cooldown=0;tick(s,{firing:true,...aimControl(1)});assert.equal(s.airlocks[1].cooldown,8);
+  run(s,1);assert.equal(s.ejected,2);s.cooldown=0;s.boarders=[crossing()];tick(s,{firing:true,...aimControl(0)});assert.equal(s.airlocks[0].warning,null,'recharge cannot be bypassed');
 });
-test('Life Support Natural 1 doubles airlock recharge only in every band',()=>{
+test('targets light on approach and occupancy, extinguish on departure, and never bank an unlit shot',()=>{
+  const s=state('Life Support');
+  for(const [remaining,active] of [[1.6,true],[1.1,true],[.8,true],[1.6/3,true],[.5,false]] as const) {
+    s.boarders=[crossing(0,remaining)];assert.equal(boardingAirlockTargetActive(s,0),active);assert.equal(boardingAirlockTargetActive(s,1),false);
+  }
+  s.boarders=[boarder()];tick(s,{firing:true,...aimControl(0)});s.boarders=[crossing()];tick(s);assert.equal(s.airlocks[0].warning,null);
+  s.cooldown=0;tick(s,{firing:true,aimX:BOARDING_AIRLOCK_TARGETS[0].x+24,aimY:280});assert.equal(s.airlocks[0].warning,null,'miss outside control radius');
+});
+test('late control shot opens the door but misses a boarder which has left the bay',()=>{
+  const s=state('Life Support');s.boarders=[crossing(0,.55)];
+  tick(s,{firing:true,...aimControl(0)});run(s,.6);assert.equal(s.ejected,0);assert.ok(s.airlocks[0].openRemaining>0);assert.equal(s.ejections.length,0);
+});
+test('Life Support Natural 1 doubles control-triggered recharge only in every band',()=>{
   for(const total of [5,10,15,16]) {
-    const a=state('Life Support'),b=state('Life Support');
-    tick(a,{ventLeft:true,firing:true},.05,{total,naturalOne:false});tick(b,{ventLeft:true,firing:true},.05,{total,naturalOne:true});
-    assert.equal(b.airlocks[0].cooldown,2*a.airlocks[0].cooldown);assert.equal(b.cooldown,a.cooldown);
+    const a=state('Life Support'),b=state('Life Support');a.boarders=[crossing()];b.boarders=[crossing()];
+    tick(a,{firing:true,...aimControl(0)},.05,{total,naturalOne:false});tick(b,{firing:true,...aimControl(0)},.05,{total,naturalOne:true});
+    assert.equal(b.airlocks[0].cooldown,2*a.airlocks[0].cooldown);assert.equal(b.cooldown,a.cooldown);assert.equal(b.airlocks[0].warning,a.airlocks[0].warning);
   }
 });
-test('rifle and independent airlock can act simultaneously',()=>{
-  const s=state('Life Support');s.boarders=[boarder()];tick(s,{aimX:145,aimY:180,firing:true,ventRight:true});
-  assert.equal(s.shotBoarders,1);assert.notEqual(s.airlocks[1].warning,null);
+test('one rifle shot cannot activate a control and kill an overlapping exposed boarder',()=>{
+  const s=state('Life Support'),t=BOARDING_AIRLOCK_TARGETS[0];s.boarders=[crossing(),boarder(2,'exposed',1,t.x,t.y)];
+  tick(s,{firing:true,...aimControl(0)});assert.equal(s.shotBoarders,0);assert.notEqual(s.airlocks[0].warning,null);assert.equal(s.shots,1);
+});
+test('ejection awards once and preserves fired lasers; bounded visual effects expire and retry resets',()=>{
+  const s=state('Life Support');s.boarders=[crossing()];tick(s,{firing:true,...aimControl(0)});
+  s.lasers=[{id:99,x:65,y:280,side:0,duration:.9,remaining:.9}];run(s,.55);
+  assert.equal(s.ejected,1);assert.equal(s.ejections.length,1);assert.ok(s.ejections[0].remaining<=BOARDING_EJECTION_TIME);assert.equal(s.lasers.length,1);
+  run(s,.5);assert.equal(s.hull,4);assert.equal(s.ejected,1);assert.equal(s.ejections.length,0);assert.equal(s.airlocks[0].openRemaining,0);
+  const fresh=createBoarding('Life Support');assert.deepEqual(fresh.ejections,[]);assert.ok(fresh.airlocks.every(l=>l.openRemaining===0&&l.cooldown===0&&l.warning===null));
 });
 test('health failure wins a time tie; all four terminal states are immutable and reports contain GM context',()=>{
   for(const role of ['Pilot','Gunner','Bomber','Life Support'] as const) {
     const s=state(role);s.elapsed=59.99;s.hull=1;
     if(role==='Life Support')s.lasers=[{id:9,x:145,y:180,side:0,duration:.9,remaining:.005}];else s.pods=[pod(1,240,role==='Pilot'?140:172,-100)];
     tick(s);assert.equal(s.finished,true);assert.equal(s.endReason,'hull');
-    const before=structuredClone(s);tick(s,{firing:true,placing:true,ventLeft:true});assert.deepEqual(s,before);
+    const before=structuredClone(s);tick(s,{firing:true,placing:true});assert.deepEqual(s,before);
     const report=boardingResultText({total:-2,naturalOne:true},s);
     for(const text of ['Boarding Party',role,'Check total: -2','Natural 1: Yes','Rating:','GM determines campaign outcome.'])assert.ok(report.includes(text));
   }

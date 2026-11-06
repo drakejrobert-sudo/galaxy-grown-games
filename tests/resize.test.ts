@@ -73,7 +73,7 @@ function startup() {
   load('../src/main.ts', {
     './style.css': {}, './bomber.css': {}, './game/runtime': { Phaser, FlightScene: scenes.FlightScene },
     './game/rules': rules,
-    './game/input': Object.fromEntries(['createInput', 'createGunnerInput', 'createSpaceGunnerInput', 'createBomberInput', 'createSpaceBomberInput', 'createLifeSupportInput', 'createSpaceLifeInput', 'createBoardingVentInput'].map(name => [name, idleInput])),
+    './game/input': Object.fromEntries(['createInput', 'createGunnerInput', 'createSpaceGunnerInput', 'createBomberInput', 'createSpaceBomberInput', 'createLifeSupportInput', 'createSpaceLifeInput'].map(name => [name, idleInput])),
   }, {
     document: { querySelector: () => element('app'), getElementById: element, addEventListener() {}, hidden: false },
     window: { addEventListener() {} }, ResizeObserver,

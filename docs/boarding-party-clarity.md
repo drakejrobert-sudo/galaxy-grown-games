@@ -27,6 +27,8 @@ Turret cooldowns, three hull, collision grace and the entire aft-launcher contra
 
 ## First-person Life Support
 
+The approved [cargo/airlock follow-up](boarding-cargo-airlocks.md) supersedes the cover presentation and Q/E/button activation below. Current Life Support uses fixed layered cargo and shootable side-door targets during crossing opportunities. The timings and damage rules below remain applicable.
+
 The player holds one stationary corridor position. A generated corridor, rifle and hostile boarder art replace the overhead icons. Rule-owned depth controls position, scale and target radius; art never defines collision geometry. Cover masks lower bodies, exposed targets have clear aiming/firing cues, incoming lasers have a visible travel path and damage flashes identify their source side. Covered and relocating targets block rifle fire.
 
 Four independent slots cap active boarders at four. The first appears at two seconds. Each cycles through 0.65 seconds covered warning, an exposed aiming countdown, a laser shot and a 1.6-second relocation through a visibly lit side airlock bay. Relocation advances far→middle→near; near boarders repeat from near cover. The original difficulty table controls spawn interval, rifle cooldown and base attack countdown.

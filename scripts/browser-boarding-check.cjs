@@ -34,7 +34,7 @@ fs.mkdirSync(out, { recursive: true });
         await page.waitForTimeout(350);
         if (await page.locator('#resume').isVisible()) await page.locator('#resume').click();
         assert.match(await page.locator('#mode-label').innerText(), /BOARDING PARTY/);
-        assert.equal(await page.locator('#vent-controls').isVisible(), role === 'Life Support');
+        assert.equal(await page.locator('#vent-controls').count(), 0);
         await page.locator('#canvas').focus();
         const before = await page.evaluate(() => ({ x: qaScene.boarding.x, aim: qaScene.boarding.crosshairX }));
         if (role === 'Pilot' || role === 'Gunner' || role === 'Life Support') {
@@ -60,12 +60,42 @@ fs.mkdirSync(out, { recursive: true });
           assert.ok(await page.evaluate(n => qaScene.boarding.shots > n, shots));
         }
         if (role === 'Life Support') {
-          await page.locator('#vent-left').click();
-          await page.waitForTimeout(80);
-          assert.ok(await page.evaluate(() => qaScene.boarding.airlocks[0].cooldown > 7));
-          assert.equal(await page.evaluate(() => qaScene.boarding.airlocks[1].cooldown), 0);
-          await page.keyboard.press('KeyE'); await page.waitForTimeout(80);
-          assert.ok(await page.evaluate(() => qaScene.boarding.airlocks[1].cooldown > 7));
+          // Real rifle inputs against a controlled crossing, not a production debug API.
+          for (const side of [0, 1]) {
+            await page.evaluate(side => {
+              const s=qaScene.boarding;qaScene.activeFlight=false;s.cooldown=0;s.spawnIn=100;s.lasers=[];
+              s.boarders=[{id:700+side,x:side?310:200,y:193,slot:side,depth:0,phase:'relocating',remaining:1.6}];
+            },side);
+            const box=await page.locator('canvas').boundingBox(),x=side?380:100,y=280;
+            if(width<600) {
+              const shots=await page.evaluate(()=>qaScene.boarding.shots);
+              await page.touchscreen.tap(box.x+box.width*x/480,box.y+box.height*y/560);
+              assert.equal(await page.evaluate(()=>qaScene.boarding.shots),shots,'door target touch aims without firing');
+              await page.locator('#fire-action').tap();
+            } else {
+              // Keyboard can fire at a pointer-selected target too.
+              await page.mouse.move(box.x+box.width*x/480,box.y+box.height*y/560);
+              await page.keyboard.press('Space');
+            }
+            await page.evaluate(()=>{qaScene.activeFlight=true;});
+            await page.waitForTimeout(80);
+            assert.ok(await page.evaluate(side=>qaScene.boarding.airlocks[side].cooldown>7,side),JSON.stringify(await page.evaluate(()=>({s:qaScene.boarding,active:qaScene.activeFlight})))+' width '+width+' side '+side);
+            if(side===0) {
+              assert.equal(await page.evaluate(()=>qaScene.boarding.airlocks[1].cooldown),0);
+              await page.screenshot({path:path.join(out,`airlock-opening-${width}.png`),fullPage:true});
+              await page.waitForTimeout(470);
+              await page.waitForFunction(()=>qaScene.boarding.ejections.length>0);
+              await page.evaluate(()=>{qaScene.activeFlight=false;qaScene.paint();});
+              const effect=await page.evaluate(()=>JSON.stringify(qaScene.boarding));
+              await page.waitForTimeout(100);assert.equal(await page.evaluate(()=>JSON.stringify(qaScene.boarding)),effect);
+              await page.screenshot({path:path.join(out,`airlock-ejection-${width}.png`),fullPage:true});
+              await page.evaluate(()=>{qaScene.activeFlight=true;});
+            }
+          }
+          const before=await page.evaluate(()=>qaScene.boarding.shots);
+          await page.keyboard.press('KeyQ');await page.keyboard.press('KeyE');
+          assert.equal(await page.evaluate(()=>qaScene.boarding.shots),before);
+
         }
         await page.locator('#pause').click();
         const paused = await page.evaluate(() => JSON.stringify(qaScene.boarding));
@@ -95,6 +125,8 @@ fs.mkdirSync(out, { recursive: true });
         await page.locator('#again').click(); await page.locator('#natural-one').check(); await page.locator('#start').click();
         assert.equal(await page.evaluate(() => qaScene.boarding.elapsed), 0);
         assert.equal(await page.evaluate(() => qaScene.boarding.aimDistance), 100);
+        assert.equal(await page.evaluate(() => qaScene.boarding.ejections.length),0);
+        assert.ok(await page.evaluate(() => qaScene.boarding.airlocks.every(l=>l.cooldown===0&&l.openRemaining===0)));
         assert.equal(await page.locator('vite-error-overlay').count(), 0);
         checks.push({ width, role, liveControls: true, screenshotAndEndFixture: true });
       }
@@ -135,7 +167,7 @@ fs.mkdirSync(out, { recursive: true });
     await fallbackPage.waitForTimeout(250);if(await fallbackPage.locator('#resume').isVisible())await fallbackPage.locator('#resume').click();
     await fallbackPage.evaluate(()=>{const s=qaScene.boarding;qaScene.activeFlight=false;s.boarders=[{id:900,x:310,y:288,slot:1,depth:1,phase:'exposed',remaining:.4}];s.lasers=[{id:901,x:200,y:193,side:0,duration:.9,remaining:.4}];qaScene.onBoardingStep(s);qaScene.paint();});
     await fallbackPage.screenshot({path:path.join(out,'Life Support-fallback-390.png'),fullPage:true});
-    assert.ok(await fallbackPage.locator('#fire-action').isVisible());assert.ok(await fallbackPage.locator('#vent-controls').isVisible());
+    assert.ok(await fallbackPage.locator('#fire-action').isVisible());assert.equal(await fallbackPage.locator('#vent-controls').count(),0);
     await fallbackPage.evaluate(()=>{const s=qaScene.boarding;qaScene.activeFlight=true;qaScene.readBoardingFrame=()=>({first:{x:0,y:0,firing:true,aimX:310,aimY:288},continued:{x:0,y:0,firing:false}});qaScene.advanceFrame(50);});
     assert.equal(await fallbackPage.evaluate(()=>qaScene.boarding.shotBoarders),1);
     await fallbackContext.close();
