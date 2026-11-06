@@ -3,13 +3,13 @@ A repository for hosting mini games for the galaxy grown campaign.
 
 ## First playable slice
 
-Asteroid Field / Pilot, Gunner, Bomber, and Life Support, plus Space Battle / Pilot, Gunner, Bomber, and Life Support, are implemented as **prototypes awaiting score calibration**. Other situation/role combinations are visibly disabled. Players enter their GM-requested final skill-check total and a separate Natural 1 flag, play independently, and manually share their rating or score. Flight Deck has no live multiplayer service. The Galaxy Map prototype stores GM-authored campaigns locally in the browser.
+Asteroid Field / Pilot, Gunner, Bomber, and Life Support, Space Battle / Pilot, Gunner, Bomber, and Life Support, plus Boarding Party / Pilot, Gunner, Bomber, and Life Support, are implemented as **prototypes awaiting score calibration**. All twelve station combinations are now available. Players enter their GM-requested final skill-check total and a separate Natural 1 flag, play independently, and manually share their rating or score. Flight Deck has no live multiplayer service. The Galaxy Map prototype stores GM-authored campaigns locally in the browser.
 
 Player link: [play.drakesfood.com](https://play.drakesfood.com/). This HTTPS shortlink redirects to the current GitHub Pages deployment and remains the link to share if the underlying hosting URL changes.
 
 ## Galaxy Map V1
 
-Open **Galaxy Map** beside Flight Deck to plot connected courses, advance travel under GM control, and pause for random or deliberate encounters. Encounter cards can provide Asteroid Field / Space Battle player links or pause for your already-open Maps VTT. The fictional demo includes planets, a ship, a station and a point of interest.
+Open **Galaxy Map** beside Flight Deck to plot connected courses, advance travel under GM control, and pause for random or deliberate encounters. Encounter cards can provide Asteroid Field / Space Battle / Boarding Party player links or pause for your already-open Maps VTT. The fictional demo includes planets, a ship, a station and a point of interest.
 
 **GM preparation** offers linked map/library editors, optional locally uploaded background images, system and star markers, reference-only landmarks, weighted tables, scheduled encounters and independent named campaign saves. Browse regional and detail maps without advancing travel; each map retains its own journey. Version 2 exports include every map and accept migrated version 1 saves. Private campaign maps are imported locally and are not bundled with the public app. Saves stay in this browser; export JSON backups to keep or move them. Preparation is hidden from presentation, without authentication. Travel steps and Low 10% / Medium 25% / High 50% risk are provisional. The GM decides all outcomes.
 
@@ -26,11 +26,11 @@ Roll once before starting your Asteroid Field challenge:
 | Bomber | 1d20 + Intelligence (Investigation) modifier |
 | Life Support | 1d20 + Intelligence (Arcana) modifier |
 
-Use your character’s relevant modifier, including applicable proficiency only once. Enter the final total, including modifiers; negative totals are allowed. Separately select **I rolled a natural 1** if the d20 shows 1, regardless of the modified total. Space Battle continues to use the check requested by the GM. Difficulty bands, Natural-1 impairments, and provisional scoring are unchanged; players report their rating and band, and the GM decides campaign consequences.
+Use your character’s relevant modifier, including applicable proficiency only once. Enter the final total, including modifiers; negative totals are allowed. Separately select **I rolled a natural 1** if the d20 shows 1, regardless of the modified total. Space Battle and Boarding Party use the check requested by the GM. Difficulty bands, Natural-1 impairments, and provisional scoring are unchanged; players report their rating and band, and the GM decides campaign consequences.
 
 ### Remaining designs and final acceptance
 
-[Issue #11](https://github.com/drakejrobert-sudo/galaxy-grown-games/issues/11) tracks remaining Boarding Party designs and the completed handoff for the [Space Battle Gunner design](docs/space-battle-gunner-design.md) and its separate [implementation issue #38](https://github.com/drakejrobert-sudo/galaxy-grown-games/issues/38). Gunner's core turret-defense activity, keyboard/touch/mouse controls, and half-fire-rate Natural 1 are approved; detailed tuning remains provisional. Boarding Party will compare offensive and defensive concepts before Drake approves a framing and each role's activity/impairment. Boarding Party remains unavailable. Space Battle Gunner is implemented here, with final device and gameplay acceptance pending.
+[Issue #11](https://github.com/drakejrobert-sudo/galaxy-grown-games/issues/11) tracks the approved Space Battle Gunner and Boarding Party designs. [Boarding Party — repel boarders](docs/boarding-party-design.md) adds Pilot evasion of a closing carrier and pods, Gunner carrier damage/interception, Bomber aft mines, and Life Support rifle/airlock defense. Natural 1 slows Pilot movement to 60%, halves Gunner fire rate, halves Bomber blast area, and doubles Life Support airlock recharge. All rounds remain independent; disabling a carrier stops new launches but does not end the round or remove existing pods. See [Boarding Party engineering evidence and owner checklist](docs/boarding-party-playtest.md).
 
 [Final owner validation #39](https://github.com/drakejrobert-sudo/galaxy-grown-games/issues/39) tracks all 12 situation/role combinations. Each requires Drake's explicit approval of gameplay, all difficulty bands and Natural 1, score/rating balance, real iPhone/iPad Safari, and applicable desktop controls before being marked final. Earlier prototype playtests support that review but do not automatically complete it. Issues #3 and #10 retain their outstanding acceptance work.
 

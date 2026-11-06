@@ -161,3 +161,18 @@ test('fatal collision stops the frame before later steps can move, heal or award
   assert.equal(h.calls.length, 1); assert.equal(h.hud, 1);
   const state = structuredClone(h.scene.flight); h.tick(250); assert.deepEqual(h.scene.flight, state);
 });
+
+test('Boarding Party snapshots actions once per raw frame; substeps, pause, interruption and retry preserve the contract',()=>{
+  for(const role of ['Pilot','Gunner','Bomber','Life Support'] as const) {
+    const h=harness(),scene=h.scene,cfg={total:10,naturalOne:true};scene.begin(cfg,'Boarding Party',role);
+    scene.boarding.spawnIn=100;let reads=0,hud=0;
+    const first={x:0,y:0,firing:true,placing:true,ventLeft:true},continued={...first,placing:false,ventLeft:false};
+    scene.readInput=()=>({x:0,y:0});scene.readBoardingFrame=()=>{reads++;return {first,continued};};scene.onBoardingStep=()=>hud++;
+    const baseline=structuredClone(scene.boarding);h.tick(1000);assert.equal(reads,0);h.tick(250);
+    for(let i=0;i<5;i++)rules.stepBoarding(baseline,cfg,i?continued:first,.05,()=>.5);
+    assert.deepEqual(scene.boarding,baseline);assert.equal(reads,1);assert.equal(hud,1);
+    const snapshot=JSON.stringify(scene.boarding);scene.activeFlight=false;h.tick(200);assert.equal(JSON.stringify(scene.boarding),snapshot);
+    scene.activeFlight=true;h.tick(1000);h.tick(251);assert.equal(JSON.stringify(scene.boarding),snapshot);assert.equal(scene.activeFlight,false);
+    scene.begin(cfg,'Boarding Party',role);assert.equal(scene.boarding.elapsed,0);assert.equal(scene.boarding.aimDistance,100);assert.equal(scene.boarding.airlocks[0].cooldown,0);
+  }
+});

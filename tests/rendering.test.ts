@@ -371,3 +371,17 @@ test('illustrated sprites reuse a bounded pool, hide retired objects and leave a
   assert.ok(images.every(image => image.Visible[0] === false), 'failed/missing textures leave no stale sprites');
   assert.ok(h.commands.some(command => command[0] === 'fillPath'), 'procedural objects still render');
 });
+
+test('Boarding Party renderers keep frozen threats, cover, airlocks, warnings and HUD geometry finite',()=>{
+  const h=harness();
+  for(const role of ['Pilot','Gunner','Bomber','Life Support'] as const) {
+    h.scene.begin({total:5,naturalOne:true},'Boarding Party',role);
+    const s=h.scene.boarding;s.grace=.5;s.beamTime=.05;s.carrier.targetX=120;
+    s.pods=[{id:1,x:200,y:300,vx:10,vy:-160,radius:12}];
+    s.boarders=[{id:2,x:145,y:180,slot:0,phase:'exposed',remaining:.5},{id:3,x:60,y:350,slot:2,phase:'relocating',remaining:.8}];
+    s.airlocks[0].warning=.3;s.airlocks[1].cooldown=8;
+    s.mines=[{id:4,x:200,y:250,armIn:0,expiresIn:3,blastRadius:41}];s.explosions=[{x:210,y:280,radius:41,remaining:.1}];
+    const before=JSON.stringify(s);freeze(s);h.paint();h.setReduced(true);h.paint();
+    assert.equal(JSON.stringify(s),before);assert.ok(h.commands.length>30);
+  }
+});

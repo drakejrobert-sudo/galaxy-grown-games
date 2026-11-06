@@ -126,7 +126,7 @@ test('space gunner fractional scoring and complete manual reports preserve failu
   const report = spaceGunnerResultText({ total: -5, naturalOne: true }, s);
   for (const pattern of [/Space Battle \/ Gunner/, /Check total: -5.*Hard/, /half normal fire rate/,
     /Attackers destroyed: 2/, /Projectiles intercepted: 3.*Shots fired: 8/, /Damaging hits: 0.*Breached threats: 0/,
-    /Provisional v0.5/, /GM determines campaign outcome/]) assert.match(report, pattern);
+    /Provisional v0.6/, /GM determines campaign outcome/]) assert.match(report, pattern);
   assert.deepEqual(rateScore('space-gunner', 6000, true), { rating: 100, band: 'Success', capped: true });
   assert.equal(rateScore('space-gunner', 37, false).rating, 0);
   assert.equal(rateScore('space-gunner', 5000, false).rating, 100);

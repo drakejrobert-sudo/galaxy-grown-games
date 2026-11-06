@@ -1,5 +1,5 @@
 export type Risk = 'Low' | 'Medium' | 'High';
-export type Situation = 'asteroid-field' | 'space-battle';
+export type Situation = 'asteroid-field' | 'space-battle' | 'boarding-party';
 export interface Destination { id: string; name: string; type: 'planet' | 'ship' | 'station' | 'point' | 'system' | 'star'; navigable?: boolean; detailMapId?: string; x: number; y: number; description: string }
 export interface Route { id: string; from: string; to: string; steps: number; risk: Risk; table: string; provisional?: boolean }
 export interface Encounter { id: string; title: string; prompt: string; notes: string; type: 'narrative' | 'VTT' | 'minigame'; situation: Situation }
@@ -111,6 +111,7 @@ export function demoCampaign(name = 'Demo • Lantern Sector'): Campaign {
     { id: 'rocks', title: 'Drifting asteroid field', prompt: 'An asteroid field crosses the course. Prepare your crew stations; ask the GM which checks to roll.', notes: 'Demo only. Decide consequences after players report.', type: 'minigame', situation: 'asteroid-field' },
     { id: 'signal', title: 'A curious transmission', prompt: 'A repeating signal interrupts the quiet. What does the crew do?', notes: '', type: 'narrative', situation: 'asteroid-field' },
     { id: 'boarding', title: 'An unexpected rendezvous', prompt: 'A vessel requests a meeting. Travel pauses while the GM runs the encounter in Maps VTT.', notes: 'Use your already-open Maps session.', type: 'VTT', situation: 'asteroid-field' },
+    { id: 'repel-boarders', title: 'Boarding Party — repel boarders', prompt: 'A pursuing carrier launches boarding pods. Prepare your stations and repel the boarding party; ask the GM which checks to roll.', notes: 'Independent station challenges. The GM decides consequences after reports.', type: 'minigame', situation: 'boarding-party' },
     { id: 'battle', title: 'Hostile approach', prompt: 'Unknown ships close in. Prepare for a Space Battle crew challenge.', notes: '', type: 'minigame', situation: 'space-battle' },
   ];
   c.tables = [{ id: 'demo-table', name: 'Demo travel encounters', entries: c.encounters.map(e => ({ encounter: e.id, weight: 1 })) }];

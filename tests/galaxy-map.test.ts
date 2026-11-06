@@ -82,3 +82,16 @@ test('share links contain only approved situation; no hash or campaign/private q
   assert.equal(url.pathname,'/galaxy-grown-games/');assert.equal(url.search,'?situation=asteroid-field');assert.equal(url.hash,'');
   assert.equal(new URL(challengeLink(url.href,'space-battle')).search,'?situation=space-battle');
 });
+
+test('Boarding Party demo is a separate weighted minigame, with paused save round trip and private-free link',()=>{
+  const c=demoCampaign(), encounter=c.encounters.find(e=>e.situation==='boarding-party')!;
+  assert.equal(encounter.type,'minigame');assert.equal(c.encounters.find(e=>e.id==='boarding')!.type,'VTT');
+  assert.equal(c.tables[0].entries.find(e=>e.encounter===encounter.id)!.weight,1);
+  startJourney(c,['haven','cinder']);scheduleEncounter(c,0,1,encounter.id);advance(c,()=>{throw Error('scheduled must replace random');});
+  const archive=parseArchive(exportCampaign(c));const restored=archive.campaigns[0];
+  assert.equal(activeMap(restored).journey!.active,encounter.id);
+  resolveEncounter(restored,'Reports received');assert.equal(activeMap(restored).journey!.step,1);assert.equal(activeMap(restored).journey!.active,null);
+  const link=new URL(challengeLink('https://example.com/?gm=secret#/map','boarding-party'));
+  assert.equal(link.search,'?situation=boarding-party');assert.equal(link.hash,'');
+  const randomCampaign=demoCampaign();startJourney(randomCampaign,['haven','cinder']);let calls=0;advance(randomCampaign,()=>calls++?.65:0);assert.equal(activeMap(randomCampaign).journey!.active,encounter.id);
+});

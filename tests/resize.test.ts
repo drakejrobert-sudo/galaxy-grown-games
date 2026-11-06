@@ -35,7 +35,7 @@ function startup() {
       sizingCalls.push('refresh');
       assert.equal(element('play').hidden, false);
       assert.equal(element('play').attributes.get('data-role'), element('role').value);
-      const rail = element('role').value === 'Bomber' || (element('role').value === 'Gunner' && element('situation').value === 'Space Battle');
+      const rail = element('role').value === 'Bomber' || (element('role').value === 'Gunner' && element('situation').value === 'Space Battle') || (element('situation').value === 'Boarding Party' && ['Gunner','Life Support'].includes(element('role').value));
       assert.equal(element('action-rail').hidden, !rail);
       this.displayWidth = this.parentWidth;
       this.getParentBounds();
@@ -73,7 +73,7 @@ function startup() {
   load('../src/main.ts', {
     './style.css': {}, './bomber.css': {}, './game/runtime': { Phaser, FlightScene: scenes.FlightScene },
     './game/rules': rules,
-    './game/input': Object.fromEntries(['createInput', 'createGunnerInput', 'createSpaceGunnerInput', 'createBomberInput', 'createSpaceBomberInput', 'createLifeSupportInput', 'createSpaceLifeInput'].map(name => [name, idleInput])),
+    './game/input': Object.fromEntries(['createInput', 'createGunnerInput', 'createSpaceGunnerInput', 'createBomberInput', 'createSpaceBomberInput', 'createLifeSupportInput', 'createSpaceLifeInput', 'createBoardingVentInput'].map(name => [name, idleInput])),
   }, {
     document: { querySelector: () => element('app'), getElementById: element, addEventListener() {}, hidden: false },
     window: { addEventListener() {} }, ResizeObserver,
@@ -92,7 +92,7 @@ function startup() {
 
 test('visible launch remeasures zero cached bounds for all modes and reuses one game', async () => {
   const page = startup();
-  for (const situation of ['Asteroid Field', 'Space Battle']) for (const role of ['Pilot', 'Gunner', 'Bomber', 'Life Support']) {
+  for (const situation of ['Asteroid Field', 'Space Battle', 'Boarding Party']) for (const role of ['Pilot', 'Gunner', 'Bomber', 'Life Support']) {
     page.element('situation').value = situation; page.element('role').value = role;
     page.scale.parentWidth = page.scale.displayWidth = 0;
     page.sizingCalls.length = 0;

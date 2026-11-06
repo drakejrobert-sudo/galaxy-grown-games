@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import type { InputFrame } from './input';
 import {
+  createBoarding, stepBoarding, BOARDING_TUNING, difficultyFor, BOARDING_LINE, BOARDING_CYCLE, BOARDING_WARNING, BOARDING_CARRIER_RADIUS, BOARDING_AIRLOCKS, BOARDING_COVER, BOARDING_MINE_LIFETIME, BOARDING_BLAST_RADIUS, type BoardingState, type BoardingInput,
   createSpaceGunner, stepSpaceGunner, SPACE_GUNNER_DEFENSE_LINE, type SpaceGunnerInput, type SpaceGunnerState, type SpaceGunnerAttacker,
   gunnerTargetAt, gunnerFireEvery, GUNNER_SHOT_FEEDBACK_SECONDS, type GunnerShotFeedback,
   createBomber, createFlight, createGunner, createLifeSupport, createSpaceBattleBomber, createSpaceBattlePilot, stepBomber,
@@ -16,6 +17,9 @@ import {
 } from './rules';
 
 export class FlightScene extends Phaser.Scene {
+  boarding = createBoarding('Pilot');
+  readBoardingFrame: () => InputFrame<BoardingInput> = () => ({ first: {x:0,y:0,firing:false}, continued: {x:0,y:0,firing:false} });
+  onBoardingStep: (state: BoardingState) => void = () => {};
   flight = createFlight();
   gunner = createGunner();
   spaceGunner = createSpaceGunner();
@@ -94,6 +98,7 @@ export class FlightScene extends Phaser.Scene {
     this.config = config;
     this.situation = situation;
     this.role = role;
+    this.boarding = createBoarding(role);
     this.flight = createFlight();
     this.gunner = createGunner();
     this.spaceGunner = createSpaceGunner();
@@ -126,6 +131,18 @@ export class FlightScene extends Phaser.Scene {
   }
 
   private advanceFrame(milliseconds: number) {
+    if (this.situation === 'Boarding Party') {
+      if (this.boarding.finished) { this.activeFlight = false; return; }
+      const frame = this.readBoardingFrame();
+      for (let i = 0; i < Math.ceil(milliseconds / 50); i++) {
+        const input = i === 0 ? frame.first : frame.continued;
+        stepBoarding(this.boarding, this.config, this.role === 'Pilot'
+          ? {...input, ...this.readInput(this.boarding.x, this.boarding.y)} : input,
+          Math.min(50, milliseconds-i*50)/1000);
+        if (this.boarding.finished) { this.activeFlight = false; break; }
+      }
+      this.onBoardingStep(this.boarding); return;
+    }
     const space = this.situation === 'Space Battle';
     const state = space
       ? this.role === 'Pilot' ? this.spacePilot : this.role === 'Gunner' ? this.spaceGunner
@@ -169,13 +186,14 @@ export class FlightScene extends Phaser.Scene {
     g.clear();
     this.backgroundGraphics.clear();
     this.artUsed = 0;
-    const elapsed = this.situation === 'Space Battle'
+    const elapsed = this.situation === 'Boarding Party' ? this.boarding.elapsed : this.situation === 'Space Battle'
       ? this.role === 'Life Support' ? this.spaceLife.elapsed : this.role === 'Bomber' ? this.spaceBomber.elapsed : this.role === 'Gunner' ? this.spaceGunner.elapsed : this.spacePilot.elapsed
       : this.role === 'Pilot' ? this.flight.elapsed
         : this.role === 'Gunner' ? this.gunner.elapsed
           : this.role === 'Bomber' ? this.bomber.elapsed : this.lifeSupport.elapsed;
     this.paintBackground(this.backgroundGraphics, this.role === 'Pilot' || this.role === 'Bomber' || (this.situation === 'Asteroid Field' && (this.role === 'Gunner' || this.role === 'Life Support')) ? this.decorativeTime(elapsed) : elapsed);
-    if (this.situation === 'Space Battle') {
+    if (this.situation === 'Boarding Party') this.paintBoardingMode(g);
+    else if (this.situation === 'Space Battle') {
       if (this.role === 'Life Support') this.paintSpaceLifeMode(g);
       else if (this.role === 'Gunner') this.paintSpaceGunnerMode(g);
       else if (this.role === 'Bomber') this.paintSpaceBattleBomberMode(g);
@@ -187,6 +205,74 @@ export class FlightScene extends Phaser.Scene {
     else this.paintLifeSupportMode(g);
     this.paintFrame(g);
     for (let i = this.artUsed; i < this.artPool.length; i++) this.artPool[i].setVisible(false);
+  }
+
+  private paintBoardingMode(g: Phaser.GameObjects.Graphics) {
+    const s = this.boarding;
+    if (s.role === 'Life Support') {
+      for (const [i, z] of BOARDING_AIRLOCKS.entries()) {
+        const lock = s.airlocks[i];
+        g.fillStyle(lock.warning !== null ? 0xf4a55b : 0x246d78, .25); g.fillRect(z.x,z.y,z.width,z.height);
+        g.lineStyle(2,lock.warning !== null ? 0xffbd6b : lock.cooldown>0 ? 0x68758e : 0x79e1ce);
+        g.strokeRect(z.x,z.y,z.width,z.height);
+        // Chevrons identify the vent direction without relying on color.
+        const x = z.x+z.width/2;
+        for (const y of [110,450]) g.strokeTriangle(x+(i?10:-10),y,x+(i?-5:5),y-8,x+(i?-5:5),y+8);
+      }
+      for (const c of BOARDING_COVER) {
+        g.fillStyle(0x293d57); g.fillRoundedRect(c.x-30,c.y+8,60,28,5);
+        g.lineStyle(2,0x7792ab); g.strokeRoundedRect(c.x-30,c.y+8,60,28,5);
+      }
+      for (const b of s.boarders) {
+        const exposed = b.phase === 'exposed';
+        g.fillStyle(exposed ? 0xff806c : b.phase === 'warning' ? 0xffca83 : 0x8b9bb1);
+        g.fillCircle(b.x,b.y-10,9); g.fillRoundedRect(b.x-12,b.y,24,20,4);
+        if (exposed) { g.lineStyle(3,0xff806c);g.lineBetween(b.x+12,b.y+8,b.x+24,b.y+4); }
+        else { g.lineStyle(2,0xffca83);g.strokeCircle(b.x,b.y,25); }
+        const full = exposed ? BOARDING_TUNING[difficultyFor(this.config.total)].attackTime : b.phase === 'warning' ? .65 : 1.6;
+        g.fillStyle(0xffca83);g.fillRect(b.x-18,b.y-30,36*Math.min(1,b.remaining/full),3);
+      }
+    } else {
+      if (s.role !== 'Pilot') {
+        g.lineStyle(2,0xffbd6b,.7);g.lineBetween(16,BOARDING_LINE,464,BOARDING_LINE);
+        for(const x of [24,456]) g.strokeTriangle(x,BOARDING_LINE-7,x-5,BOARDING_LINE+4,x+5,BOARDING_LINE+4);
+      }
+      const c=s.carrier, phase=s.elapsed%BOARDING_CYCLE;
+      if(c.hp>0) {
+        if(phase<BOARDING_WARNING) {
+          g.lineStyle(2,0xffca83,.8);g.lineBetween(c.targetX,210,c.targetX,460);
+          g.strokeTriangle(c.targetX,215,c.targetX-12,240,c.targetX+12,240);
+        }
+        // Carrier hull silhouette and health bar reflect its actual collision radius.
+        if (!this.drawArt('enemy',c.x,c.y,90,72,Math.PI)) {
+          g.fillStyle(0x68485f);g.fillRoundedRect(c.x-34,c.y-30,68,60,12);
+          g.lineStyle(2,0xff9781);g.lineBetween(c.x,c.y-30,c.x,c.y+20);
+        }
+        g.lineStyle(3,0xff9781);g.strokeCircle(c.x,c.y,BOARDING_CARRIER_RADIUS);
+        g.fillStyle(0x20283e);g.fillRect(c.x-36,c.y+43,72,6);
+        g.fillStyle(0xff9781);g.fillRect(c.x-36,c.y+43,72*c.hp/c.maxHp,6);
+        for(const dx of [-23,23]) {g.fillStyle(0xffca83);g.fillTriangle(c.x+dx,c.y-42,c.x+dx-8,c.y-23,c.x+dx+8,c.y-23);}
+      }
+      for(const p of s.pods) {
+        g.lineStyle(2,0xffca83,.6);g.lineBetween(p.x,p.y,p.x-p.vx*.12,p.y-p.vy*.12);
+        g.fillStyle(0xffbd6b);g.fillTriangle(p.x,p.y-12,p.x-10,p.y+10,p.x+10,p.y+10);
+        g.lineStyle(2,0x291f38);g.strokeCircle(p.x,p.y,5);
+      }
+      for(const m of s.mines)this.paintMine(g,m,s.elapsed,BOARDING_MINE_LIFETIME,!!m.flight);
+      for(const e of s.explosions)this.paintMineExplosion(g,e);
+      if(s.role==='Bomber') {
+        const rack=mineDropPosition(s),target=spaceBomberLanding(s);
+        g.lineStyle(2,0xffca83,.7);g.lineBetween(rack.x,rack.y,target.x,target.y);
+        this.paintWeaponTarget(g,target.x,target.y,BOARDING_BLAST_RADIUS*(this.config.naturalOne?Math.SQRT1_2:1),0xffca83,s.cooldown<=0);
+        g.fillStyle(s.cooldown<=0?0xffca83:0x68758e);g.fillRoundedRect(rack.x-10,rack.y-4,20,8,3);
+      }
+      this.paintPlayerShip(g,s.x,s.y,s.elapsed,false);
+    }
+    if(s.grace>0) {g.lineStyle(4,0x79e1ce,.7);g.strokeRect(12,12,456,536);}
+    if(s.role==='Gunner'||s.role==='Life Support') {
+      if(s.beamTime>0) {g.lineStyle(3,0x79e1ce,.85);g.lineBetween(s.role==='Life Support'?240:s.x,s.role==='Life Support'?530:s.y,s.beamX,s.beamY);}
+      this.paintWeaponTarget(g,s.crosshairX,s.crosshairY,14,0x79e1ce,s.cooldown<=0);
+    }
   }
 
   private paintFrame(g: Phaser.GameObjects.Graphics) {

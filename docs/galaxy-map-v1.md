@@ -1,6 +1,6 @@
 # Galaxy Map V1
 
-Galaxy Map is a shared-screen, GM-operated travel prototype alongside Flight Deck. Open **Galaxy Map** in the app navigation (`#/map`). The fictional Lantern Sector is demo content, not campaign canon. Campaigns can contain multiple linked maps with independent journeys. The existing eight Flight Deck prototypes retain their controls, roll bands, Natural 1 behavior and manual result reporting.
+Galaxy Map is a shared-screen, GM-operated travel prototype alongside Flight Deck. Open **Galaxy Map** in the app navigation (`#/map`). The fictional Lantern Sector is demo content, not campaign canon. Campaigns can contain multiple linked maps with independent journeys. The twelve Flight Deck prototypes retain their controls, roll bands, Natural 1 behavior and manual result reporting.
 
 ## First journey
 
@@ -76,7 +76,7 @@ Before acceptance, Drake should:
 - [ ] Upload/remove a background, check readable labels and target alignment, then export/reimport the image-bearing campaign on actual Safari devices.
 - [ ] Import a multi-map backup, open a linked detail map and return, verify reference markers cannot be travel stops, and reload a paused journey after switching views. Export/reimport both maps without changing the original campaign.
 - [ ] Schedule a surprise without exposing preparation; trigger random and immediate encounters and verify pause, final-step arrival and explicit resume.
-- [ ] Have the crew open Asteroid Field and Space Battle links on their devices; confirm role selection, roll entry and manual GM reporting.
+- [ ] Have the crew open Asteroid Field, Space Battle and Boarding Party links on their devices; confirm role selection, roll entry and manual GM reporting.
 - [ ] Run a Maps encounter, reload a paused journey, switch between party saves, and restore an exported backup.
 - [ ] Assess travel length, risk probabilities and table weights as provisional playtest values. Record acceptance with revision and device/control coverage before closing the issues.
 
@@ -85,3 +85,9 @@ Before acceptance, Drake should:
 Schematic maps now use original bundled scenery and destination illustrations, with schematic fallback if an asset fails. Uploaded map images still suppress bundled scenery and object icons. Selection brackets and pressed-state destination buttons distinguish selection from the current-position ring; reference markers remain dashed and labeled in the destination list. The legend explains these states. Paused encounter cards retain leg/step progress.
 
 Selecting destinations and performing same-map actions preserves keyboard focus and horizontal scroll. If an action removes the focused control, focus moves to its surviving section heading or the map heading without scrolling. Browsing linked maps remembers horizontal positions independently by campaign/map until reload. These view preferences are memory-only and do not alter exports or saved journeys. This pass does not add per-object uploads, zoom, size/layer editors or an expanded presentation mode from #67.
+
+## Boarding Party encounters
+
+New demos include **Boarding Party — repel boarders** alongside Asteroid Field, Space Battle, narrative and VTT cards, all at weight one. Existing saves retain their own libraries. End active journeys to unlock shared-library editing, create a **minigame** card with situation **Boarding Party**, then include it at a positive weight in tables assigned to routes. It supports random, scheduled and inserted pauses with the same explicit GM resolution. Challenge links preselect Boarding Party only; players choose their own station and requested roll. There is no automatic score return or campaign damage.
+
+Archive versions 1/2 and the storage key are unchanged. This build accepts `boarding-party` in encounter situations; older builds cannot import cards containing that new value. Keep JSON backups when moving between revisions. See the [station design](boarding-party-design.md) and [remaining owner checks](boarding-party-playtest.md).

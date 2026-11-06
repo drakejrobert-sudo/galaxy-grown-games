@@ -2,8 +2,9 @@ import type Phaser from 'phaser';
 import './style.css';
 import './bomber.css';
 import type { FlightScene } from './game/scene';
-import { createBomberInput, createGunnerInput, createInput, createLifeSupportInput, createSpaceBomberInput, createSpaceLifeInput, createSpaceGunnerInput } from './game/input';
+import { createBomberInput, createGunnerInput, createInput, createLifeSupportInput, createSpaceBomberInput, createSpaceLifeInput, createSpaceGunnerInput, createBoardingVentInput } from './game/input';
 import {
+  boardingScoreFor, boardingScoreMode, boardingResultText,
   spaceGunnerResultText, spaceGunnerScoreFor,
   bomberResultText, bomberScoreFor, difficultyFor, parseTotal, resultText, scoreFor,
   gunnerResultText, gunnerScoreFor, spaceBattlePilotResultText, spaceBattlePilotScoreFor,
@@ -22,7 +23,7 @@ app.innerHTML = `
   <div class="intro"><p class="eyebrow">CREW CHALLENGE 01</p><h1>A steady hand.<br>A galaxy of trouble.</h1><p class="lede">Choose your station, face the danger ahead, and bring your individual score back to the GM.</p><div class="details"><span>60-second challenge</span><span>Role-specific systems</span><span>Solo run</span></div></div>
   <form id="flight-form" class="panel">
     <h2>Prepare for flight</h2>
-    <div class="fields"><label>Situation<select id="situation"><option>Asteroid Field</option><option>Space Battle</option><option disabled>Boarding Party — in design</option></select></label><label>Crew position<select id="role"><option>Pilot</option><option id="role-gunner">Gunner</option><option id="role-bomber">Bomber</option><option id="role-life-support">Life Support</option></select></label></div>
+    <div class="fields"><label>Situation<select id="situation"><option>Asteroid Field</option><option>Space Battle</option><option>Boarding Party</option></select></label><label>Crew position<select id="role"><option>Pilot</option><option id="role-gunner">Gunner</option><option id="role-bomber">Bomber</option><option id="role-life-support">Life Support</option></select></label></div>
     <label for="total">Check total <span class="muted">including modifiers</span></label>
     <input id="total" name="total" type="text" autocomplete="off" placeholder="Enter your final total" aria-describedby="total-help error" required />
     <p id="total-help" class="help">Roll once before starting: 1d20 + your Dexterity (Acrobatics) modifier. Include applicable proficiency only once; enter the final total. Negative totals are allowed. Select Natural 1 separately if the d20 shows 1.</p>
@@ -39,6 +40,7 @@ app.innerHTML = `
   <div class="hud"><div><span>TIME LEFT</span><strong id="time">60s</strong></div><div><span id="health-label">HULL</span><strong id="hull">3 / 3</strong></div><div id="fuel-wrap" hidden><span>FUEL</span><strong id="fuel">18.0s</strong></div><div><span>SCORE</span><strong id="score">300</strong></div></div>
   <p id="flight-status" class="flight-status"></p>
   <div class="flight-stage"><div class="flight-wrap"><div id="canvas" aria-label="Asteroid field. Steer with arrow keys, WASD, or touch." role="application" tabindex="0"></div><div id="pause-overlay" hidden><h2>Challenge paused</h2><p id="pause-reason">Your timer is stopped.</p><button id="resume" class="primary" type="button">Resume challenge</button><button id="abandon" type="button">Back to setup</button></div></div><div id="action-rail" class="action-rail" hidden><button id="fire-action" class="action action-fire" type="button" hidden>Fire</button><button id="action" class="action action-mine" type="button" hidden>Launch mine</button></div></div>
+  <div id="vent-controls" class="vent-controls" hidden><button id="vent-left" type="button">Vent left · Q</button><button id="vent-right" type="button">Vent right · E</button></div>
   <div id="route-controls" class="route-controls" aria-label="Life Support routing switch" hidden><button id="route-thrusters" type="button" aria-pressed="false"><span>▲</span>Thrusters<small>1</small></button><button id="route-shields" type="button" aria-pressed="true"><span>●</span>Shields<small>2</small></button><button id="route-guns" type="button" aria-pressed="false"><span>✛</span>Guns<small>3</small></button></div>
   <div id="platform-controls" class="platform-controls" aria-label="Platformer controls" hidden><button id="move-left" type="button">◀ Left</button><button id="move-right" type="button">Right ▶</button><button id="jump" type="button">Jump</button></div>
   <div id="routing-info" class="routing-info" hidden><p class="help">Match power symbols to their bays. Hearts → Shields: restore up to 1 integrity. Overloads → Guns: a mistake costs 2 integrity; other mistakes cost 1. Packets route when they reach the switch.</p><p id="routing-status" class="routing-status" role="status" aria-live="polite" aria-atomic="true"></p></div>
@@ -58,7 +60,7 @@ const roleSelect = get<HTMLSelectElement>('role');
 const situationSelect = get<HTMLSelectElement>('situation');
 if (typeof location !== 'undefined') {
   const requested = new URLSearchParams(location.search).get('situation');
-  if (requested === 'asteroid-field' || requested === 'space-battle') situationSelect.value = requested === 'space-battle' ? 'Space Battle' : 'Asteroid Field';
+  if (requested === 'asteroid-field' || requested === 'space-battle' || requested === 'boarding-party') situationSelect.value = requested === 'boarding-party' ? 'Boarding Party' : requested === 'space-battle' ? 'Space Battle' : 'Asteroid Field';
 }
 let scene: FlightScene | null = null;
 const canvas = get('canvas');
@@ -70,6 +72,14 @@ const platformControls = get('platform-controls');
 const routeButtons = [get<HTMLButtonElement>('route-thrusters'), get<HTMLButtonElement>('route-shields'), get<HTMLButtonElement>('route-guns')];
 const input = createInput(canvas);
 const gunnerInput = createGunnerInput(canvas);
+const ventControls = get('vent-controls');
+const boardingVents = createBoardingVentInput(get('vent-left'), get('vent-right'));
+const boardingHelp: Record<Role, string> = {
+  Pilot: 'Evade the carrier’s marked approach and boarding pods. Arrow keys / WASD or hold and drag to steer.',
+  Gunner: 'Ship flies automatically. Damage the carrier or intercept pods before the boarding line. Touch/mouse aims; hold Fire to shoot. Mouse click or Space/Enter also fires. Arrow keys / WASD aims.',
+  Bomber: 'Automatic flight. Aim aft: tap/drag-release or mouse release launches. Left/Right or A/D rotates; Down/S aims straight aft. Space/Enter or Launch mine fires once. Intercept pods; mine the carrier during close approaches.',
+  'Life Support': 'Shoot exposed boarders; covered targets block rifle hits. Touch/mouse aims; Fire, mouse click or Space/Enter shoots; arrows / WASD aims. Vent left/right or Q/E ejects enemies inside that marked zone after a warning. Each lock recharges separately.',
+};
 const spaceGunnerInput = createSpaceGunnerInput(canvas, fireAction);
 const spaceGunnerHelp = 'Ship flies automatically. Touch/mouse aims; touch aim never fires. Hold Fire to shoot. Mouse primary click also fires. Arrow keys / WASD aims; Space / Enter fires.';
 const bomberInput = createBomberInput(canvas, action);
@@ -83,6 +93,10 @@ let pauseOnReady = false;
 let config: FlightConfig = { total: 10, naturalOne: false };
 let role: Role = 'Pilot';
 let situation: Situation = 'Asteroid Field';
+function usesRifleControls() {
+  return (situation === 'Space Battle' && role === 'Gunner') ||
+    (situation === 'Boarding Party' && (role === 'Gunner' || role === 'Life Support'));
+}
 let inFlight = false;
 let paused = false;
 let playfieldRefreshFrame: number | null = null;
@@ -138,7 +152,7 @@ window.addEventListener('resize', sizeSummary);
 function refreshSetup() {
   const parsed = parseTotal(total.value);
   get('difficulty').textContent = parsed === null ? 'Awaiting valid check' : difficultyFor(parsed);
-  const selectedSituation: Situation = situationSelect.value === 'Space Battle' ? 'Space Battle' : 'Asteroid Field';
+  const selectedSituation: Situation = situationSelect.value === 'Boarding Party' ? 'Boarding Party' : situationSelect.value === 'Space Battle' ? 'Space Battle' : 'Asteroid Field';
   const gunnerOption = get<HTMLOptionElement>('role-gunner');
   const bomberOption = get<HTMLOptionElement>('role-bomber');
   const lifeSupportOption = get<HTMLOptionElement>('role-life-support');
@@ -176,6 +190,10 @@ function refreshSetup() {
         : selectedSituation === 'Space Battle'
           ? 'Move with Left/Right or A/D and jump with Up/W/Space. Stand beside a blue panel for 1.5 seconds to repair it automatically; progress is kept when you move away. Touch uses Left, Right, and Jump.'
           : 'Use Left/Right or A/D to turn the routing switch. Use 1, 2, or 3 to choose a system directly. Touch players can tap a system button. Match power symbols to bays; hearts go to Shields and overloads to Guns. Packets route at the switch.';
+  if (selectedSituation === 'Boarding Party') {
+    get('controls-help').textContent = boardingHelp[selectedRole];
+    if (selectedRole === 'Life Support') get('impairment').textContent = natural.checked ? 'Sluggish airlocks · twice-normal recharge (playtest)' : 'Standard rifle and airlocks';
+  }
   get('error').textContent = '';
 }
 total.addEventListener('input', refreshSetup); natural.addEventListener('change', refreshSetup);
@@ -186,12 +204,13 @@ function setPaused(value: boolean, interrupted = false) {
   if (!inFlight) return;
   paused = value; scene!.activeFlight = !value;
   input.enable(!value && role === 'Pilot');
-  spaceGunnerInput.enable(!value && situation === 'Space Battle' && role === 'Gunner');
+  spaceGunnerInput.enable(!value && usesRifleControls());
   gunnerInput.enable(!value && situation === 'Asteroid Field' && role === 'Gunner');
   bomberInput.enable(!value && situation === 'Asteroid Field' && role === 'Bomber');
-  spaceBomberInput.enable(!value && situation === 'Space Battle' && role === 'Bomber');
+  spaceBomberInput.enable(!value && situation !== 'Asteroid Field' && role === 'Bomber');
   lifeSupportInput.enable(!value && situation === 'Asteroid Field' && role === 'Life Support');
   spaceLifeInput.enable(!value && situation === 'Space Battle' && role === 'Life Support');
+  boardingVents.enable(!value && situation === 'Boarding Party' && role === 'Life Support');
   get('pause-reason').textContent = interrupted
     ? 'Play paused after an interruption. Resume when ready.' : 'Your timer is stopped.';
   get('pause-overlay').hidden = !value;
@@ -208,7 +227,7 @@ document.addEventListener('visibilitychange', () => {
 });
 function resetSetup() {
   launchPending = false; pauseOnReady = false;
-  inFlight = false; if (scene) scene.activeFlight = false; input.enable(false); gunnerInput.enable(false); spaceGunnerInput.enable(false); bomberInput.enable(false); spaceBomberInput.enable(false); lifeSupportInput.enable(false); spaceLifeInput.enable(false); paused = false;
+  inFlight = false; if (scene) scene.activeFlight = false; input.enable(false); gunnerInput.enable(false); spaceGunnerInput.enable(false); bomberInput.enable(false); spaceBomberInput.enable(false); lifeSupportInput.enable(false); spaceLifeInput.enable(false); boardingVents.enable(false); paused = false;
   get('pause-overlay').hidden = true; show('setup'); total.focus();
 }
 get('abandon').addEventListener('click', resetSetup); get('again').addEventListener('click', resetSetup);
@@ -217,12 +236,13 @@ function preparePlayLayout() {
   get('play').setAttribute('data-situation', situation);
   action.hidden = role !== 'Bomber';
   action.textContent = 'Launch mine';
-  const spaceGunner = situation === 'Space Battle' && role === 'Gunner';
-  fireAction.hidden = !spaceGunner;
+  const rifle = usesRifleControls();
+  fireAction.hidden = !rifle;
   fireAction.textContent = 'Fire';
-  actionRail.hidden = role !== 'Bomber' && !spaceGunner;
+  actionRail.hidden = role !== 'Bomber' && !rifle;
   routeControls.hidden = role !== 'Life Support' || situation !== 'Asteroid Field';
   get('routing-info').hidden = routeControls.hidden;
+  ventControls.hidden = situation !== 'Boarding Party' || role !== 'Life Support';
   platformControls.hidden = role !== 'Life Support' || situation !== 'Space Battle';
 }
 function launch() {
@@ -237,12 +257,14 @@ function launch() {
   get('routing-status').setAttribute('data-outcome', 'waiting');
   routeButtons.forEach((button, index) => button.setAttribute('aria-pressed', String(index === 1)));
   input.enable(role === 'Pilot');
-  spaceGunnerInput.enable(situation === 'Space Battle' && role === 'Gunner');
+  spaceGunnerInput.enable(usesRifleControls());
   gunnerInput.enable(situation === 'Asteroid Field' && role === 'Gunner');
   bomberInput.enable(situation === 'Asteroid Field' && role === 'Bomber');
-  spaceBomberInput.enable(situation === 'Space Battle' && role === 'Bomber');
+  spaceBomberInput.enable(situation !== 'Asteroid Field' && role === 'Bomber');
   lifeSupportInput.enable(situation === 'Asteroid Field' && role === 'Life Support');
   spaceLifeInput.enable(situation === 'Space Battle' && role === 'Life Support');
+  for (const [i,id] of ['vent-left','vent-right'].entries()) { get(id).textContent = `Vent ${i === 0 ? 'left · Q' : 'right · E'} · Ready`; get(id).setAttribute('aria-disabled','false'); }
+  boardingVents.enable(situation === 'Boarding Party' && role === 'Life Support');
   inFlight = true; paused = false;
   get('pause').textContent = 'Pause'; get('pause-overlay').hidden = true;
   get('fuel-wrap').hidden = situation !== 'Space Battle' || role !== 'Pilot';
@@ -285,6 +307,12 @@ function launch() {
     : role === 'Gunner' ? 'Standard weapon cooling'
       : role === 'Bomber' ? 'Standard mine blast target' : situation === 'Space Battle' ? 'Standard icon mix' : 'Standard packet mix';
   get('flight-status').textContent = `${difficultyFor(config.total)} · Check ${config.total} · ${config.naturalOne ? `Natural 1: ${impairment}` : standard}`;
+  if (situation === 'Boarding Party') {
+    get('mode-heading').textContent = role === 'Life Support' ? 'Repel boarders. Control the airlocks.' : 'Break the boarding pursuit.';
+    get('play-help').textContent = boardingHelp[role];
+    canvas.setAttribute('aria-label', `Boarding Party / ${role}. ${boardingHelp[role]}`);
+    get('flight-status').textContent = `${difficultyFor(config.total)} · Check ${config.total} · ${config.naturalOne ? 'Natural 1: ' + (role === 'Life Support' ? 'double airlock recharge' : impairment) : 'Standard station systems'}`;
+  }
   if (startPaused) setPaused(true); else get('canvas').focus();
 }
 function setLoading(value: boolean) {
@@ -300,7 +328,7 @@ get('flight-form').addEventListener('submit', async e => {
   const parsed = parseTotal(total.value);
   if (parsed === null) { get('error').textContent = 'Enter a whole-number check total, including modifiers.'; total.focus(); return; }
   config = { total: parsed, naturalOne: natural.checked };
-  situation = situationSelect.value === 'Space Battle' ? 'Space Battle' : 'Asteroid Field';
+  situation = situationSelect.value === 'Boarding Party' ? 'Boarding Party' : situationSelect.value === 'Space Battle' ? 'Space Battle' : 'Asteroid Field';
   role = roleSelect.value as Role;
   launchPending = true;
   if (!game) {
@@ -310,6 +338,13 @@ get('flight-form').addEventListener('submit', async e => {
       if (!scene) {
         scene = new FlightScene('flight');
         scene.onTimingInterruption = () => setPaused(true, true);
+        scene.readBoardingFrame = () => {
+          const aim = spaceGunnerInput.readFrame(), mines = spaceBomberInput.readFrame(), vents = boardingVents.read();
+          return {
+            first: {...aim.first, ...(role === 'Bomber' ? mines.first : {}), ...vents},
+            continued: {...aim.continued, ...(role === 'Bomber' ? mines.continued : {}), ventLeft: false, ventRight: false},
+          };
+        };
         scene.readInput = input.read;
         scene.readGunnerFrame = () => gunnerInput.readFrame();
         scene.readSpaceGunnerFrame = () => spaceGunnerInput.readFrame();
@@ -341,6 +376,23 @@ get('flight-form').addEventListener('submit', async e => {
   } else { preparePlayLayout(); show('play'); launch(); }
 });
 function attachSceneCallbacks(scene: FlightScene) {
+scene.onBoardingStep = s => {
+  get('time').textContent = `${Math.ceil(DURATION-s.elapsed)}s`;
+  get('hull').textContent = `${s.hull} / ${s.role === 'Life Support' ? 5 : 3}`;
+  get('score').textContent = String(boardingScoreFor(s));
+  if (s.role === 'Life Support') s.airlocks.forEach((lock,side) => {
+    const button = get<HTMLButtonElement>(side === 0 ? 'vent-left' : 'vent-right');
+    button.textContent = `Vent ${side === 0 ? 'left · Q' : 'right · E'} · ${lock.warning !== null ? 'VENTING' : lock.cooldown > 0 ? Math.ceil(lock.cooldown)+'s' : 'Ready'}`;
+    button.setAttribute('aria-disabled', String(lock.cooldown > 0));
+  });
+  else get('flight-status').textContent = `${difficultyFor(config.total)} · Check ${config.total}${config.naturalOne ? ' · Natural 1' : ''} · Carrier ${s.disabled ? 'disabled' : s.carrier.hp+'/'+s.carrier.maxHp} · Pods intercepted ${s.intercepted} · Breaches ${s.breaches}`;
+  if (!s.finished) return;
+  inFlight = false; input.enable(false); gunnerInput.enable(false); spaceGunnerInput.enable(false);
+  bomberInput.enable(false); spaceBomberInput.enable(false); lifeSupportInput.enable(false); spaceLifeInput.enable(false); boardingVents.enable(false);
+  show('results'); get('outcome').textContent = s.hull <= 0 ? 'Defense overwhelmed.' : 'Defense complete.';
+  showRatedResult(boardingScoreMode(s.role), boardingScoreFor(s), s.hull <= 0);
+  fillSummary(boardingResultText(config,s)); get('copy-status').textContent = ''; get('copy').focus();
+};
 scene.onSpaceGunnerStep = s => {
   get('time').textContent = `${Math.ceil(DURATION - s.elapsed)}s`;
   get('hull').textContent = `${s.hull} / 3`;
