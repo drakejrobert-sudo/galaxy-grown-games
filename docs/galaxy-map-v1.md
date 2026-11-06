@@ -79,3 +79,9 @@ Before acceptance, Drake should:
 - [ ] Have the crew open Asteroid Field and Space Battle links on their devices; confirm role selection, roll entry and manual GM reporting.
 - [ ] Run a Maps encounter, reload a paused journey, switch between party saves, and restore an exported backup.
 - [ ] Assess travel length, risk probabilities and table weights as provisional playtest values. Record acceptance with revision and device/control coverage before closing the issues.
+
+## Illustrated polish
+
+Schematic maps now use original bundled scenery and destination illustrations, with schematic fallback if an asset fails. Uploaded map images still suppress bundled scenery and object icons. Selection brackets and pressed-state destination buttons distinguish selection from the current-position ring; reference markers remain dashed and labeled in the destination list. The legend explains these states. Paused encounter cards retain leg/step progress.
+
+Selecting destinations and performing same-map actions preserves keyboard focus and horizontal scroll. If an action removes the focused control, focus moves to its surviving section heading or the map heading without scrolling. Browsing linked maps remembers horizontal positions independently by campaign/map until reload. These view preferences are memory-only and do not alter exports or saved journeys. This pass does not add per-object uploads, zoom, size/layer editors or an expanded presentation mode from #67.

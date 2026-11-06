@@ -331,3 +331,43 @@ test('routing renderer freezes decoration with reduced motion and never mutates 
   const paused = structuredClone(h.commands); h.scene.update(0, 50);
   assert.deepEqual(structuredClone(h.commands.slice(paused.length)), paused);
 });
+
+test('illustrated sprites reuse a bounded pool, hide retired objects and leave all simulation states unchanged', () => {
+  const h = harness(); fixtures(h.scene);
+  const images: any[] = [];
+  h.scene.textures = { exists: () => true };
+  h.scene.add.image = (_x: number, _y: number, texture: string) => {
+    const image: any = { texture };
+    for (const method of ['setTexture', 'setPosition', 'setDisplaySize', 'setRotation', 'setAlpha', 'setDepth', 'setVisible']) {
+      image[method] = (...args: any[]) => { image[method.slice(3)] = args; return image; };
+    }
+    images.push(image); return image;
+  };
+  const rock = { id: 1, x: 120, y: 120, radius: 24, speed: 100, rotation: .5 };
+  h.scene.flight.asteroids.push(rock);
+  h.scene.gunner.elapsed = 2;
+  const keys = ['flight', 'gunner', 'spaceGunner', 'bomber', 'lifeSupport', 'spacePilot', 'spaceBomber', 'spaceLife'];
+  const before = keys.map(key => JSON.stringify(h.scene[key]));
+  keys.forEach(key => freeze(h.scene[key]));
+  for (const situation of ['Asteroid Field', 'Space Battle']) for (const role of ['Pilot', 'Gunner', 'Bomber', 'Life Support']) {
+    h.scene.situation = situation; h.scene.role = role; h.paint();
+    const count = images.length;
+    h.paint(); assert.equal(images.length, count, 'steady rendering reuses Images');
+    assert.deepEqual(keys.map(key => JSON.stringify(h.scene[key])), before);
+    assert.ok(images.filter(image => image.Visible[0]).every(image => image.Depth[0] < 0), 'procedural feedback stays above art');
+  }
+  h.scene.situation = 'Asteroid Field'; h.scene.role = 'Gunner'; h.setReduced(true); h.paint();
+  const ship = images.find(image => image.Texture[0] === 'illustrated-player' && image.Visible[0]);
+  assert.equal(ship.Position[0], rules.automaticShipX(2), 'reduced motion cannot detach the hull from the moving turret');
+  h.scene.situation = 'Asteroid Field'; h.scene.role = 'Pilot'; h.paint();
+  const asteroid = images.find(image => image.Texture[0] === 'illustrated-asteroid' && image.Visible[0]);
+  assert.deepEqual(asteroid.DisplaySize, [48, 48], 'art uses existing asteroid diameter');
+  assert.deepEqual(asteroid.Position, [120, 120]);
+  h.scene.textures.exists = (key: string) => key !== 'illustrated-space';
+  h.paint();
+  assert.ok(images.some(image => image.Texture[0] === 'illustrated-player' && image.Visible[0]), 'missing background does not disable loaded sprites');
+  h.scene.textures.exists = () => false;
+  h.paint();
+  assert.ok(images.every(image => image.Visible[0] === false), 'failed/missing textures leave no stale sprites');
+  assert.ok(h.commands.some(command => command[0] === 'fillPath'), 'procedural objects still render');
+});

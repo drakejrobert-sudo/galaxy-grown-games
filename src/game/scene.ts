@@ -24,6 +24,27 @@ export class FlightScene extends Phaser.Scene {
   spacePilot = createSpaceBattlePilot();
   spaceBomber = createSpaceBattleBomber();
   spaceLife = createSpaceLifeSupport();
+  private artPool: Phaser.GameObjects.Image[] = [];
+  private artUsed = 0;
+
+  preload() {
+    // Only the game runtime requests these assets; setup remains lightweight.
+    for (const name of ['space', 'interior', 'player', 'enemy', 'asteroid']) {
+      this.load.image(`illustrated-${name}`, new URL(`art/${name}.webp`, document.baseURI).href);
+    }
+  }
+
+  private hasArt(name: string) { return this.textures?.exists(`illustrated-${name}`) ?? false; }
+
+  private drawArt(name: string, x: number, y: number, width: number, height: number, rotation = 0, alpha = 1, background = false) {
+    if (!this.hasArt(name)) return false;
+    const image = this.artPool[this.artUsed] ?? this.add.image(0, 0, `illustrated-${name}`);
+    this.artPool[this.artUsed++] = image;
+    image.setTexture(`illustrated-${name}`).setPosition(x, y).setDisplaySize(width, height)
+      .setRotation(rotation).setAlpha(alpha).setDepth(background ? -3 : -1).setVisible(true);
+    return true;
+  }
+
   private playing = false;
   private timingPrimed = false;
   get activeFlight() { return this.playing; }
@@ -36,6 +57,7 @@ export class FlightScene extends Phaser.Scene {
   situation: Situation = 'Asteroid Field';
   config: FlightConfig = { total: 10, naturalOne: false };
   private graphics!: Phaser.GameObjects.Graphics;
+  private backgroundGraphics!: Phaser.GameObjects.Graphics;
   // Read the live preference without adding listeners or an independent animation clock.
   private reducedMotion = typeof window !== 'undefined' && typeof window.matchMedia === 'function'
     ? window.matchMedia('(prefers-reduced-motion: reduce)') : null;
@@ -61,6 +83,8 @@ export class FlightScene extends Phaser.Scene {
   onReady: () => void = () => {};
 
   create() {
+    this.backgroundGraphics = this.add.graphics();
+    this.backgroundGraphics.setDepth(-2);
     this.graphics = this.add.graphics();
     this.paint();
     this.onReady();
@@ -143,12 +167,14 @@ export class FlightScene extends Phaser.Scene {
   private paint() {
     const g = this.graphics;
     g.clear();
+    this.backgroundGraphics.clear();
+    this.artUsed = 0;
     const elapsed = this.situation === 'Space Battle'
       ? this.role === 'Life Support' ? this.spaceLife.elapsed : this.role === 'Bomber' ? this.spaceBomber.elapsed : this.role === 'Gunner' ? this.spaceGunner.elapsed : this.spacePilot.elapsed
       : this.role === 'Pilot' ? this.flight.elapsed
         : this.role === 'Gunner' ? this.gunner.elapsed
           : this.role === 'Bomber' ? this.bomber.elapsed : this.lifeSupport.elapsed;
-    this.paintBackground(g, this.role === 'Pilot' || this.role === 'Bomber' || (this.situation === 'Asteroid Field' && (this.role === 'Gunner' || this.role === 'Life Support')) ? this.decorativeTime(elapsed) : elapsed);
+    this.paintBackground(this.backgroundGraphics, this.role === 'Pilot' || this.role === 'Bomber' || (this.situation === 'Asteroid Field' && (this.role === 'Gunner' || this.role === 'Life Support')) ? this.decorativeTime(elapsed) : elapsed);
     if (this.situation === 'Space Battle') {
       if (this.role === 'Life Support') this.paintSpaceLifeMode(g);
       else if (this.role === 'Gunner') this.paintSpaceGunnerMode(g);
@@ -160,6 +186,7 @@ export class FlightScene extends Phaser.Scene {
     else if (this.role === 'Bomber') this.paintBomberMode(g);
     else this.paintLifeSupportMode(g);
     this.paintFrame(g);
+    for (let i = this.artUsed; i < this.artPool.length; i++) this.artPool[i].setVisible(false);
   }
 
   private paintFrame(g: Phaser.GameObjects.Graphics) {
@@ -177,16 +204,19 @@ export class FlightScene extends Phaser.Scene {
   }
 
   private paintBackground(g: Phaser.GameObjects.Graphics, elapsed: number) {
-    g.fillStyle(0x101528); g.fillRect(0, 0, WIDTH, HEIGHT);
-    for (let i = 8; i > 0; i--) {
-      g.fillStyle(0x47366b, 0.025); g.fillEllipse(90, 180, i * 60, i * 90);
-      g.fillStyle(0x16546b, 0.025); g.fillEllipse(420, 430, i * 55, i * 70);
+    const illustrated = this.drawArt(this.role === 'Life Support' ? 'interior' : 'space', WIDTH / 2, HEIGHT / 2, WIDTH, HEIGHT, 0, 1, true);
+    if (!illustrated) {
+      g.fillStyle(0x101528); g.fillRect(0, 0, WIDTH, HEIGHT);
+      for (let i = 8; i > 0; i--) {
+        g.fillStyle(0x47366b, 0.025); g.fillEllipse(90, 180, i * 60, i * 90);
+        g.fillStyle(0x16546b, 0.025); g.fillEllipse(420, 430, i * 55, i * 70);
+      }
+      g.fillStyle(0x26364f); g.fillCircle(385, 100, 43);
+      g.fillStyle(0x172338); g.fillCircle(397, 94, 38);
+      g.lineStyle(1, 0x60839d, 0.25); g.strokeCircle(385, 100, 45);
     }
-    g.fillStyle(0x26364f); g.fillCircle(385, 100, 43);
-    g.fillStyle(0x172338); g.fillCircle(397, 94, 38);
-    g.lineStyle(1, 0x60839d, 0.25); g.strokeCircle(385, 100, 45);
     const automaticFlight = this.role === 'Bomber' || this.role === 'Gunner';
-    for (let i = 0; i < 100; i++) {
+    for (let i = 0; i < (illustrated ? (this.role === 'Life Support' ? 0 : 35) : 100); i++) {
       const x = (i * 137.5) % WIDTH;
       const speed = automaticFlight ? 110 + i % 3 * 45 : 12 + i % 3 * 8;
       const y = ((i * 79.3) + elapsed * speed) % HEIGHT;
@@ -201,6 +231,14 @@ export class FlightScene extends Phaser.Scene {
   private paintAsteroid(g: Phaser.GameObjects.Graphics, asteroid: Asteroid, armored = false, damaged = false, travelDirection = 1) {
     g.lineStyle(asteroid.radius * 0.65, armored ? 0xc0785b : 0x95b6d0, 0.07);
     g.lineBetween(asteroid.x, asteroid.y, asteroid.x - (asteroid.vx ?? 0) * 0.18, asteroid.y - asteroid.speed * travelDirection * 0.18);
+    if (this.drawArt('asteroid', asteroid.x, asteroid.y, asteroid.radius * 2, asteroid.radius * 2, asteroid.rotation ?? 0)) {
+      // Armor/damage overlays below describe actual HP; art never supplies hit geometry.
+      if (armored || damaged) {
+        g.lineStyle(armored ? 2 : 1, damaged ? 0xffbc74 : 0xe6a87d, .9);
+        g.strokeCircle(asteroid.x, asteroid.y, asteroid.radius);
+      }
+      return;
+    }
     g.fillStyle(armored ? 0x8e685f : 0x897c88);
     g.lineStyle(armored ? 3 : 2, damaged ? 0xffbc74 : armored ? 0xe6a87d : 0xc5b4ad);
     g.beginPath();
@@ -264,7 +302,7 @@ export class FlightScene extends Phaser.Scene {
     this.paintPlayerShip(g, s.x, s.y, s.elapsed);
   }
 
-  private paintPlayerShip(g: Phaser.GameObjects.Graphics, x: number, y: number, elapsed: number, impairedEngine = this.config.naturalOne) {
+  private paintPlayerShip(g: Phaser.GameObjects.Graphics, x: number, y: number, elapsed: number, impairedEngine = this.config.naturalOne, drawHull = true) {
     const flame = impairedEngine ? 0xffac64 : 0x71e4f5;
     const detailed = this.role === 'Pilot' || this.role === 'Bomber';
     const time = detailed ? this.decorativeTime(elapsed) : elapsed;
@@ -274,6 +312,7 @@ export class FlightScene extends Phaser.Scene {
       g.fillStyle(flame); g.fillTriangle(x + dx - 3, y + 10, x + dx + 3, y + 10, x + dx, y + 25 + pulse);
       g.fillStyle(0xf4fbff); g.fillTriangle(x + dx - 1.5, y + 11, x + dx + 1.5, y + 11, x + dx, y + 21);
     }
+    if (!drawHull || this.drawArt('player', x, y - 2, 34, 38)) return;
     g.fillStyle(0x687c9c); g.lineStyle(1, 0xa8c5df);
     g.fillTriangle(x, y - 9, x - 17, y + 14, x + 17, y + 14);
     g.strokeTriangle(x, y - 9, x - 17, y + 14, x + 17, y + 14);
@@ -410,6 +449,7 @@ export class FlightScene extends Phaser.Scene {
     }
     g.fillStyle(0xff6575, 0.07); g.fillEllipse(x, y, 54, 42);
 
+    if (this.drawArt('enemy', x, y + direction * 1.5, 44, 33, direction === -1 ? Math.PI : 0)) return;
     // Swept wings, armored centerline, and panel seams create a compact fighter.
     g.fillStyle(0x4b3049); g.lineStyle(2, 0xe36f7f, 0.9);
     g.beginPath();
@@ -573,18 +613,21 @@ export class FlightScene extends Phaser.Scene {
       g.fillStyle(0xff829c, 0.8); g.fillTriangle(x - 2, -14, x + 2, -14, x, -20 - flame);
       g.fillStyle(0xffe5d1); g.fillTriangle(x - 1, -14, x + 1, -14, x, -20);
     }
-    // Swept wings, inset fuselage and metallic bevels stay within the old silhouette's scale.
-    g.fillStyle(armored ? 0x584351 : 0x40334d); g.lineStyle(2, edge);
-    g.beginPath(); g.moveTo(0, 20); g.lineTo(-7, 7); g.lineTo(-18, 2);
-    g.lineTo(-17, -16); g.lineTo(-7, -10); g.lineTo(0, -14);
-    g.lineTo(7, -10); g.lineTo(17, -16); g.lineTo(18, 2); g.lineTo(7, 7);
-    g.closePath(); g.fillPath(); g.strokePath();
-    g.fillStyle(0x755064); g.fillTriangle(0, 18, -7, -7, 7, -7);
-    g.lineStyle(1, 0xffb9c3, 0.7); g.lineBetween(-14, -12, -14, 0); g.lineBetween(14, -12, 14, 0);
-    g.lineStyle(1, 0x1c2037); g.lineBetween(-8, -4, -15, -4); g.lineBetween(8, -4, 15, -4);
-    g.fillStyle(0x172539); g.lineStyle(1, 0x9fb9ee);
-    g.fillRoundedRect(-4, -6, 8, 13, 3); g.strokeRoundedRect(-4, -6, 8, 13, 3);
-    g.fillStyle(0x9fb9ee, 0.75); g.fillRect(-2, -4, 2, 7);
+    const illustrated = this.drawArt('enemy', a.x, a.y + 2, 36, 36);
+    if (!illustrated) {
+      // Swept wings, inset fuselage and metallic bevels stay within the old silhouette's scale.
+      g.fillStyle(armored ? 0x584351 : 0x40334d); g.lineStyle(2, edge);
+      g.beginPath(); g.moveTo(0, 20); g.lineTo(-7, 7); g.lineTo(-18, 2);
+      g.lineTo(-17, -16); g.lineTo(-7, -10); g.lineTo(0, -14);
+      g.lineTo(7, -10); g.lineTo(17, -16); g.lineTo(18, 2); g.lineTo(7, 7);
+      g.closePath(); g.fillPath(); g.strokePath();
+      g.fillStyle(0x755064); g.fillTriangle(0, 18, -7, -7, 7, -7);
+      g.lineStyle(1, 0xffb9c3, 0.7); g.lineBetween(-14, -12, -14, 0); g.lineBetween(14, -12, 14, 0);
+      g.lineStyle(1, 0x1c2037); g.lineBetween(-8, -4, -15, -4); g.lineBetween(8, -4, 15, -4);
+      g.fillStyle(0x172539); g.lineStyle(1, 0x9fb9ee);
+      g.fillRoundedRect(-4, -6, 8, 13, 3); g.strokeRoundedRect(-4, -6, 8, 13, 3);
+      g.fillStyle(0x9fb9ee, 0.75); g.fillRect(-2, -4, 2, 7);
+    }
     if (armored) {
       g.fillStyle(0x9b7757); g.lineStyle(1, 0xffca83, 0.85);
       for (const side of [-1, 1]) {
@@ -618,7 +661,9 @@ export class FlightScene extends Phaser.Scene {
     const turretX = automaticShipX(s.elapsed), turretY = HEIGHT - 44;
     // A larger armored weapon deck, exposed engines and service lights.
     g.save(); g.translateCanvas(turretX, turretY); g.scaleCanvas(1.65, 1.25);
-    this.paintPlayerShip(g, 0, 0, time, false); g.restore();
+    // Sprite position follows flight time even when decorative motion is reduced.
+    const illustrated = this.drawArt('player', turretX, turretY - 2 * 1.25, 34 * 1.65, 38 * 1.25);
+    this.paintPlayerShip(g, 0, 0, time, false, !illustrated); g.restore();
     for (const side of [-1, 1]) {
       const x = turretX + side * 32;
       g.fillStyle(0x26384f); g.lineStyle(1, 0x91b7d5, 0.9);
@@ -806,7 +851,7 @@ export class FlightScene extends Phaser.Scene {
 
   private paintLifeSupportPanel(g: Phaser.GameObjects.Graphics, elapsed: number) {
     // A recessed ship console replaces the generic star field without reducing contrast around packets.
-    g.fillStyle(0x0b1324, 0.94); g.fillRoundedRect(15, 14, WIDTH - 30, HEIGHT - 28, 22);
+    g.fillStyle(0x0b1324, this.hasArt('interior') ? 0.3 : 0.94); g.fillRoundedRect(15, 14, WIDTH - 30, HEIGHT - 28, 22);
     g.lineStyle(3, 0x344866, 0.9); g.strokeRoundedRect(15, 14, WIDTH - 30, HEIGHT - 28, 22);
     g.lineStyle(1, 0x7991b0, 0.32); g.strokeRoundedRect(22, 21, WIDTH - 44, HEIGHT - 42, 17);
 
@@ -957,36 +1002,38 @@ export class FlightScene extends Phaser.Scene {
 
   private paintSpaceLifeInterior(g: Phaser.GameObjects.Graphics) {
     // Quiet structural layers behind the action; no decorative geometry changes a platform.
-    g.fillStyle(0x101a2b); g.fillRect(10, 10, WIDTH - 20, HEIGHT - 20);
-    for (let bay = 0; bay < 3; bay++) {
-      const x = 28 + bay * 148;
-      g.fillStyle(0x172338); g.lineStyle(1, 0x344761, 0.7);
-      g.fillRoundedRect(x, 44, 124, 454, 8); g.strokeRoundedRect(x, 44, 124, 454, 8);
-      g.fillStyle(0x0c1728); g.fillRoundedRect(x + 8, 58, 108, 77, 6);
-      g.lineStyle(1, 0x415873, 0.6); g.strokeRoundedRect(x + 8, 58, 108, 77, 6);
-      for (let vent = 0; vent < 5; vent++) {
-        g.lineStyle(2, 0x293d55); g.lineBetween(x + 23, 78 + vent * 9, x + 101, 78 + vent * 9);
+    if (!this.hasArt('interior')) {
+      g.fillStyle(0x101a2b); g.fillRect(10, 10, WIDTH - 20, HEIGHT - 20);
+      for (let bay = 0; bay < 3; bay++) {
+        const x = 28 + bay * 148;
+        g.fillStyle(0x172338); g.lineStyle(1, 0x344761, 0.7);
+        g.fillRoundedRect(x, 44, 124, 454, 8); g.strokeRoundedRect(x, 44, 124, 454, 8);
+        g.fillStyle(0x0c1728); g.fillRoundedRect(x + 8, 58, 108, 77, 6);
+        g.lineStyle(1, 0x415873, 0.6); g.strokeRoundedRect(x + 8, 58, 108, 77, 6);
+        for (let vent = 0; vent < 5; vent++) {
+          g.lineStyle(2, 0x293d55); g.lineBetween(x + 23, 78 + vent * 9, x + 101, 78 + vent * 9);
+        }
+        for (let deck = 0; deck < 3; deck++) {
+          const y = 218 + deck * 96;
+          g.lineStyle(1, 0x2d4059, 0.8); g.strokeRect(x + 15, y, 94, 51);
+          g.fillStyle(0x23364e); g.fillRect(x + 20, y + 6, 84, 4);
+          g.fillStyle(0xbba6ff, 0.25); g.fillRect(x + 22, y + 17, 2, 17);
+          g.lineStyle(1, 0x30455e, 0.6); g.lineBetween(x + 33, y + 37, x + 91, y + 37);
+        }
       }
-      for (let deck = 0; deck < 3; deck++) {
-        const y = 218 + deck * 96;
-        g.lineStyle(1, 0x2d4059, 0.8); g.strokeRect(x + 15, y, 94, 51);
-        g.fillStyle(0x23364e); g.fillRect(x + 20, y + 6, 84, 4);
-        g.fillStyle(0xbba6ff, 0.25); g.fillRect(x + 22, y + 17, 2, 17);
-        g.lineStyle(1, 0x30455e, 0.6); g.lineBetween(x + 33, y + 37, x + 91, y + 37);
+      for (const x of [18, WIDTH - 18]) {
+        g.lineStyle(7, 0x22364d); g.lineBetween(x, 30, x, HEIGHT - 30);
+        g.lineStyle(1, 0x66819b, 0.45); g.lineBetween(x - 2, 30, x - 2, HEIGHT - 30);
+        for (let y = 45; y < HEIGHT - 25; y += 78) {
+          g.fillStyle(0x40536e); g.fillRect(x - 5, y, 10, 5);
+          g.fillStyle(0x9bbbd1, 0.5); g.fillCircle(x, y + 2, 1);
+        }
       }
-    }
-    for (const x of [18, WIDTH - 18]) {
-      g.lineStyle(7, 0x22364d); g.lineBetween(x, 30, x, HEIGHT - 30);
-      g.lineStyle(1, 0x66819b, 0.45); g.lineBetween(x - 2, 30, x - 2, HEIGHT - 30);
-      for (let y = 45; y < HEIGHT - 25; y += 78) {
-        g.fillStyle(0x40536e); g.fillRect(x - 5, y, 10, 5);
-        g.fillStyle(0x9bbbd1, 0.5); g.fillCircle(x, y + 2, 1);
+      g.fillStyle(0x263951); g.lineStyle(1, 0x6b819b, 0.5);
+      g.fillRoundedRect(34, 18, WIDTH - 68, 16, 4); g.strokeRoundedRect(34, 18, WIDTH - 68, 16, 4);
+      for (let x = 50; x < WIDTH - 40; x += 46) {
+        g.fillStyle(0x79e1ce, 0.35); g.fillRect(x, 24, 20, 3);
       }
-    }
-    g.fillStyle(0x263951); g.lineStyle(1, 0x6b819b, 0.5);
-    g.fillRoundedRect(34, 18, WIDTH - 68, 16, 4); g.strokeRoundedRect(34, 18, WIDTH - 68, 16, 4);
-    for (let x = 50; x < WIDTH - 40; x += 46) {
-      g.fillStyle(0x79e1ce, 0.35); g.fillRect(x, 24, 20, 3);
     }
     for (const platform of SPACE_LIFE_PLATFORMS) {
       const width = platform.x2 - platform.x1;
