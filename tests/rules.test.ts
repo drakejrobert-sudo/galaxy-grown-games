@@ -34,7 +34,7 @@ test('all twelve modes share exact rating thresholds, clamping, and failure cap'
     assert.deepEqual(rateScore(mode, raw(50), true), { rating: 50, band: 'Success', capped: false });
   }
   assert.throws(() => rateScore('asteroid-pilot', Number.NaN, false));
-  assert.equal(SCORING_VERSION, '0.6');
+  assert.equal(SCORING_VERSION, '0.7');
 });
 test('owner playtest recalibration makes modest Space Battle Pilot scores Mixed', () => {
   assert.deepEqual(SCORE_ANCHORS['space-pilot'], { low: 63, high: 1000 });
@@ -53,7 +53,7 @@ test('owner Space Battle Bomber sample moves from Mixed to Success without chang
   assert.deepEqual(rateScore('space-bomber', 1200, true), { rating: 35, band: 'Mixed', capped: false });
   const report = spaceBattleBomberResultText({ total: 15, naturalOne: false }, s);
   assert.match(report, /Score: 1832/);
-  assert.match(report, /Rating: 55\/100 • Advisory band: Success • Provisional v0\.6/);
+  assert.match(report, /Rating: 55\/100 • Advisory band: Success • Provisional v0\.7/);
   assert.match(report, /Hull depleted/);
   assert.deepEqual(rateScore('space-bomber', 3300, true), { rating: 100, band: 'Success', capped: true });
 });

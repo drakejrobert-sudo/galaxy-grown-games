@@ -76,9 +76,9 @@ const ventControls = get('vent-controls');
 const boardingVents = createBoardingVentInput(get('vent-left'), get('vent-right'));
 const boardingHelp: Record<Role, string> = {
   Pilot: 'Evade the carrier’s marked approach and boarding pods. Arrow keys / WASD or hold and drag to steer.',
-  Gunner: 'Ship flies automatically. Damage the carrier or intercept pods before the boarding line. Touch/mouse aims; hold Fire to shoot. Mouse click or Space/Enter also fires. Arrow keys / WASD aims.',
-  Bomber: 'Automatic flight. Aim aft: tap/drag-release or mouse release launches. Left/Right or A/D rotates; Down/S aims straight aft. Space/Enter or Launch mine fires once. Intercept pods; mine the carrier during close approaches.',
-  'Life Support': 'Shoot exposed boarders; covered targets block rifle hits. Touch/mouse aims; Fire, mouse click or Space/Enter shoots; arrows / WASD aims. Vent left/right or Q/E ejects enemies inside that marked zone after a warning. Each lock recharges separately.',
+  Gunner: 'Ship flies automatically. Small probes take one hit; shuttles take two. Shoot during launch warnings or before they cross the boarding line; damage the carrier between threats. Touch/mouse aims; hold Fire to shoot. Mouse click or Space/Enter also fires. Arrow keys / WASD aims.',
+  Bomber: 'Automatic flight. Aim aft: tap/drag-release or mouse release launches. Left/Right or A/D rotates; Down/S aims straight aft. Space/Enter or Launch mine fires once. Intercept probes and shuttles during their launch warning or diagonal approach; mine the carrier when it closes.',
+  'Life Support': 'Shoot boarders when they raise rifles. Red lasers hurt on arrival and keep coming after a kill; surviving enemies advance. When a side bay lights up, use Vent left/right (Q/E). Aim with touch/mouse or arrows/WASD; Fire, mouse click or Space/Enter shoots.',
 };
 const spaceGunnerInput = createSpaceGunnerInput(canvas, fireAction);
 const spaceGunnerHelp = 'Ship flies automatically. Touch/mouse aims; touch aim never fires. Hold Fire to shoot. Mouse primary click also fires. Arrow keys / WASD aims; Space / Enter fires.';
@@ -308,7 +308,7 @@ function launch() {
       : role === 'Bomber' ? 'Standard mine blast target' : situation === 'Space Battle' ? 'Standard icon mix' : 'Standard packet mix';
   get('flight-status').textContent = `${difficultyFor(config.total)} · Check ${config.total} · ${config.naturalOne ? `Natural 1: ${impairment}` : standard}`;
   if (situation === 'Boarding Party') {
-    get('mode-heading').textContent = role === 'Life Support' ? 'Repel boarders. Control the airlocks.' : 'Break the boarding pursuit.';
+    get('mode-heading').textContent = role === 'Life Support' ? 'Hold the corridor. Repel boarders.' : 'Break the boarding pursuit.';
     get('play-help').textContent = boardingHelp[role];
     canvas.setAttribute('aria-label', `Boarding Party / ${role}. ${boardingHelp[role]}`);
     get('flight-status').textContent = `${difficultyFor(config.total)} · Check ${config.total} · ${config.naturalOne ? 'Natural 1: ' + (role === 'Life Support' ? 'double airlock recharge' : impairment) : 'Standard station systems'}`;
@@ -385,7 +385,8 @@ scene.onBoardingStep = s => {
     button.textContent = `Vent ${side === 0 ? 'left · Q' : 'right · E'} · ${lock.warning !== null ? 'VENTING' : lock.cooldown > 0 ? Math.ceil(lock.cooldown)+'s' : 'Ready'}`;
     button.setAttribute('aria-disabled', String(lock.cooldown > 0));
   });
-  else get('flight-status').textContent = `${difficultyFor(config.total)} · Check ${config.total}${config.naturalOne ? ' · Natural 1' : ''} · Carrier ${s.disabled ? 'disabled' : s.carrier.hp+'/'+s.carrier.maxHp} · Pods intercepted ${s.intercepted} · Breaches ${s.breaches}`;
+  if (s.role === 'Life Support') get('flight-status').textContent = `${difficultyFor(config.total)} · Check ${config.total}${config.naturalOne ? ' · Natural 1: double airlock recharge' : ''} · Boarders ${s.boarders.length} · Incoming lasers ${s.lasers.length}`;
+  else get('flight-status').textContent = `${difficultyFor(config.total)} · Check ${config.total}${config.naturalOne ? ' · Natural 1' : ''} · Carrier ${s.disabled ? 'disabled' : s.carrier.hp+'/'+s.carrier.maxHp} · Craft intercepted ${s.intercepted} · Breaches ${s.breaches}`;
   if (!s.finished) return;
   inFlight = false; input.enable(false); gunnerInput.enable(false); spaceGunnerInput.enable(false);
   bomberInput.enable(false); spaceBomberInput.enable(false); lifeSupportInput.enable(false); spaceLifeInput.enable(false); boardingVents.enable(false);

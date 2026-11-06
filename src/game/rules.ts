@@ -6,7 +6,7 @@ export type ScoreMode = 'asteroid-pilot' | 'asteroid-gunner' | 'asteroid-bomber'
   'asteroid-life-support' | 'space-pilot' | 'space-bomber' | 'space-life-support' | 'space-gunner' |
   'boarding-pilot' | 'boarding-gunner' | 'boarding-bomber' | 'boarding-life-support';
 export type ResultBand = 'Setback' | 'Mixed' | 'Success' | 'Exceptional';
-export const SCORING_VERSION = '0.6';
+export const SCORING_VERSION = '0.7';
 /** Provisional mode anchors. Space Battle values include owner playtest adjustments; see docs/scoring-calibration.md. */
 export const SCORE_ANCHORS: Record<ScoreMode, { low: number; high: number }> = {
   'asteroid-pilot': { low: 66, high: 700 },
@@ -17,10 +17,10 @@ export const SCORE_ANCHORS: Record<ScoreMode, { low: number; high: number }> = {
   'space-bomber': { low: 64, high: 3300 },
   'space-life-support': { low: 130, high: 1350 },
   'space-gunner': { low: 37, high: 5000 },
-  'boarding-pilot': { low: 62, high: 900 },
-  'boarding-gunner': { low: 31, high: 3418 },
-  'boarding-bomber': { low: 31, high: 4100 },
-  'boarding-life-support': { low: 53, high: 4900 },
+  'boarding-pilot': { low: 68, high: 900 },
+  'boarding-gunner': { low: 46, high: 3220 },
+  'boarding-bomber': { low: 46, high: 1454 },
+  'boarding-life-support': { low: 61, high: 4900 },
 };
 export interface RatedResult { rating: number; band: ResultBand; capped: boolean }
 /** Check total and Natural 1 already affect gameplay; neither is reapplied here. */
@@ -1525,6 +1525,18 @@ export const BOARDING_TUNING: Record<Difficulty, {
   Easy: { podSpeed: 135, launchEvery: 1.6, moveSpeed: 250, fireEvery: .32, boarderEvery: 2.2, attackTime: 1.8 },
   'Very Easy': { podSpeed: 110, launchEvery: 2, moveSpeed: 260, fireEvery: .28, boarderEvery: 2.6, attackTime: 2.1 },
 };
+// Weapon stations intentionally have more reaction time than Pilot.
+export const BOARDING_DEFENSE_TUNING: Record<Difficulty, {
+  podSpeed: number;
+  launchEvery: number;
+}> = {
+  Hard: { podSpeed: 155, launchEvery: 1.35 },
+  Medium: { podSpeed: 125, launchEvery: 1.8 },
+  Easy: { podSpeed: 105, launchEvery: 2.1 },
+  'Very Easy': { podSpeed: 90, launchEvery: 2.5 },
+};
+export const BOARDING_LAUNCH_WARNING = .6;
+export const BOARDING_MIN_FLIGHT = .8;
 export const BOARDING_CYCLE = 12;
 export const BOARDING_WARNING = 1.2;
 export const BOARDING_LINE = 160;
@@ -1537,9 +1549,23 @@ export const BOARDING_VENT_RECHARGE = 8;
 export const BOARDING_VENT_WARNING = .6;
 export const BOARDING_COVER_WARNING = .65;
 export const BOARDING_RELOCATION_TIME = 1.6;
-export const BOARDING_COVER = [{ x: 145, y: 180 }, { x: 335, y: 180 }, { x: 145, y: 350 }, { x: 335, y: 350 }];
+export const BOARDING_DEPTHS = [
+  { y: 205, spread: 55, scale: .65, radius: 18, attackScale: 1.25, laserTime: .9 },
+  { y: 300, spread: 85, scale: .9, radius: 24, attackScale: 1, laserTime: .65 },
+  { y: 400, spread: 100, scale: 1.15, radius: 30, attackScale: .85, laserTime: .45 },
+] as const;
+export function boardingCover(slot: number, depth: number) {
+  const d = BOARDING_DEPTHS[depth];
+  return { x: 240 + (slot % 2 ? 1 : -1) * (d.spread + (slot >= 2 ? 15 : -15)), y: d.y + (slot >= 2 ? 22 : -12) };
+}
+export const BOARDING_COVER = [0, 1, 2, 3].map(slot => boardingCover(slot, 0));
 export const BOARDING_AIRLOCKS = [{ x: 20, y: 90, width: 95, height: 380 }, { x: 365, y: 90, width: 95, height: 380 }];
 export interface BoardingPod {
+  kind: 'probe' | 'shuttle';
+  hp: number;
+  maxHp: number;
+  warningRemaining: number;
+  hitFlash: number;
   id: number;
   x: number;
   y: number;
@@ -1548,6 +1574,7 @@ export interface BoardingPod {
   radius: number;
 }
 export interface BoardingCarrier {
+  startX: number;
   x: number;
   y: number;
   targetX: number;
@@ -1556,11 +1583,20 @@ export interface BoardingCarrier {
   maxHp: number;
 }
 export interface BoardingBoarder {
+  depth: number;
   id: number;
   x: number;
   y: number;
   slot: number;
   phase: 'warning' | 'exposed' | 'relocating';
+  remaining: number;
+}
+export interface BoardingLaser {
+  id: number;
+  x: number;
+  y: number;
+  side: number;
+  duration: number;
   remaining: number;
 }
 export interface BoardingAirlock {
@@ -1587,6 +1623,15 @@ export interface BoardingState {
   mines: SpaceBomberMine[];
   explosions: Explosion[];
   boarders: BoardingBoarder[];
+  lasers: BoardingLaser[];
+  impactFlash: number;
+  impactSide: number;
+  hitFlash: number;
+  hitX: number;
+  hitY: number;
+  launchedCraft: number;
+  probesIntercepted: number;
+  shuttlesIntercepted: number;
   airlocks: BoardingAirlock[];
   spawnIn: number;
   nextId: number;
@@ -1610,9 +1655,9 @@ export function createBoarding(role: Role): BoardingState {
   const hp = role === 'Bomber' ? 5 : 36;
   return { role, x: 240, y: 140, elapsed: 0, hull: role === 'Life Support' ? 5 : 3, grace: 0,
     aimAngle: Math.PI / 2, aimDistance: 100, crosshairX: 240, crosshairY: 300,
-    carrier: { x: 240, y: 500, targetX: 240, cycle: -1, hp, maxHp: hp },
-    pods: [], mines: [], explosions: [], boarders: [], airlocks: [{ cooldown: 0, warning: null }, { cooldown: 0, warning: null }],
-    spawnIn: 1, nextId: 1, cooldown: 0, shots: 0, minesPlaced: 0, intercepted: 0, carrierDamage: 0,
+    carrier: { startX: 240, x: 240, y: 500, targetX: 240, cycle: -1, hp, maxHp: hp },
+    pods: [], mines: [], explosions: [], boarders: [], lasers: [], impactFlash: 0, impactSide: 0, hitFlash: 0, hitX: 0, hitY: 0, launchedCraft: 0, probesIntercepted: 0, shuttlesIntercepted: 0, airlocks: [{ cooldown: 0, warning: null }, { cooldown: 0, warning: null }],
+    spawnIn: role === 'Pilot' ? 1 : 2, nextId: 1, cooldown: 0, shots: 0, minesPlaced: 0, intercepted: 0, carrierDamage: 0,
     disabled: false, hits: 0, breaches: 0, shotBoarders: 0, ejected: 0, beamTime: 0, beamX: 240, beamY: 300,
     finished: false, endReason: null };
 }
@@ -1632,7 +1677,7 @@ export function boardingResultText(config: FlightConfig, s: BoardingState): stri
     `Natural 1: ${config.naturalOne ? 'Yes — ' + impairment : 'No'}`,
     `Score: ${boardingScoreFor(s)} • Time: ${s.elapsed.toFixed(1)}s • ${s.role === 'Life Support' ? 'Integrity' : 'Hull'}: ${s.hull}/${s.role === 'Life Support' ? 5 : 3}`,
     s.role === 'Life Support' ? `Boarders shot: ${s.shotBoarders} • Ejected: ${s.ejected}`
-      : `Pods intercepted: ${s.intercepted} • Carrier damage: ${s.carrierDamage} • Carrier disabled: ${s.disabled ? 'Yes' : 'No'}`,
+      : `Craft intercepted: ${s.intercepted} (probes ${s.probesIntercepted}, shuttles ${s.shuttlesIntercepted}) • Carrier damage: ${s.carrierDamage} • Carrier disabled: ${s.disabled ? 'Yes' : 'No'}`,
     `Damaging hits: ${s.hits} • Boarding breaches: ${s.breaches} • Shots: ${s.shots} • Mines: ${s.minesPlaced}`,
     ratingReportText(boardingScoreMode(s.role), boardingScoreFor(s), s.hull <= 0),
     s.endReason === 'hull' ? 'Defense overwhelmed' : 'Defense complete', 'GM determines campaign outcome.'].join('\n');
@@ -1649,6 +1694,9 @@ function damageCarrier(s: BoardingState) {
     return;
   s.carrier.hp--;
   s.carrierDamage++;
+  s.hitFlash = .15;
+  s.hitX = s.carrier.x;
+  s.hitY = s.carrier.y;
   if (s.carrier.hp === 0)
     s.disabled = true;
 }
@@ -1672,10 +1720,21 @@ export function boardingInAirlock(b: {
   const z = BOARDING_AIRLOCKS[side];
   return b.x >= z.x && b.x <= z.x + z.width && b.y >= z.y && b.y <= z.y + z.height;
 }
+/** Projection is shared by movement, targeting, art and cover — no art-derived hitboxes. */
+export function boardingBoarderPose(b: BoardingBoarder) {
+  const from = boardingCover(b.slot, b.depth), next = Math.min(2, b.depth + 1);
+  if (b.phase !== 'relocating')
+    return { ...from, scale: BOARDING_DEPTHS[b.depth].scale };
+  const to = boardingCover(b.slot, next), progress = Math.max(0, Math.min(1, 1 - b.remaining / BOARDING_RELOCATION_TIME));
+  const bay = { x: b.slot % 2 ? 415 : 65, y: (from.y + to.y) / 2 };
+  const a = progress < 1 / 3 ? from : bay, z = progress > 2 / 3 ? to : bay;
+  const t = progress < 1 / 3 ? progress * 3 : progress > 2 / 3 ? (progress - 2 / 3) * 3 : 0;
+  return { x: a.x + (z.x - a.x) * t, y: a.y + (z.y - a.y) * t,
+    scale: BOARDING_DEPTHS[b.depth].scale + (BOARDING_DEPTHS[next].scale - BOARDING_DEPTHS[b.depth].scale) * progress };
+}
 function stepBoardingInterior(s: BoardingState, config: FlightConfig, input: BoardingInput, dt: number, random: () => number, oldGrace: number) {
   const tuning = BOARDING_TUNING[difficultyFor(config.total)];
   const recharge = BOARDING_VENT_RECHARGE * (config.naturalOne ? 2 : 1);
-  // Requests are one-shot, consumed even while a lock is unavailable.
   const ventEvents: {
     time: number;
     side: number;
@@ -1703,66 +1762,136 @@ function stepBoardingInterior(s: BoardingState, config: FlightConfig, input: Boa
     s.beamTime = .09;
     s.beamX = s.crosshairX;
     s.beamY = s.crosshairY;
-    const b = s.boarders.filter(b => b.phase === 'exposed' && Math.hypot(b.x - s.crosshairX, b.y - s.crosshairY) <= 25)
+    const b = s.boarders.filter(b => b.phase === 'exposed' && Math.hypot(b.x - s.crosshairX, b.y - s.crosshairY) <= BOARDING_DEPTHS[b.depth].radius)
       .sort((a, b) => Math.hypot(a.x - s.crosshairX, a.y - s.crosshairY) - Math.hypot(b.x - s.crosshairX, b.y - s.crosshairY) || a.id - b.id)[0];
     if (b) {
       s.boarders = s.boarders.filter(x => x.id !== b.id);
       s.shotBoarders++;
+      s.hitFlash = .15;
+      s.hitX = b.x;
+      s.hitY = b.y;
     }
   }
-  // Subdivide at vent/phase boundaries: an ejected boarder never attacks later in the step.
+  // Resolve exact phase, vent and impact boundaries. Killing/ejecting the source never erases a fired bolt.
   let time = 0, grace = oldGrace;
   while (time < dt - 1e-9 && s.hull > 0) {
     const nextVent = ventEvents.filter(e => e.time >= time - 1e-9).sort((a, b) => a.time - b.time)[0];
-    const span = Math.min(dt - time, ...s.boarders.map(b => Math.max(0, b.remaining)), nextVent ? Math.max(0, nextVent.time - time) : Infinity);
+    const span = Math.min(dt - time, ...s.boarders.map(b => Math.max(0, b.remaining)), ...s.lasers.map(l => Math.max(0, l.remaining)), nextVent ? Math.max(0, nextVent.time - time) : Infinity);
     for (const b of s.boarders) {
       b.remaining -= span;
       if (b.phase === 'relocating') {
-        const cover = BOARDING_COVER[b.slot];
-        const progress = 1 - Math.max(0, b.remaining) / BOARDING_RELOCATION_TIME;
-        // Out and back through the nearest airlock during relocation.
-        const excursion = Math.sin(Math.PI * progress);
-        b.x = cover.x + (b.slot % 2 === 0 ? -90 : 90) * excursion;
-        b.y = cover.y;
+        const pose = boardingBoarderPose(b);
+        b.x = pose.x;
+        b.y = pose.y;
       }
     }
+    for (const laser of s.lasers)
+      laser.remaining -= span;
     time += span;
     for (const e of ventEvents.filter(e => Math.abs(e.time - time) < 1e-8)) {
-      const ejected = s.boarders.filter(b => boardingInAirlock(b, e.side));
-      s.ejected += ejected.length;
-      const ids = new Set(ejected.map(b => b.id));
+      const ids = new Set(s.boarders.filter(b => boardingInAirlock(b, e.side)).map(b => b.id));
+      s.ejected += ids.size;
       s.boarders = s.boarders.filter(b => !ids.has(b.id));
       e.time = -1;
     }
+    for (const laser of s.lasers.filter(l => l.remaining <= 1e-8)) {
+      const health = s.hull;
+      boardingDamage(s, time, grace, dt);
+      if (s.hull < health) {
+        grace = time + 1.25;
+        s.impactFlash = .25;
+        s.impactSide = laser.side;
+      }
+    }
+    s.lasers = s.lasers.filter(l => l.remaining > 1e-8);
+    if (s.hull <= 0)
+      break;
     for (const b of s.boarders)
       if (b.remaining <= 1e-8) {
         if (b.phase === 'warning') {
           b.phase = 'exposed';
-          b.remaining = tuning.attackTime;
+          b.remaining = tuning.attackTime * BOARDING_DEPTHS[b.depth].attackScale;
         }
         else if (b.phase === 'exposed') {
-          boardingDamage(s, time, grace, dt);
-          if (time >= grace)
-            grace = time + 1.25;
+          const duration = BOARDING_DEPTHS[b.depth].laserTime;
+          s.lasers.push({ id: s.nextId++, x: b.x, y: b.y, side: b.slot % 2, duration, remaining: duration });
           b.phase = 'relocating';
           b.remaining = BOARDING_RELOCATION_TIME;
         }
         else {
-          Object.assign(b, BOARDING_COVER[b.slot]);
+          b.depth = Math.min(2, b.depth + 1);
+          Object.assign(b, boardingCover(b.slot, b.depth));
           b.phase = 'warning';
           b.remaining = BOARDING_COVER_WARNING;
         }
       }
   }
-  if (s.hull <= 0) return;
+  if (s.hull <= 0)
+    return;
   s.spawnIn -= dt;
   while (s.spawnIn <= 0) {
-    const start = Math.floor(random() * BOARDING_COVER.length);
-    const slot = Array.from({ length: 4 }, (_, i) => (start + i) % 4).find(slot => !s.boarders.some(b => b.slot === slot));
+    const start = Math.floor(random() * 4), slot = [0, 1, 2, 3].map(i => (start + i) % 4).find(slot => !s.boarders.some(b => b.slot === slot));
     if (slot !== undefined)
-      s.boarders.push({ id: s.nextId++, ...BOARDING_COVER[slot], slot, phase: 'warning', remaining: BOARDING_COVER_WARNING });
+      s.boarders.push({ id: s.nextId++, ...boardingCover(slot, 0), depth: 0, slot, phase: 'warning', remaining: BOARDING_COVER_WARNING });
     s.spawnIn += tuning.boarderEvery;
   }
+}
+function recordBoardingInterception(s: BoardingState, id: number) {
+  const pod = s.pods.find(p => p.id === id)!;
+  s.intercepted++;
+  if (pod.kind === 'shuttle')
+    s.shuttlesIntercepted++;
+  else
+    s.probesIntercepted++;
+}
+type BoardingMotionSegment = {
+  start: number;
+  end: number;
+  from: {
+    x: number;
+    y: number;
+  };
+  to: {
+    x: number;
+    y: number;
+  };
+};
+function boardingCarrierPosition(carrier: BoardingCarrier, phase: number) {
+  const closeness = phase < BOARDING_WARNING ? 0 : phase < 4 ? (phase - BOARDING_WARNING) / (4 - BOARDING_WARNING)
+    : phase < 6 ? 1 : phase < 9 ? (9 - phase) / 3 : 0;
+  const staging = carrier.cycle % 2 ? 120 : 360;
+  return { x: phase < 9 ? carrier.startX + (carrier.targetX - carrier.startX) * closeness
+      : carrier.startX + (staging - carrier.startX) * (phase - 9) / 3, y: 500 - closeness * 250 };
+}
+/** Complete each phase before changing clocks. One carrier owns all segments, including shared endpoints. */
+function advanceBoardingCarrier(s: BoardingState, oldTime: number, oldShip: {
+  x: number;
+  y: number;
+}, dt: number): BoardingMotionSegment[] {
+  const carrier = s.carrier, segments: BoardingMotionSegment[] = [];
+  const beginCycle = (cycle: number, time: number) => {
+    const progress = Math.max(0, Math.min(1, (time - oldTime) / dt));
+    const pilotX = oldShip.x + (s.x - oldShip.x) * progress;
+    carrier.cycle = cycle;
+    carrier.startX = carrier.x;
+    carrier.targetX = Math.max(80, Math.min(400, (s.role === 'Pilot' ? pilotX : automaticShipX(time + 4)) + (cycle % 2 ? -45 : 45)));
+  };
+  const initialCycle = Math.floor(oldTime / BOARDING_CYCLE);
+  if (carrier.cycle !== initialCycle)
+    beginCycle(initialCycle, initialCycle * BOARDING_CYCLE);
+  let cursor = oldTime;
+  while (cursor < s.elapsed) {
+    const base = carrier.cycle * BOARDING_CYCLE, cycleEnd = base + BOARDING_CYCLE;
+    const boundary = [BOARDING_WARNING, 4, 6, 9, BOARDING_CYCLE].map(p => base + p).find(t => t > cursor + 1e-9) ?? cycleEnd;
+    const end = Math.min(s.elapsed, boundary);
+    const from = { x: carrier.x, y: carrier.y }, to = boardingCarrierPosition(carrier, end - base);
+    segments.push({ start: Math.max(0, Math.min(dt, cursor - oldTime)), end: Math.max(0, Math.min(dt, end - oldTime)), from, to });
+    Object.assign(carrier, to);
+    cursor = end;
+    if (cursor === cycleEnd)
+      beginCycle(carrier.cycle + 1, cycleEnd);
+  }
+  return segments;
 }
 /** Bounded stepping; all collision events are ordered by their actual contact time. */
 export function stepBoarding(s: BoardingState, config: FlightConfig, input: BoardingInput, dt: number, random: () => number = Math.random): void {
@@ -1775,6 +1904,10 @@ export function stepBoarding(s: BoardingState, config: FlightConfig, input: Boar
   s.grace = Math.max(0, s.grace - dt);
   s.cooldown = Math.max(0, s.cooldown - dt);
   s.beamTime = Math.max(0, s.beamTime - dt);
+  s.impactFlash = Math.max(0, s.impactFlash - dt);
+  s.hitFlash = Math.max(0, s.hitFlash - dt);
+  for (const pod of s.pods)
+    pod.hitFlash = Math.max(0, pod.hitFlash - dt);
   if (s.role === 'Life Support') {
     stepBoardingInterior(s, config, input, dt, random, oldGrace);
     s.elapsed = Math.min(DURATION, s.elapsed + dt);
@@ -1799,8 +1932,16 @@ export function stepBoarding(s: BoardingState, config: FlightConfig, input: Boar
       if (target?.carrier)
         damageCarrier(s);
       else if (target) {
-        s.pods = s.pods.filter(p => p.id !== target.id);
-        s.intercepted++;
+        const pod = s.pods.find(p => p.id === target.id)!;
+        pod.hp--;
+        pod.hitFlash = .15;
+        s.hitFlash = .15;
+        s.hitX = pod.x;
+        s.hitY = pod.y;
+        if (pod.hp <= 0) {
+          recordBoardingInterception(s, pod.id);
+          s.pods = s.pods.filter(p => p.id !== pod.id);
+        }
       }
     }
   }
@@ -1813,13 +1954,12 @@ export function stepBoarding(s: BoardingState, config: FlightConfig, input: Boar
     }
   }
   s.explosions = s.explosions.map(e => ({ ...e, remaining: e.remaining - dt })).filter(e => e.remaining > 0);
-  const oldCarrier = { x: s.carrier.x, y: s.carrier.y };
-  const cycle = Math.floor(s.elapsed / BOARDING_CYCLE);
-  if (cycle !== s.carrier.cycle) {
-    s.carrier.cycle = cycle;
-    s.carrier.targetX = s.role === 'Pilot' ? s.x : automaticShipX(s.elapsed + 4);
-  }
+  const oldTime = s.elapsed, oldCarrier = { x: s.carrier.x, y: s.carrier.y };
   s.elapsed = Math.min(DURATION, s.elapsed + dt);
+  // Snap arithmetic roundoff at cycle endpoints, not legitimate fractional travel time.
+  const nearestCycle = Math.round(s.elapsed / BOARDING_CYCLE) * BOARDING_CYCLE;
+  if (Math.abs(s.elapsed - nearestCycle) < 1e-9)
+    s.elapsed = nearestCycle;
   if (s.role === 'Pilot') {
     const length = Math.max(1, Math.hypot(input.x, input.y)), speed = tuning.moveSpeed * (config.naturalOne ? .6 : 1);
     s.x = Math.max(22, Math.min(458, s.x + input.x / length * speed * dt));
@@ -1827,11 +1967,9 @@ export function stepBoarding(s: BoardingState, config: FlightConfig, input: Boar
   }
   else
     s.x = automaticShipX(s.elapsed);
-  const phase = s.elapsed % BOARDING_CYCLE;
-  const closeness = phase < BOARDING_WARNING ? 0 : phase < 4 ? (phase - BOARDING_WARNING) / (4 - BOARDING_WARNING) : phase < 6 ? 1 : phase < 9 ? (9 - phase) / 3 : 0;
-  s.carrier.x = s.carrier.targetX;
-  s.carrier.y = 500 - closeness * 250;
+  const carrierMotion = advanceBoardingCarrier(s, oldTime, oldShip, dt);
   type Path = {
+    segments?: BoardingMotionSegment[];
     id: number;
     radius: number;
     from: {
@@ -1843,18 +1981,34 @@ export function stepBoarding(s: BoardingState, config: FlightConfig, input: Boar
       y: number;
     };
     end: number;
+    start: number;
     carrier: boolean;
   };
   const paths: Path[] = s.pods.map(p => {
     const from = { x: p.x, y: p.y };
-    p.x += p.vx * dt;
-    p.y += p.vy * dt;
-    const crossing = s.role === 'Pilot' ? dt : p.vy < 0 ? Math.max(0, Math.min(dt, (BOARDING_LINE + p.radius - from.y) / p.vy)) : dt;
-    return { id: p.id, radius: p.radius, from, to: { x: p.x, y: p.y }, end: crossing, carrier: false };
+    const start = Math.min(dt, p.warningRemaining);
+    p.warningRemaining = Math.max(0, p.warningRemaining - dt);
+    const moving = dt - start;
+    p.x += p.vx * moving;
+    p.y += p.vy * moving;
+    const crossing = s.role === 'Pilot' ? dt : p.vy < 0 ? Math.max(0, Math.min(dt, start + (BOARDING_LINE + p.radius - from.y) / p.vy)) : dt;
+    return { id: p.id, radius: p.radius, from, to: { x: p.x, y: p.y }, start, end: crossing, carrier: false };
   });
   if (s.carrier.hp > 0)
-    paths.push({ id: 0, radius: BOARDING_CARRIER_RADIUS, from: oldCarrier, to: { x: s.carrier.x, y: s.carrier.y }, end: dt, carrier: true });
-  const at = (p: Path, t: number) => ({ x: p.from.x + (p.to.x - p.from.x) * t / dt, y: p.from.y + (p.to.y - p.from.y) * t / dt });
+    paths.push({ id: 0, radius: BOARDING_CARRIER_RADIUS, from: oldCarrier, to: { x: s.carrier.x, y: s.carrier.y }, segments: carrierMotion, start: 0, end: dt, carrier: true });
+  const at = (p: Path, t: number) => {
+    if (p.segments?.length) {
+      const segment = p.segments.find(segment => t <= segment.end) ?? p.segments.at(-1)!;
+      const fraction = segment.end > segment.start ? Math.max(0, Math.min(1, (t - segment.start) / (segment.end - segment.start))) : 0;
+      return { x: segment.from.x + (segment.to.x - segment.from.x) * fraction, y: segment.from.y + (segment.to.y - segment.from.y) * fraction };
+    }
+    const fraction = dt > p.start ? Math.max(0, (t - p.start) / (dt - p.start)) : 0;
+    return { x: p.from.x + (p.to.x - p.from.x) * fraction, y: p.from.y + (p.to.y - p.from.y) * fraction };
+  };
+  const spans = (path: Path, begin: number, end: number) => {
+    const cuts = [begin, ...(path.segments ? path.segments.map(segment => segment.end) : [path.start]).filter(t => t > begin && t < end), end];
+    return cuts.slice(1).map((finish, i) => ({ begin: cuts[i], finish }));
+  };
   type Event = {
     time: number;
     kind: 'mine' | 'breach' | 'hull';
@@ -1866,9 +2020,14 @@ export function stepBoarding(s: BoardingState, config: FlightConfig, input: Boar
   const events: Event[] = [];
   for (const path of paths) {
     if (s.role === 'Pilot') {
-      const t = circleEntry(path.from.x - oldShip.x, path.from.y - oldShip.y, (path.to.x - path.from.x) - (s.x - oldShip.x), (path.to.y - path.from.y) - (s.y - oldShip.y), path.radius + 13);
-      if (t !== null)
-        events.push({ time: t * dt, kind: 'hull', path });
+      for (const { begin, finish } of spans(path, 0, dt)) {
+        const from = at(path, begin), to = at(path, finish);
+        const shipFrom = { x: oldShip.x + (s.x - oldShip.x) * begin / dt, y: oldShip.y + (s.y - oldShip.y) * begin / dt };
+        const shipTo = { x: oldShip.x + (s.x - oldShip.x) * finish / dt, y: oldShip.y + (s.y - oldShip.y) * finish / dt };
+        const t = circleEntry(from.x - shipFrom.x, from.y - shipFrom.y, to.x - from.x - shipTo.x + shipFrom.x, to.y - from.y - shipTo.y + shipFrom.y, path.radius + 13);
+        if (t !== null)
+          events.push({ time: begin + t * (finish - begin), kind: 'hull', path });
+      }
     }
     else if (!path.carrier && path.to.y - path.radius <= BOARDING_LINE)
       events.push({ time: path.end, kind: 'breach', path });
@@ -1882,12 +2041,14 @@ export function stepBoarding(s: BoardingState, config: FlightConfig, input: Boar
         const end = Math.min(b, path.end, life);
         if (a > end || a >= life)
           continue;
-        const m0 = mineAt(a), m1 = mineAt(end), p0 = at(path, a), p1 = at(path, end);
-        const t = circleEntry(p0.x - m0.x, p0.y - m0.y, p1.x - p0.x - m1.x + m0.x, p1.y - p0.y - m1.y + m0.y, path.radius + 8);
-        if (t !== null) {
-          const time = a + t * (end - a);
-          if (time < life)
-            events.push({ time, kind: 'mine', path, mine, ...mineAt(time) });
+        for (const { begin, finish } of spans(path, a, end)) {
+          const m0 = mineAt(begin), m1 = mineAt(finish), p0 = at(path, begin), p1 = at(path, finish);
+          const t = circleEntry(p0.x - m0.x, p0.y - m0.y, p1.x - p0.x - m1.x + m0.x, p1.y - p0.y - m1.y + m0.y, path.radius + 8);
+          if (t !== null) {
+            const time = begin + t * (finish - begin);
+            if (time < life)
+              events.push({ time, kind: 'mine', path, mine, ...mineAt(time) });
+          }
         }
       }
     Object.assign(mine, mineAt(dt));
@@ -1924,7 +2085,7 @@ export function stepBoarding(s: BoardingState, config: FlightConfig, input: Boar
             damageCarrier(s);
           else {
             removed.add(p.id);
-            s.intercepted++;
+            recordBoardingInterception(s, p.id);
           }
         }
       }
@@ -1945,16 +2106,25 @@ export function stepBoarding(s: BoardingState, config: FlightConfig, input: Boar
   if (s.carrier.hp > 0 && s.hull > 0) {
     s.spawnIn -= dt;
     while (s.spawnIn <= 0) {
-      const x = s.carrier.x + (random() - .5) * 40, y = s.carrier.y - 45;
-      const intercept = Math.hypot(x - s.x, y - s.y) / tuning.podSpeed;
-      const targetX = s.role === 'Pilot'
-        ? Math.max(22, Math.min(458, s.x + (s.x - oldShip.x) / dt * intercept))
-        : automaticShipX(s.elapsed + intercept);
-      const targetY = s.role === 'Pilot'
-        ? Math.max(22, Math.min(538, s.y + (s.y - oldShip.y) / dt * intercept)) : s.y;
+      const defense = s.role !== 'Pilot', flight = defense ? BOARDING_DEFENSE_TUNING[difficultyFor(config.total)] : tuning;
+      const kind = random() < .8 ? 'probe' : 'shuttle', radius = kind === 'probe' ? 12 : 18, hp = kind === 'probe' ? 1 : 2;
+      const port = s.launchedCraft++ % 2 ? 1 : -1;
+      const x = s.carrier.x + port * 28, y = s.carrier.y - 45;
+      const speed = flight.podSpeed * (kind === 'shuttle' ? .75 : 1);
+      const intercept = Math.hypot(x - s.x, y - s.y) / speed + (defense ? BOARDING_LAUNCH_WARNING : 0);
+      const offset = (random() - .5) * 80;
+      const targetX = Math.max(22, Math.min(458, (s.role === 'Pilot' ? s.x + (s.x - oldShip.x) / dt * intercept : automaticShipX(s.elapsed + intercept)) + offset));
+      const targetY = s.role === 'Pilot' ? Math.max(22, Math.min(538, s.y + (s.y - oldShip.y) / dt * intercept)) : s.y;
       const dx = targetX - x, dy = targetY - y, length = Math.max(1, Math.hypot(dx, dy));
-      s.pods.push({ id: s.nextId++, x, y, vx: dx / length * tuning.podSpeed, vy: dy / length * tuning.podSpeed, radius: 12 });
-      s.spawnIn += tuning.launchEvery;
+      let vx = dx / length * speed, vy = dy / length * speed;
+      if (defense && vy < 0) {
+        const maxVertical = Math.max(0, y - radius - BOARDING_LINE) / BOARDING_MIN_FLIGHT;
+        const scale = Math.min(1, maxVertical / -vy);
+        vx *= scale;
+        vy *= scale;
+      }
+      s.pods.push({ id: s.nextId++, kind, hp, maxHp: hp, x, y, vx, vy, radius, warningRemaining: defense ? BOARDING_LAUNCH_WARNING : 0, hitFlash: 0 });
+      s.spawnIn += flight.launchEvery * (defense ? 1 : .8);
     }
   }
   s.finished = s.hull <= 0 || s.elapsed >= DURATION;
