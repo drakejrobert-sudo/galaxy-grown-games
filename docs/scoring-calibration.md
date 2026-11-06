@@ -139,3 +139,7 @@ The aimed aft launcher keeps v0.5 rating anchors at 71–3,060 and the existing 
 ## Boarding Party addition — v0.6
 
 Four independent Boarding Party station ratings now use separate fixed 10th/90th-percentile anchors from 288 seeded runs each. Pilot: **62–900**, Gunner: **31–3418**, Bomber: **31–4100**, Life Support: **53–4900**. All eight existing live anchors and their synthetic samples remain unchanged; the shared report version advances to v0.6. See [Boarding Party calibration profiles, observed percentiles and owner checklist](boarding-party-playtest.md). These remain synthetic references, not proof of human/device balance.
+
+## Boarding Party clarity follow-up — v0.7
+
+Owner feedback at check 10 motivated gentler Boarding Gunner/Bomber launch windows and first-person Life Support. All four Boarding Party anchors are regenerated from the updated 288-sample seeded profiles: Pilot **68–900**, Gunner **46–3220**, Bomber **46–1917**, Life Support **61–4900**. The original eight modes' fixed anchors and synthetic references are unchanged; all reports now identify v0.7. See [the measured outcomes, limitations and owner checklist](boarding-party-clarity-playtest.md). These are provisional references, not owner balance acceptance.

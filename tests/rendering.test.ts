@@ -377,11 +377,30 @@ test('Boarding Party renderers keep frozen threats, cover, airlocks, warnings an
   for(const role of ['Pilot','Gunner','Bomber','Life Support'] as const) {
     h.scene.begin({total:5,naturalOne:true},'Boarding Party',role);
     const s=h.scene.boarding;s.grace=.5;s.beamTime=.05;s.carrier.targetX=120;
-    s.pods=[{id:1,x:200,y:300,vx:10,vy:-160,radius:12}];
-    s.boarders=[{id:2,x:145,y:180,slot:0,phase:'exposed',remaining:.5},{id:3,x:60,y:350,slot:2,phase:'relocating',remaining:.8}];
+    s.pods=[{id:1,x:200,y:300,vx:10,vy:-160,radius:12,kind:'probe',hp:1,maxHp:1,warningRemaining:.3,hitFlash:.1}];
+    s.boarders=[{id:2,x:145,y:180,slot:0,depth:0,phase:'exposed',remaining:.5},{id:3,x:60,y:350,slot:2,depth:1,phase:'relocating',remaining:.8}];
     s.airlocks[0].warning=.3;s.airlocks[1].cooldown=8;
     s.mines=[{id:4,x:200,y:250,armIn:0,expiresIn:3,blastRadius:41}];s.explosions=[{x:210,y:280,radius:41,remaining:.1}];
     const before=JSON.stringify(s);freeze(s);h.paint();h.setReduced(true);h.paint();
     assert.equal(JSON.stringify(s),before);assert.ok(h.commands.length>30);
   }
+});
+
+test('Boarding textures and labels are pooled, retire on mode switch, and retain partial-asset fallbacks',()=>{
+  const h=harness(),images:any[]=[],labels:any[]=[];
+  const object=(collection:any[],methods:string[])=>{const o:any={};for(const m of methods)o[m]=(...v:any[])=>{o[m.slice(3)]=v;return o;};collection.push(o);return o;};
+  h.scene.textures={exists:()=>true};
+  h.scene.add.image=()=>object(images,['setTexture','setPosition','setDisplaySize','setRotation','setAlpha','setDepth','setVisible']);
+  h.scene.add.text=()=>object(labels,['setText','setPosition','setOrigin','setFontSize','setColor','setDepth','setVisible']);
+  h.scene.begin({total:10,naturalOne:false},'Boarding Party','Life Support');
+  const s=h.scene.boarding;s.boarders=[{id:1,x:200,y:193,slot:0,depth:0,phase:'exposed',remaining:.3},{id:2,x:415,y:372,slot:3,depth:1,phase:'relocating',remaining:.8}];
+  s.lasers=[{id:3,x:200,y:193,side:0,duration:.9,remaining:.4}];const snapshot=JSON.stringify(s);freeze(s);h.paint();
+  assert.ok(images.some(i=>i.Texture[0]==='illustrated-boarding-corridor'));
+  assert.ok(images.some(i=>i.Texture[0]==='illustrated-boarding-rifle'&&i.Depth[0]>.0));
+  assert.ok(labels.some(l=>l.Text[0]==='VENT NOW'));const count=[images.length,labels.length];h.paint();assert.deepEqual([images.length,labels.length],count);
+  assert.equal(JSON.stringify(s),snapshot);
+  h.scene.textures.exists=(key:string)=>key!=='illustrated-boarding-corridor';h.paint();assert.ok(h.commands.some(c=>c[0]==='strokeRect'&&c[1]===195&&c[2]===100));
+  assert.ok(images.some(i=>i.Texture[0]==='illustrated-boarding-boarder'&&i.Visible[0]));
+  h.scene.textures.exists=()=>false;h.paint();assert.ok(images.every(i=>!i.Visible[0]));assert.ok(labels.some(l=>l.Visible[0]));
+  h.scene.situation='Asteroid Field';h.scene.role='Pilot';h.paint();assert.ok(labels.every(l=>!l.Visible[0]));
 });

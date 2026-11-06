@@ -1,0 +1,32 @@
+[
+  {
+    "name": "carrier",
+    "alpha": true,
+    "prompt": "A single original hostile sci-fi boarding carrier spacecraft sprite, strict orthographic TOP DOWN view, pointed bow pointing UP, broad heavy twin armored hulls, visible boarding launch bays, realistic layered dark graphite metal plating with muted coral-red panels, amber windows, subtle teal engines at stern. Detailed hand-painted realistic arcade game illustration with crisp silhouette matching a navy/coral spaceship game. Isolated whole craft centered with margin, no perspective foreshortening, no ground shadow, no text, no logos, no stars or backdrop. Genuine transparent background. This is the large mother ship; recognizable even at 80 pixels."
+  },
+  {
+    "name": "probe",
+    "alpha": true,
+    "prompt": "A single original unmanned boarding probe spacecraft sprite, strict orthographic TOP DOWN, nose pointing UP. Compact dart/capsule fuselage, mechanical claw-like docking prongs at bow, no cockpit, graphite metal and copper-orange details, small cyan stern thruster. Realistic layered metal and hand-painted arcade illustration, clear silhouette readable at 24px. Isolated entire object centered with margin. No text, no logos, no shadow, no stars, no surrounding scene. Genuine transparent background."
+  },
+  {
+    "name": "shuttle",
+    "alpha": true,
+    "prompt": "A single original crewed boarding shuttle spacecraft sprite, strict orthographic TOP DOWN, nose pointing UP. Stocky armored transport with two short swept wings and twin engines, visible cockpit glass and docking ramp at nose, graphite metal with muted burgundy/coral armor and amber lights. Realistic detailed hand-painted arcade game illustration, clearly wider and heavier than a tiny unmanned dart probe. Entire craft centered with margin, sharp silhouette legible at 36px. No text, no logos, no shadow, no stars, no surrounding scene. Genuine transparent background."
+  },
+  {
+    "name": "corridor",
+    "alpha": false,
+    "prompt": "Original first-person sci-fi spaceship corridor background for a portrait 480x560 arcade defense game. Eye-level stationary first-person view toward a distant central bulkhead vanishing point at x50% y25%. Deep navy graphite realistic metal, warm amber practical lighting and cyan side door lights, subtle worn panels, strong readable perspective floor lines. Large open side airlock bays at far LEFT and RIGHT in midground with empty interiors, central corridor has generous empty space for game-added enemies and waist-high cover. No people, no guns, no text, no labels, no HUD, no crosshair, no logos, no built-in foreground cover. Detailed painterly realistic game illustration, dark enough for bright red enemy lasers to stand out. Portrait composition, background fills whole image."
+  },
+  {
+    "name": "boarder",
+    "alpha": true,
+    "prompt": "A single original hostile sci-fi boarding soldier game sprite, front-facing view looking and aiming directly at viewer, full body including boots, helmeted face obscured by amber visor, dark graphite armored suit with burgundy/coral panels, holding a clearly readable futuristic laser carbine aimed toward camera at chest height. Realistic painterly game art, broad readable silhouette, no gore. Entire body isolated, upright centered with margin, neutral studio lighting, no ground plane or shadow, no scenery, no text or logos. Genuine transparent background. Intended for pop-up enemies behind cover in a first-person spaceship corridor arcade game."
+  },
+  {
+    "name": "rifle",
+    "alpha": true,
+    "prompt": "Original first-person futuristic laser rifle foreground game sprite, view from the player's eyes: only the weapon and two gloved hands visible, lower-right composition, barrel pointing diagonally upward toward the distant center of the screen. Graphite metallic housing with restrained lavender panels and cyan power cell, realistic layered worn metal, detailed painterly game art. Whole hands and weapon isolated with clean edge, no face or body, no environment, no text, no logos, no crosshair or HUD, no muzzle flash. Genuine transparent background. Will be overlaid in the bottom-right of a portrait sci-fi corridor defense game."
+  }
+]

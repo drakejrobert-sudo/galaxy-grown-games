@@ -13,7 +13,7 @@ fs.mkdirSync(out, { recursive: true });
   const errors = [], checks = [];
   try {
     for (const width of [1440, 390, 320]) {
-      const context = await browser.newContext({ viewport: { width, height: 1100 }, ...(width < 600 ? { isMobile: true, hasTouch: true } : {}) });
+      const context = await browser.newContext({ viewport: { width, height: width < 600 ? 844 : 1100 }, ...(width < 600 ? { isMobile: true, hasTouch: true } : {}) });
       const page = await context.newPage();
       page.on('pageerror', e => errors.push(e.message));
       page.on('console', e => { if (e.type() === 'error') errors.push(e.text()); });
@@ -27,8 +27,8 @@ fs.mkdirSync(out, { recursive: true });
           FlightScene.prototype.begin = function (...args) { begin.apply(this, args); window.qaScene = this; };
         }, new URL('src/game/runtime.ts', base).href);
         await page.locator('#role').selectOption(role);
-        await page.locator('#total').fill('16');
-        await page.locator('#natural-one').check();
+        await page.locator('#total').fill('10');
+        await page.locator('#natural-one').uncheck();
         await page.locator('#start').click();
         await page.locator('canvas').waitFor();
         await page.waitForTimeout(350);
@@ -62,10 +62,10 @@ fs.mkdirSync(out, { recursive: true });
         if (role === 'Life Support') {
           await page.locator('#vent-left').click();
           await page.waitForTimeout(80);
-          assert.ok(await page.evaluate(() => qaScene.boarding.airlocks[0].cooldown > 15));
+          assert.ok(await page.evaluate(() => qaScene.boarding.airlocks[0].cooldown > 7));
           assert.equal(await page.evaluate(() => qaScene.boarding.airlocks[1].cooldown), 0);
           await page.keyboard.press('KeyE'); await page.waitForTimeout(80);
-          assert.ok(await page.evaluate(() => qaScene.boarding.airlocks[1].cooldown > 15));
+          assert.ok(await page.evaluate(() => qaScene.boarding.airlocks[1].cooldown > 7));
         }
         await page.locator('#pause').click();
         const paused = await page.evaluate(() => JSON.stringify(qaScene.boarding));
@@ -81,18 +81,18 @@ fs.mkdirSync(out, { recursive: true });
         await page.evaluate(role => {
           const scene=qaScene,s=scene.boarding;scene.activeFlight=false;
           s.elapsed=role==='Life Support'?3:4;s.grace=0;s.carrier.x=240;s.carrier.targetX=240;s.carrier.y=250;s.carrier.cycle=0;
-          s.pods=[{id:100,x:140,y:340,vx:10,vy:-130,radius:12},{id:101,x:310,y:420,vx:-15,vy:-130,radius:12}];
-          s.boarders=[{id:102,x:145,y:180,slot:0,phase:'exposed',remaining:.9},{id:103,x:65,y:350,slot:2,phase:'relocating',remaining:.8},{id:104,x:335,y:180,slot:1,phase:'warning',remaining:.4}];
+          s.pods=[{id:100,kind:'probe',hp:1,maxHp:1,warningRemaining:0,hitFlash:0,x:140,y:340,vx:45,vy:-100,radius:12},{id:101,kind:'shuttle',hp:1,maxHp:2,warningRemaining:.4,hitFlash:.1,x:310,y:420,vx:-55,vy:-80,radius:18}];
+          s.boarders=[{id:102,x:200,y:193,slot:0,depth:0,phase:'exposed',remaining:.4},{id:103,x:415,y:372,slot:3,depth:1,phase:'relocating',remaining:.8},{id:104,x:310,y:288,slot:1,depth:1,phase:'warning',remaining:.4},{id:105,x:125,y:422,slot:2,depth:2,phase:'exposed',remaining:.9}];s.lasers=role==='Life Support'?[{id:106,x:200,y:193,side:0,duration:.9,remaining:.45}]:[];
           s.airlocks[0].warning=.4;s.airlocks[1].cooldown=9;s.airlocks[1].warning=null;scene.onBoardingStep(s);scene.paint();
         }, role);
         await page.screenshot({ path: path.join(out, `${role}-${width}.png`), fullPage: true });
         // Finish using a synthetic end-boundary fixture, verify the actual report UI and retry.
-        await page.evaluate(() => { const s=qaScene.boarding;s.elapsed=59.98;s.pods=[];s.boarders=[];s.carrier.hp=0;s.disabled=true;s.spawnIn=100;qaScene.activeFlight=true; });
+        await page.evaluate(() => { const s=qaScene.boarding;s.elapsed=59.98;s.pods=[];s.boarders=[];s.lasers=[];s.carrier.hp=0;s.disabled=true;s.spawnIn=100;qaScene.activeFlight=true; });
         await page.locator('#results:not([hidden])').waitFor();
         assert.match(await page.locator('#summary').inputValue(), /Boarding Party/);
-        assert.match(await page.locator('#summary').inputValue(), /Natural 1: Yes/);
+        assert.match(await page.locator('#summary').inputValue(), /Natural 1: No/);
         assert.match(await page.locator('#summary').inputValue(), /GM determines campaign outcome/);
-        await page.locator('#again').click(); await page.locator('#start').click();
+        await page.locator('#again').click(); await page.locator('#natural-one').check(); await page.locator('#start').click();
         assert.equal(await page.evaluate(() => qaScene.boarding.elapsed), 0);
         assert.equal(await page.evaluate(() => qaScene.boarding.aimDistance), 100);
         assert.equal(await page.locator('vite-error-overlay').count(), 0);
@@ -114,6 +114,32 @@ fs.mkdirSync(out, { recursive: true });
       assert.ok(await page.evaluate(() => {const a=JSON.parse(localStorage.getItem('galaxy-grown-map-v1'));return a.version===2 && a.campaigns[0].maps[0].journey.step===1;}));
       await context.close();
     }
+    // Decode final shipped assets and verify alpha survived WebP preparation.
+    const assetContext=await browser.newContext(),assetPage=await assetContext.newPage();await assetPage.goto(base);
+    const assets=await assetPage.evaluate(async base=>{
+      const results=[];for(const name of ['carrier','probe','shuttle','corridor','boarder','rifle']) {
+        const im=new Image();im.src=new URL('art/boarding-'+name+'.webp',base).href;await im.decode();
+        const canvas=document.createElement('canvas');canvas.width=im.width;canvas.height=im.height;const g=canvas.getContext('2d');g.drawImage(im,0,0);
+        const data=g.getImageData(0,0,im.width,im.height).data;let transparent=0,opaque=0;for(let i=3;i<data.length;i+=4){if(data[i]===0)transparent++;if(data[i]>240)opaque++;}
+        results.push({name,width:im.width,height:im.height,transparent,opaque});
+      }return results;
+    },base);
+    for(const a of assets){assert.ok(a.width>0&&a.height>0&&a.opaque>0);if(a.name!=='corridor')assert.ok(a.transparent>0,a.name+' retains alpha');}
+    await assetContext.close();
+    // Missing Boarding art must leave the first-person controls, warnings and rules usable.
+    const fallbackContext=await browser.newContext({viewport:{width:390,height:844},isMobile:true,hasTouch:true});const fallbackPage=await fallbackContext.newPage();
+    fallbackPage.on('pageerror',e=>errors.push(e.message));await fallbackPage.route('**/art/boarding-*.webp',route=>route.abort());
+    await fallbackPage.goto(base+'?situation=boarding-party');
+    await fallbackPage.evaluate(async url=>{const{FlightScene}=await import(url);const begin=FlightScene.prototype.begin;FlightScene.prototype.begin=function(...args){begin.apply(this,args);window.qaScene=this;};},new URL('src/game/runtime.ts',base).href);
+    await fallbackPage.locator('#role').selectOption('Life Support');await fallbackPage.locator('#total').fill('10');await fallbackPage.locator('#start').click();await fallbackPage.locator('canvas').waitFor();
+    await fallbackPage.waitForTimeout(250);if(await fallbackPage.locator('#resume').isVisible())await fallbackPage.locator('#resume').click();
+    await fallbackPage.evaluate(()=>{const s=qaScene.boarding;qaScene.activeFlight=false;s.boarders=[{id:900,x:310,y:288,slot:1,depth:1,phase:'exposed',remaining:.4}];s.lasers=[{id:901,x:200,y:193,side:0,duration:.9,remaining:.4}];qaScene.onBoardingStep(s);qaScene.paint();});
+    await fallbackPage.screenshot({path:path.join(out,'Life Support-fallback-390.png'),fullPage:true});
+    assert.ok(await fallbackPage.locator('#fire-action').isVisible());assert.ok(await fallbackPage.locator('#vent-controls').isVisible());
+    await fallbackPage.evaluate(()=>{const s=qaScene.boarding;qaScene.activeFlight=true;qaScene.readBoardingFrame=()=>({first:{x:0,y:0,firing:true,aimX:310,aimY:288},continued:{x:0,y:0,firing:false}});qaScene.advanceFrame(50);});
+    assert.equal(await fallbackPage.evaluate(()=>qaScene.boarding.shotBoarders),1);
+    await fallbackContext.close();
+    fs.writeFileSync(path.join(out,'assets.json'),JSON.stringify(assets,null,2));
     assert.deepEqual(errors, []);
     fs.writeFileSync(path.join(out, 'checks.json'), JSON.stringify(checks, null, 2));
     console.log(`PASS: Boarding Party live controls, pause/resize, fixture rendering/results/retry at desktop/390/320; ${out}`);

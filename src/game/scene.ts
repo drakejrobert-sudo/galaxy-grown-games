@@ -1,7 +1,7 @@
 import Phaser from 'phaser';
 import type { InputFrame } from './input';
 import {
-  createBoarding, stepBoarding, BOARDING_TUNING, difficultyFor, BOARDING_LINE, BOARDING_CYCLE, BOARDING_WARNING, BOARDING_CARRIER_RADIUS, BOARDING_AIRLOCKS, BOARDING_COVER, BOARDING_MINE_LIFETIME, BOARDING_BLAST_RADIUS, type BoardingState, type BoardingInput,
+  createBoarding, stepBoarding, BOARDING_TUNING, BOARDING_DEPTHS, boardingCover, boardingBoarderPose, boardingInAirlock, difficultyFor, BOARDING_LINE, BOARDING_CYCLE, BOARDING_WARNING, BOARDING_CARRIER_RADIUS, BOARDING_AIRLOCKS, BOARDING_COVER, BOARDING_MINE_LIFETIME, BOARDING_BLAST_RADIUS, type BoardingState, type BoardingInput,
   createSpaceGunner, stepSpaceGunner, SPACE_GUNNER_DEFENSE_LINE, type SpaceGunnerInput, type SpaceGunnerState, type SpaceGunnerAttacker,
   gunnerTargetAt, gunnerFireEvery, GUNNER_SHOT_FEEDBACK_SECONDS, type GunnerShotFeedback,
   createBomber, createFlight, createGunner, createLifeSupport, createSpaceBattleBomber, createSpaceBattlePilot, stepBomber,
@@ -30,23 +30,32 @@ export class FlightScene extends Phaser.Scene {
   spaceLife = createSpaceLifeSupport();
   private artPool: Phaser.GameObjects.Image[] = [];
   private artUsed = 0;
+  private labelPool: Phaser.GameObjects.Text[] = [];
+  private labelsUsed = 0;
 
   preload() {
     // Only the game runtime requests these assets; setup remains lightweight.
-    for (const name of ['space', 'interior', 'player', 'enemy', 'asteroid']) {
+    for (const name of ['space', 'interior', 'player', 'enemy', 'asteroid', 'boarding-carrier', 'boarding-probe', 'boarding-shuttle', 'boarding-corridor', 'boarding-boarder', 'boarding-rifle']) {
       this.load.image(`illustrated-${name}`, new URL(`art/${name}.webp`, document.baseURI).href);
     }
   }
 
   private hasArt(name: string) { return this.textures?.exists(`illustrated-${name}`) ?? false; }
 
-  private drawArt(name: string, x: number, y: number, width: number, height: number, rotation = 0, alpha = 1, background = false) {
+  private drawArt(name: string, x: number, y: number, width: number, height: number, rotation = 0, alpha = 1, background = false, depth = background ? -3 : -1) {
     if (!this.hasArt(name)) return false;
     const image = this.artPool[this.artUsed] ?? this.add.image(0, 0, `illustrated-${name}`);
     this.artPool[this.artUsed++] = image;
     image.setTexture(`illustrated-${name}`).setPosition(x, y).setDisplaySize(width, height)
-      .setRotation(rotation).setAlpha(alpha).setDepth(background ? -3 : -1).setVisible(true);
+      .setRotation(rotation).setAlpha(alpha).setDepth(depth).setVisible(true);
     return true;
+  }
+
+  private drawLabel(text: string, x: number, y: number, size = 12, color = '#e7edf9') {
+    if (typeof this.add.text !== 'function') return; // Graphics-only test/fallback harnesses.
+    const label = this.labelPool[this.labelsUsed] ?? this.add.text(0,0,'',{ fontFamily:'Arial, sans-serif',fontSize:size,fontStyle:'bold',color,backgroundColor:'#101528',padding:{x:3,y:2} });
+    this.labelPool[this.labelsUsed++] = label;
+    label.setText(text).setPosition(x,y).setOrigin(.5).setFontSize(size).setColor(color).setDepth(2).setVisible(true);
   }
 
   private playing = false;
@@ -186,6 +195,7 @@ export class FlightScene extends Phaser.Scene {
     g.clear();
     this.backgroundGraphics.clear();
     this.artUsed = 0;
+    this.labelsUsed = 0;
     const elapsed = this.situation === 'Boarding Party' ? this.boarding.elapsed : this.situation === 'Space Battle'
       ? this.role === 'Life Support' ? this.spaceLife.elapsed : this.role === 'Bomber' ? this.spaceBomber.elapsed : this.role === 'Gunner' ? this.spaceGunner.elapsed : this.spacePilot.elapsed
       : this.role === 'Pilot' ? this.flight.elapsed
@@ -205,73 +215,185 @@ export class FlightScene extends Phaser.Scene {
     else this.paintLifeSupportMode(g);
     this.paintFrame(g);
     for (let i = this.artUsed; i < this.artPool.length; i++) this.artPool[i].setVisible(false);
+    for (let i = this.labelsUsed; i < this.labelPool.length; i++) this.labelPool[i].setVisible(false);
   }
 
   private paintBoardingMode(g: Phaser.GameObjects.Graphics) {
     const s = this.boarding;
     if (s.role === 'Life Support') {
+      g.fillStyle(0x0a1425, .8); g.fillRoundedRect(12, 14, 456, 52, 6);
+      this.drawLabel('HOLD THE CORRIDOR', 240, 28, 15, '#79e1ce');
+      this.drawLabel(s.elapsed < 5 ? 'Shoot raised rifles • Watch incoming red lasers' : `Shot ${s.shotBoarders} • Ejected ${s.ejected}`, 240, 51, 11);
       for (const [i, z] of BOARDING_AIRLOCKS.entries()) {
-        const lock = s.airlocks[i];
-        g.fillStyle(lock.warning !== null ? 0xf4a55b : 0x246d78, .25); g.fillRect(z.x,z.y,z.width,z.height);
-        g.lineStyle(2,lock.warning !== null ? 0xffbd6b : lock.cooldown>0 ? 0x68758e : 0x79e1ce);
-        g.strokeRect(z.x,z.y,z.width,z.height);
-        // Chevrons identify the vent direction without relying on color.
-        const x = z.x+z.width/2;
-        for (const y of [110,450]) g.strokeTriangle(x+(i?10:-10),y,x+(i?-5:5),y-8,x+(i?-5:5),y+8);
+        const lock = s.airlocks[i], occupied = s.boarders.some(b => boardingInAirlock(b, i));
+        const color = lock.warning !== null ? 0xffca83 : occupied ? 0x79e1ce : 0x5d8e9a;
+        g.fillStyle(color, lock.warning !== null ? .22 : occupied ? .12 : .035);
+        g.fillRect(z.x, z.y, z.width, z.height);
+        g.lineStyle(2, color, .8);
+        g.strokeRect(z.x, z.y, z.width, z.height);
+        for (const y of [135, 440])
+          g.strokeTriangle(z.x + (i ? 75 : 20), y, z.x + (i ? 55 : 40), y - 9, z.x + (i ? 55 : 40), y + 9);
+        this.drawLabel(i ? 'RIGHT BAY' : 'LEFT BAY', z.x + z.width / 2, 105, 11, occupied ? '#79e1ce' : '#c7dce4');
+        if (occupied)
+          this.drawLabel(lock.warning !== null ? 'VENTING' : lock.cooldown > 0 ? 'RECHARGING' : 'VENT NOW', z.x + z.width / 2, 462, 10, '#79e1ce');
       }
-      for (const c of BOARDING_COVER) {
-        g.fillStyle(0x293d57); g.fillRoundedRect(c.x-30,c.y+8,60,28,5);
-        g.lineStyle(2,0x7792ab); g.strokeRoundedRect(c.x-30,c.y+8,60,28,5);
+      // Draw far figures first. Rule-owned depth determines scale and target size.
+      for (const b of [...s.boarders].sort((a, b) => a.depth - b.depth || a.y - b.y || a.id - b.id)) {
+        const scale = boardingBoarderPose(b).scale, exposed = b.phase === 'exposed';
+        const height = 126 * scale, width = 53 * scale, offset = b.phase === 'warning' ? 40 * scale : 9 * scale;
+        if (!this.drawArt('boarding-boarder', b.x, b.y + offset, width, height, 0, 1, false, -1 + b.depth * .05)) {
+          g.fillStyle(0x925f69);
+          g.fillCircle(b.x, b.y - 25 * scale, 10 * scale);
+          g.fillRoundedRect(b.x - 16 * scale, b.y - 12 * scale, 32 * scale, 50 * scale, 5);
+          g.lineStyle(4, 0xffaa7a);
+          g.lineBetween(b.x, b.y - 3 * scale, b.x + 18 * scale, b.y - 3 * scale);
+        }
+        if (exposed) {
+          const imminent = b.remaining < .5;
+          g.fillStyle(imminent ? 0xff596f : 0xffca83, .85);
+          g.fillCircle(b.x + 7 * scale, b.y - 5 * scale, imminent ? 5 : 3);
+          if (imminent) {
+            g.lineStyle(1, 0xff596f, .35);
+            g.lineBetween(b.x + 7 * scale, b.y - 5 * scale, 240, 540);
+          }
+        }
+        const radius = BOARDING_DEPTHS[b.depth].radius;
+        this.drawLabel(b.phase === 'relocating' ? 'MOVING' : exposed ? (b.remaining < .5 ? 'FIRING' : 'AIMING') : 'COVERED', b.x, b.y - 72 * scale, 10, exposed ? '#ffba9c' : '#c0cfdf');
+        if (exposed) {
+          g.lineStyle(1, 0xffca83, .7);
+          g.strokeCircle(b.x, b.y, radius);
+        }
       }
-      for (const b of s.boarders) {
-        const exposed = b.phase === 'exposed';
-        g.fillStyle(exposed ? 0xff806c : b.phase === 'warning' ? 0xffca83 : 0x8b9bb1);
-        g.fillCircle(b.x,b.y-10,9); g.fillRoundedRect(b.x-12,b.y,24,20,4);
-        if (exposed) { g.lineStyle(3,0xff806c);g.lineBetween(b.x+12,b.y+8,b.x+24,b.y+4); }
-        else { g.lineStyle(2,0xffca83);g.strokeCircle(b.x,b.y,25); }
-        const full = exposed ? BOARDING_TUNING[difficultyFor(this.config.total)].attackTime : b.phase === 'warning' ? .65 : 1.6;
-        g.fillStyle(0xffca83);g.fillRect(b.x-18,b.y-30,36*Math.min(1,b.remaining/full),3);
+      // Crates mask the lower bodies rather than presenting floating target icons.
+      for (let depth = 0; depth < 3; depth++)
+        for (const slot of [0, 1, 2, 3]) {
+          if (depth !== 0 && !s.boarders.some(b => b.slot === slot && (b.depth === depth || b.phase === 'relocating' && Math.min(2, b.depth + 1) === depth)))
+            continue;
+          const c = boardingCover(slot, depth), scale = BOARDING_DEPTHS[depth].scale, w = 67 * scale, h = 58 * scale;
+          g.fillStyle(0x263747);
+          g.fillRoundedRect(c.x - w / 2, c.y + 15 * scale, w, h, 4);
+          g.lineStyle(2, 0x6d8b9f);
+          g.strokeRoundedRect(c.x - w / 2, c.y + 15 * scale, w, h, 4);
+          g.fillStyle(0x405466);
+          g.fillRect(c.x - w / 2 + 3, c.y + 17 * scale, w - 6, 6 * scale);
+          g.fillStyle(0x192b3b);
+          g.fillRect(c.x + w / 2 - 10 * scale, c.y + 23 * scale, 6 * scale, h - 12 * scale);
+          g.lineStyle(2, 0x152232);
+          g.lineBetween(c.x - w / 2 + 7, c.y + 22 * scale, c.x + w / 2 - 7, c.y + (15 + 50) * scale);
+          g.lineStyle(2, 0xc1a679, .7);
+          g.lineBetween(c.x - w / 2 + 5, c.y + 17 * scale, c.x + w / 2 - 5, c.y + 17 * scale);
+        }
+      if (!this.drawArt('boarding-rifle', 370, 510, 220, 147, 0, 1, false, .5)) {
+        g.fillStyle(0x3f4b63);
+        g.fillRoundedRect(315, 465, 130, 90, 12);
+        g.lineStyle(16, 0x9faec1);
+        g.lineBetween(350, 485, 290, 440);
       }
-    } else {
+      for (const laser of s.lasers) {
+        const t = 1 - Math.max(0, laser.remaining) / laser.duration;
+        const x = laser.x + (240 - laser.x) * t, y = laser.y + (540 - laser.y) * t;
+        const dx = 240 - laser.x, dy = 540 - laser.y, length = Math.max(1, Math.hypot(dx, dy)), trail = 16 + 30 * t;
+        g.lineStyle(10 + 8 * t, 0xff475f, .15);
+        g.lineBetween(x, y, x - dx / length * trail, y - dy / length * trail);
+        g.lineStyle(3 + 3 * t, 0xff6b75, 1);
+        g.lineBetween(x, y, x - dx / length * trail, y - dy / length * trail);
+        g.fillStyle(0xffe0d2);
+        g.fillCircle(x, y, 3 + 3 * t);
+      }
+      if (s.impactFlash > 0) {
+        g.fillStyle(0xff465d, s.impactFlash * .7);
+        g.fillRect(s.impactSide ? WIDTH - 55 : 0, 90, 55, 420);
+        this.drawLabel(s.impactSide ? 'HIT FROM RIGHT' : 'HIT FROM LEFT', 240, 82, 12, '#ffb4a2');
+      }
+    }
+    else {
       if (s.role !== 'Pilot') {
-        g.lineStyle(2,0xffbd6b,.7);g.lineBetween(16,BOARDING_LINE,464,BOARDING_LINE);
-        for(const x of [24,456]) g.strokeTriangle(x,BOARDING_LINE-7,x-5,BOARDING_LINE+4,x+5,BOARDING_LINE+4);
+        g.lineStyle(2, 0xffbd6b, .7);
+        g.lineBetween(16, BOARDING_LINE, 464, BOARDING_LINE);
+        for (const x of [24, 456])
+          g.strokeTriangle(x, BOARDING_LINE - 7, x - 5, BOARDING_LINE + 4, x + 5, BOARDING_LINE + 4);
       }
-      const c=s.carrier, phase=s.elapsed%BOARDING_CYCLE;
-      if(c.hp>0) {
-        if(phase<BOARDING_WARNING) {
-          g.lineStyle(2,0xffca83,.8);g.lineBetween(c.targetX,210,c.targetX,460);
-          g.strokeTriangle(c.targetX,215,c.targetX-12,240,c.targetX+12,240);
+      const c = s.carrier, phase = s.elapsed % BOARDING_CYCLE;
+      if (c.hp > 0) {
+        if (phase < BOARDING_WARNING) {
+          g.lineStyle(2, 0xffca83, .8);
+          g.lineBetween(c.startX, 500, c.targetX, 250);
+          g.strokeTriangle(c.targetX, 215, c.targetX - 12, 240, c.targetX + 12, 240);
         }
         // Carrier hull silhouette and health bar reflect its actual collision radius.
-        if (!this.drawArt('enemy',c.x,c.y,90,72,Math.PI)) {
-          g.fillStyle(0x68485f);g.fillRoundedRect(c.x-34,c.y-30,68,60,12);
-          g.lineStyle(2,0xff9781);g.lineBetween(c.x,c.y-30,c.x,c.y+20);
+        const dx = phase < 6 ? c.targetX - c.startX : c.startX - c.targetX;
+        const rotation = phase < BOARDING_WARNING ? 0 : phase < 6 ? Math.atan2(-250, dx) + Math.PI / 2 : phase < 9 ? Math.atan2(250, dx) + Math.PI / 2 : (s.carrier.cycle % 2 ? -Math.PI / 2 : Math.PI / 2);
+        if (!this.drawArt('boarding-carrier', c.x, c.y, 50, 72, rotation)) {
+          g.fillStyle(0x68485f);
+          g.fillRoundedRect(c.x - 34, c.y - 30, 68, 60, 12);
+          g.lineStyle(2, 0xff9781);
+          g.lineBetween(c.x, c.y - 30, c.x, c.y + 20);
         }
-        g.lineStyle(3,0xff9781);g.strokeCircle(c.x,c.y,BOARDING_CARRIER_RADIUS);
-        g.fillStyle(0x20283e);g.fillRect(c.x-36,c.y+43,72,6);
-        g.fillStyle(0xff9781);g.fillRect(c.x-36,c.y+43,72*c.hp/c.maxHp,6);
-        for(const dx of [-23,23]) {g.fillStyle(0xffca83);g.fillTriangle(c.x+dx,c.y-42,c.x+dx-8,c.y-23,c.x+dx+8,c.y-23);}
+        g.lineStyle(3, 0xff9781);
+        g.strokeCircle(c.x, c.y, BOARDING_CARRIER_RADIUS);
+        g.fillStyle(0x20283e);
+        g.fillRect(c.x - 36, c.y + 43, 72, 6);
+        g.fillStyle(0xff9781);
+        g.fillRect(c.x - 36, c.y + 43, 72 * c.hp / c.maxHp, 6);
+        for (const dx of [-23, 23]) {
+          g.fillStyle(0xffca83);
+          g.fillTriangle(c.x + dx, c.y - 42, c.x + dx - 8, c.y - 23, c.x + dx + 8, c.y - 23);
+        }
       }
-      for(const p of s.pods) {
-        g.lineStyle(2,0xffca83,.6);g.lineBetween(p.x,p.y,p.x-p.vx*.12,p.y-p.vy*.12);
-        g.fillStyle(0xffbd6b);g.fillTriangle(p.x,p.y-12,p.x-10,p.y+10,p.x+10,p.y+10);
-        g.lineStyle(2,0x291f38);g.strokeCircle(p.x,p.y,5);
+      for (const p of s.pods) {
+        const rotation = Math.atan2(p.vy, p.vx) + Math.PI / 2, shuttle = p.kind === 'shuttle';
+        if (!this.drawArt(shuttle ? 'boarding-shuttle' : 'boarding-probe', p.x, p.y, shuttle ? 34 : 16, shuttle ? 32 : 24, rotation)) {
+          g.fillStyle(shuttle ? 0xcf8098 : 0xffbd6b);
+          g.fillTriangle(p.x, p.y - p.radius, p.x - p.radius, p.y + p.radius, p.x + p.radius, p.y + p.radius);
+        }
+        g.lineStyle(2, shuttle ? 0xe795ac : 0xffca83, .6);
+        g.lineBetween(p.x, p.y, p.x - p.vx * .12, p.y - p.vy * .12);
+        if (p.warningRemaining > 0) {
+          g.lineStyle(2, 0xffca83, .9);
+          g.strokeCircle(p.x, p.y, p.radius + 5);
+          this.drawLabel('LAUNCH', p.x, p.y + p.radius + 13, 10, '#ffca83');
+        }
+        if (shuttle)
+          for (let i = 0; i < p.maxHp; i++) {
+            g.fillStyle(i < p.hp ? 0xffb6a0 : 0x45344e);
+            g.fillRect(p.x - 7 + i * 8, p.y - p.radius - 9, 5, 4);
+          }
+        if (p.hitFlash > 0) {
+          g.lineStyle(3, 0xffffff, .9);
+          g.strokeCircle(p.x, p.y, p.radius + 2);
+        }
       }
-      for(const m of s.mines)this.paintMine(g,m,s.elapsed,BOARDING_MINE_LIFETIME,!!m.flight);
-      for(const e of s.explosions)this.paintMineExplosion(g,e);
-      if(s.role==='Bomber') {
-        const rack=mineDropPosition(s),target=spaceBomberLanding(s);
-        g.lineStyle(2,0xffca83,.7);g.lineBetween(rack.x,rack.y,target.x,target.y);
-        this.paintWeaponTarget(g,target.x,target.y,BOARDING_BLAST_RADIUS*(this.config.naturalOne?Math.SQRT1_2:1),0xffca83,s.cooldown<=0);
-        g.fillStyle(s.cooldown<=0?0xffca83:0x68758e);g.fillRoundedRect(rack.x-10,rack.y-4,20,8,3);
+      for (const m of s.mines)
+        this.paintMine(g, m, s.elapsed, BOARDING_MINE_LIFETIME, !!m.flight);
+      for (const e of s.explosions)
+        this.paintMineExplosion(g, e);
+      if (s.role === 'Bomber') {
+        const rack = mineDropPosition(s), target = spaceBomberLanding(s);
+        g.lineStyle(2, 0xffca83, .7);
+        g.lineBetween(rack.x, rack.y, target.x, target.y);
+        this.paintWeaponTarget(g, target.x, target.y, BOARDING_BLAST_RADIUS * (this.config.naturalOne ? Math.SQRT1_2 : 1), 0xffca83, s.cooldown <= 0);
+        g.fillStyle(s.cooldown <= 0 ? 0xffca83 : 0x68758e);
+        g.fillRoundedRect(rack.x - 10, rack.y - 4, 20, 8, 3);
       }
-      this.paintPlayerShip(g,s.x,s.y,s.elapsed,false);
+      this.paintPlayerShip(g, s.x, s.y, s.elapsed, false);
     }
-    if(s.grace>0) {g.lineStyle(4,0x79e1ce,.7);g.strokeRect(12,12,456,536);}
-    if(s.role==='Gunner'||s.role==='Life Support') {
-      if(s.beamTime>0) {g.lineStyle(3,0x79e1ce,.85);g.lineBetween(s.role==='Life Support'?240:s.x,s.role==='Life Support'?530:s.y,s.beamX,s.beamY);}
-      this.paintWeaponTarget(g,s.crosshairX,s.crosshairY,14,0x79e1ce,s.cooldown<=0);
+    if (s.hitFlash > 0) {
+      g.lineStyle(2, 0xffffff);
+      for (const sign of [-1, 1]) {
+        g.lineBetween(s.hitX + sign * 6, s.hitY + sign * 6, s.hitX + sign * 12, s.hitY + sign * 12);
+        g.lineBetween(s.hitX + sign * 6, s.hitY - sign * 6, s.hitX + sign * 12, s.hitY - sign * 12);
+      }
+    }
+    if (s.grace > 0) {
+      g.lineStyle(4, 0x79e1ce, .7);
+      g.strokeRect(12, 12, 456, 536);
+    }
+    if (s.role === 'Gunner' || s.role === 'Life Support') {
+      if (s.beamTime > 0) {
+        g.lineStyle(3, 0x79e1ce, .85);
+        g.lineBetween(s.role === 'Life Support' ? 285 : s.x, s.role === 'Life Support' ? 445 : s.y, s.beamX, s.beamY);
+      }
+      this.paintWeaponTarget(g, s.crosshairX, s.crosshairY, 14, 0x79e1ce, s.cooldown <= 0);
     }
   }
 
@@ -290,6 +412,13 @@ export class FlightScene extends Phaser.Scene {
   }
 
   private paintBackground(g: Phaser.GameObjects.Graphics, elapsed: number) {
+    if(this.situation==='Boarding Party'&&this.role==='Life Support') {
+      if(this.drawArt('boarding-corridor',240,280,480,560,0,1,true))return;
+      g.fillStyle(0x101b2a);g.fillRect(0,0,480,560);
+      g.lineStyle(3,0x506c85);for(const [x,y] of [[0,0],[480,0],[0,560],[480,560],[120,560],[360,560]])g.lineBetween(240,140,x,y);
+      g.lineStyle(2,0x7296a5);g.strokeRect(195,100,90,120);return;
+    }
+
     const illustrated = this.drawArt(this.role === 'Life Support' ? 'interior' : 'space', WIDTH / 2, HEIGHT / 2, WIDTH, HEIGHT, 0, 1, true);
     if (!illustrated) {
       g.fillStyle(0x101528); g.fillRect(0, 0, WIDTH, HEIGHT);
