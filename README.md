@@ -237,3 +237,11 @@ The aimed aft-launcher follow-up is documented in [Space Bomber engineering play
 The shorter-placement and in-flight contact follow-up is recorded in [short-launch engineering validation](docs/space-bomber-short-launch-playtest.md).
 
 Asteroid Bomber launcher engineering validation and remaining device checks are recorded in [Asteroid Bomber launcher playtest](docs/asteroid-bomber-launcher-playtest.md).
+
+### Illustrated polish and development skills
+
+Flight Deck and schematic Galaxy Maps use compact original illustrated artwork with procedural fallbacks. Gameplay geometry, controls, balance and save formats are unchanged. Map selections preserve keyboard focus and horizontal scroll; linked views remember their scroll positions until the page reloads. Uploaded map backgrounds still take precedence. See [artwork provenance and rendering contract](docs/illustrated-artwork.md).
+
+Three portable, automatically discoverable Codex skills live in `.agents/skills/`: `galaxy-game-development`, `galaxy-map-development` and `galaxy-playtest`. They provide focused entry points, relevant tests and evidence requirements for Sol, Terra or other coding models, without requiring personal plugins. Invoke a skill by name or let Codex select it for matching work. `AGENTS.md` remains the workflow authority.
+
+With Playwright available, run `node scripts/browser-polish-check.cjs` against a running local server. `BASE_URL` overrides its default `http://127.0.0.1:5187/galaxy-grown-games/`; `PLAYWRIGHT_MODULE` can point to an existing installation, and `QA_OUTPUT` selects an artifact directory outside the repository. Browser automation is optional tooling, not an application dependency. See [illustrated polish validation](docs/illustrated-polish-playtest.md) for evidence and outstanding owner checks.
