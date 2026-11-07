@@ -1,6 +1,6 @@
 /** Repeatable, deliberately synthetic score samples. Run: node --import tsx scripts/calibrate-scores.ts */
 import {
-  createBoarding, stepBoarding, boardingScoreFor, boardingInAirlock, BOARDING_TUNING, difficultyFor,
+  createBoarding, stepBoarding, boardingScoreFor, boardingAirlockTargetActive, BOARDING_AIRLOCK_TARGETS, BOARDING_TUNING, difficultyFor,
   createSpaceGunner, stepSpaceGunner, spaceGunnerScoreFor, SPACE_GUNNER_DEFENSE_LINE,
   DURATION, HEIGHT, WIDTH, createFlight, stepFlight, scoreFor,
   createGunner, stepGunner, gunnerScoreFor,
@@ -50,8 +50,9 @@ function run(mode: ScoreMode, config: FlightConfig, profile: Profile, seed: numb
     while (!s.finished) {
       const active = profile !== 'passive';
       const urgent = [...s.pods].sort((a,b)=>a.y-b.y || a.id-b.id)[0];
-      const target = role === 'Life Support' ? s.boarders.filter(b=>b.phase==='exposed').sort((a,b)=>a.remaining-b.remaining || a.id-b.id)[0]
-        : profile === 'engaged' && urgent && urgent.y < 300 ? urgent : s.carrier.hp > 0 ? s.carrier : urgent;
+      const control = role === 'Life Support' && profile === 'engaged' ? BOARDING_AIRLOCK_TARGETS.find((_, side) => boardingAirlockTargetActive(s, side)) : undefined;
+      const target = control ?? (role === 'Life Support' ? s.boarders.filter(b=>b.phase==='exposed').sort((a,b)=>a.remaining-b.remaining || a.id-b.id)[0]
+        : profile === 'engaged' && urgent && urgent.y < 300 ? urgent : s.carrier.hp > 0 ? s.carrier : urgent);
       const rack = mineDropPosition(s);
       const mineTarget = profile === 'engaged' ? [...s.pods, ...(s.carrier.hp>0?[s.carrier]:[])]
         .filter(p=>p.y>=rack.y && Math.hypot(p.x-rack.x,p.y-rack.y)<=100)
@@ -80,8 +81,6 @@ function run(mode: ScoreMode, config: FlightConfig, profile: Profile, seed: numb
         aimX:active?target?.x:undefined, aimY:active?target?.y:undefined,
         placing:active && s.cooldown<=0 && (profile==='routine'||!!mineTarget),
         ...(mineTarget?{launch:{x:mineTarget.x,y:mineTarget.y}}:{}),
-        ventLeft:profile==='engaged'&&s.boarders.some(b=>boardingInAirlock(b,0)),
-        ventRight:profile==='engaged'&&s.boarders.some(b=>boardingInAirlock(b,1)),
       },step,random);
     }
     return boardingScoreFor(s);

@@ -18,15 +18,23 @@ function harness() {
   const scene = new exports.FlightScene('test');
   const commands: unknown[][] = [];
   let depth = 0;
-  const graphics: any = new Proxy({}, { get: (_target, name) => (...args: unknown[]) => {
-    for (const value of args) if (typeof value === 'number') assert.ok(Number.isFinite(value), `${String(name)} has invalid geometry`);
-    if (name === 'save') depth++;
-    if (name === 'restore') { depth--; assert.ok(depth >= 0); }
-    commands.push([name, ...args]); return graphics;
-  } });
-  scene.add = { graphics: () => graphics };
+  const layers: { depth: number; visible: boolean; commands: unknown[][] }[] = [];
+  const makeGraphics = () => {
+    const state = { depth: 0, visible: true, commands: [] as unknown[][] };layers.push(state);
+    const graphics: any = new Proxy({}, { get: (_target, name) => (...args: unknown[]) => {
+      for (const value of args) if (typeof value === 'number') assert.ok(Number.isFinite(value), `${String(name)} has invalid geometry`);
+      if (name === 'save') depth++;
+      if (name === 'restore') { depth--; assert.ok(depth >= 0); }
+      if (name === 'setDepth') state.depth = args[0] as number;
+      if (name === 'setVisible') state.visible = args[0] as boolean;
+      if (name === 'clear') state.commands.length = 0;
+      state.commands.push([name, ...args]); commands.push([name, ...args]); return graphics;
+    } });
+    return graphics;
+  };
+  scene.add = { graphics: makeGraphics };
   scene.create();
-  return { scene, commands, setReduced: (value: boolean) => { reduced = value; },
+  return { scene, commands, layers, setReduced: (value: boolean) => { reduced = value; },
     paint() { commands.length = 0; scene.paint(); assert.equal(depth, 0, 'rendering restores canvas transforms'); } };
 }
 function freeze(value: any): any {
@@ -338,7 +346,7 @@ test('illustrated sprites reuse a bounded pool, hide retired objects and leave a
   h.scene.textures = { exists: () => true };
   h.scene.add.image = (_x: number, _y: number, texture: string) => {
     const image: any = { texture };
-    for (const method of ['setTexture', 'setPosition', 'setDisplaySize', 'setRotation', 'setAlpha', 'setDepth', 'setVisible']) {
+    for (const method of ['setCrop', 'setMask', 'clearMask', 'setTexture', 'setPosition', 'setDisplaySize', 'setRotation', 'setAlpha', 'setDepth', 'setVisible']) {
       image[method] = (...args: any[]) => { image[method.slice(3)] = args; return image; };
     }
     images.push(image); return image;
@@ -390,17 +398,102 @@ test('Boarding textures and labels are pooled, retire on mode switch, and retain
   const h=harness(),images:any[]=[],labels:any[]=[];
   const object=(collection:any[],methods:string[])=>{const o:any={};for(const m of methods)o[m]=(...v:any[])=>{o[m.slice(3)]=v;return o;};collection.push(o);return o;};
   h.scene.textures={exists:()=>true};
-  h.scene.add.image=()=>object(images,['setTexture','setPosition','setDisplaySize','setRotation','setAlpha','setDepth','setVisible']);
+  h.scene.add.image=()=>object(images,['setCrop','setMask','clearMask','setTexture','setPosition','setDisplaySize','setRotation','setAlpha','setDepth','setVisible']);
   h.scene.add.text=()=>object(labels,['setText','setPosition','setOrigin','setFontSize','setColor','setDepth','setVisible']);
   h.scene.begin({total:10,naturalOne:false},'Boarding Party','Life Support');
   const s=h.scene.boarding;s.boarders=[{id:1,x:200,y:193,slot:0,depth:0,phase:'exposed',remaining:.3},{id:2,x:415,y:372,slot:3,depth:1,phase:'relocating',remaining:.8}];
   s.lasers=[{id:3,x:200,y:193,side:0,duration:.9,remaining:.4}];const snapshot=JSON.stringify(s);freeze(s);h.paint();
   assert.ok(images.some(i=>i.Texture[0]==='illustrated-boarding-corridor'));
   assert.ok(images.some(i=>i.Texture[0]==='illustrated-boarding-rifle'&&i.Depth[0]>.0));
-  assert.ok(labels.some(l=>l.Text[0]==='VENT NOW'));const count=[images.length,labels.length];h.paint();assert.deepEqual([images.length,labels.length],count);
+  assert.ok(labels.every(l=>!['SHOOT','STANDBY','OPENING','VENTING','COVERED','AIMING','FIRING','MOVING','LEFT AIRLOCK','RIGHT AIRLOCK'].includes(l.Text?.[0])));const count=[images.length,labels.length];h.paint();assert.deepEqual([images.length,labels.length],count);
   assert.equal(JSON.stringify(s),snapshot);
   h.scene.textures.exists=(key:string)=>key!=='illustrated-boarding-corridor';h.paint();assert.ok(h.commands.some(c=>c[0]==='strokeRect'&&c[1]===195&&c[2]===100));
   assert.ok(images.some(i=>i.Texture[0]==='illustrated-boarding-boarder'&&i.Visible[0]));
   h.scene.textures.exists=()=>false;h.paint();assert.ok(images.every(i=>!i.Visible[0]));assert.ok(labels.some(l=>l.Visible[0]));
   h.scene.situation='Asteroid Field';h.scene.role='Pilot';h.paint();assert.ok(labels.every(l=>!l.Visible[0]));
+});
+
+test('cargo stays present and depth-orders with enemies; ducked bodies do not leak beneath stacks',()=>{
+  const h=harness(),images:any[]=[];
+  const object=()=>{const o:any={};for(const m of ['setCrop','setMask','clearMask','setTexture','setPosition','setDisplaySize','setRotation','setAlpha','setDepth','setVisible'])o[m]=(...v:any[])=>{o[m.slice(3)]=v;return o;};images.push(o);return o;};
+  h.scene.textures={exists:()=>true};h.scene.add.image=object;
+  h.scene.begin({total:10,naturalOne:false},'Boarding Party','Life Support');h.paint();
+  const cargo=()=>h.layers.filter(l=>l.visible&&l.commands.some(c=>c[0]==='fillEllipse'));
+  assert.equal(cargo().length,6,'one fixed stack per side at each depth, even without enemies');
+  const emptyDepths=cargo().map(l=>l.depth);
+  const s=h.scene.boarding;s.boarders=[{id:1,...rules.boardingCover(0,0),slot:0,depth:0,phase:'exposed',remaining:1},{id:2,...rules.boardingCover(1,2),slot:1,depth:2,phase:'warning',remaining:.5}];
+  h.paint();assert.deepEqual(cargo().map(l=>l.depth),emptyDepths);
+  const boarders=images.filter(i=>i.Visible[0]&&i.Texture[0]==='illustrated-boarding-boarder');
+  assert.equal(boarders.length,1,'covered bodies are hidden, with only a procedural helmet behind cargo');
+  const ownCover=cargo().find(l=>Math.abs(l.depth-(-1.9+(s.boarders[0].y+1)/600))<1e-8)!;
+  assert.ok(ownCover.depth>boarders[0].Depth[0],'own cover masks lower body');
+  assert.ok(cargo().filter(l=>l.depth>ownCover.depth).length>0,'near cargo masks distant sprites');
+  const count=h.layers.length;h.paint();assert.equal(h.layers.length,count,'graphics layers are reused');
+  h.scene.situation='Asteroid Field';h.scene.role='Pilot';h.paint();assert.ok(h.layers.slice(2).every(l=>!l.visible),'no corridor graphics leak into another mode');
+});
+test('door/ejection animation phases render frozen states with art or fallbacks and reuse their pools',()=>{
+  const h=harness();h.scene.begin({total:10,naturalOne:false},'Boarding Party','Life Support');
+  for(const remaining of [.45,.225,.01]) {
+    const state=structuredClone(rules.createBoarding('Life Support'));
+    state.ejections=[{x:65,y:330,scale:.9,side:0,remaining}];state.airlocks[0].openRemaining=remaining;
+    state.airlocks[1].warning=.3;h.scene.boarding=freeze(state);const before=JSON.stringify(state);
+    h.paint();const count=h.layers.length;h.paint();assert.equal(h.layers.length,count);assert.equal(JSON.stringify(state),before);
+    assert.ok(h.commands.some(c=>c[0]==='lineBetween'),'airflow is drawn');
+  }
+});
+
+test('corridor keeps only opening guidance, then removes all in-scene labels, retaining nonverbal cues',()=>{
+  const h=harness(),labels:any[]=[];
+  h.scene.add.text=()=>{const o:any={};for(const m of ['setText','setPosition','setOrigin','setFontSize','setColor','setDepth','setVisible'])o[m]=(...v:any[])=>{o[m.slice(3)]=v;return o;};labels.push(o);return o;};
+  h.scene.begin({total:10,naturalOne:true},'Boarding Party','Life Support');
+  const s=h.scene.boarding;s.boarders=[{id:1,...rules.boardingCover(0,0),slot:0,depth:0,phase:'exposed',remaining:.2},{id:2,x:415,y:337,slot:1,depth:1,phase:'relocating',remaining:.8}];
+  h.paint();assert.equal(labels.filter(l=>l.Visible?.[0]).length,2,'brief opening guidance only');
+  s.elapsed=6;s.impactFlash=.2;s.airlocks[0].cooldown=8;h.paint();
+  assert.equal(labels.filter(l=>l.Visible?.[0]).length,0,'no enemy, door or damage words in the corridor');
+  assert.ok(h.commands.some(c=>c[0]==='fillCircle'&&c[1]===rules.BOARDING_AIRLOCK_TARGETS[1].x),'lit wall target remains');
+  assert.ok(h.commands.filter(c=>c[0]==='fillRect'&&c[4]===3).length>=16,'two segmented recharge gauges');
+});
+
+test('textured airlock panels slide within two reused masks and release crops/masks on mode changes',()=>{
+  const h=harness(),images:any[]=[];
+  h.scene.textures={exists:()=>true};
+  h.scene.add.image=()=>{
+    const o:any={frame:{realWidth:640,realHeight:800},mask:null};
+    for(const m of ['setTexture','setPosition','setDisplaySize','setRotation','setAlpha','setDepth','setVisible','setCrop'])o[m]=(...v:any[])=>{o[m.slice(3)]=v;return o;};
+    o.setMask=(mask:any)=>{o.mask=mask;return o;};o.clearMask=()=>{o.mask=null;return o;};images.push(o);return o;
+  };
+  h.scene.begin({total:10,naturalOne:false},'Boarding Party','Life Support');h.paint();
+  const panels=()=>images.filter(i=>i.Visible[0]&&i.mask);
+  assert.equal(panels().length,4);assert.equal(new Set(panels().map(i=>i.mask)).size,2);
+  assert.ok(panels().every(i=>i.Crop.length===4&&i.Crop.every(Number.isFinite)&&i.Crop[2]>0&&i.Crop[3]>0));
+  const closed=panels().map(i=>i.Position[0]),count=h.layers.length;
+  h.scene.boarding.airlocks[0].warning=.3;h.paint();
+  assert.ok(panels()[0].Position[0]<closed[0]);assert.ok(panels()[1].Position[0]>closed[1]);
+  assert.equal(h.layers.length,count,'door clipping shapes are reused');
+  h.scene.situation='Asteroid Field';h.scene.role='Pilot';h.paint();
+  assert.ok(images.filter(i=>i.Visible[0]).every(i=>i.mask===null&&i.Crop.length===0),'reused images never retain door clipping');
+  h.scene.situation='Boarding Party';h.scene.role='Life Support';h.scene.textures.exists=(key:string)=>key!=='illustrated-boarding-corridor';h.paint();
+  assert.equal(panels().length,0);assert.ok(h.commands.some(c=>c[0]==='fillPoints'),'perspective door fallback stays usable');
+});
+
+test('covered helmets clear their own cargo silhouette on both sides at every depth, with hidden bodies',()=>{
+  for(const slot of [0,1])for(const depth of [0,1,2]) {
+    const h=harness();h.scene.begin({total:10,naturalOne:false},'Boarding Party','Life Support');
+    const c=rules.boardingCover(slot,depth),scale=rules.BOARDING_DEPTHS[depth].scale;
+    h.scene.boarding.boarders=[{id:1,...c,slot,depth,phase:'warning',remaining:.5}];
+    h.scene.boarding.elapsed=10;const before=JSON.stringify(h.scene.boarding);h.paint();
+    const helmetLayer=h.layers.find(l=>l.visible&&l.commands.some(p=>p[0]==='fillCircle'&&p[1]===c.x&&p[3]===9*scale))!;
+    assert.ok(helmetLayer,'warning helmet has a render layer');
+    const helmet=helmetLayer.commands.find(p=>p[0]==='fillCircle')!,headY=helmet[2] as number,radius=helmet[3] as number;
+    const cargoTop=c.y+6*scale;
+    assert.ok(headY-radius<=cargoTop-6*scale,'a visible cap clears the upper case top face');
+    assert.ok(headY+radius>cargoTop,'the lower helmet remains behind the case');
+    const cargo=h.layers.find(l=>l.visible&&l.commands.some(p=>p[0]==='fillEllipse'&&p[1]===c.x&&p[2]===c.y+83*scale))!;
+    assert.ok(cargo.depth>helmetLayer.depth,'cargo masks the lower helmet and body');
+    assert.ok(!helmetLayer.commands.some(p=>p[0]==='fillRoundedRect'),'no ducked body can leak below cargo');
+    const visor=helmetLayer.commands.find(p=>p[0]==='fillRect')!;
+    assert.ok(visor,'amber visor supplies a readable warning cue');
+    assert.ok((visor[2] as number)+(visor[4] as number)<cargoTop,'visor stays above the occluding face');
+    assert.equal(JSON.stringify(h.scene.boarding),before);
+  }
 });

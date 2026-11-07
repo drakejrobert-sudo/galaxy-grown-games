@@ -170,9 +170,6 @@
 .routing-status[data-outcome="correct"] { border-color: var(--mint); color: #baffeb; }
 .routing-status[data-outcome="incorrect"] { border-color: #ff8f6b; color: #ffd4c7; }
 
-.vent-controls { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; max-width: 480px; margin: 10px auto; }
-.vent-controls button { touch-action: none; user-select: none; min-height: 56px; padding: 10px 6px; font-size: 12px; border-color: #79e1ce; }
-.vent-controls button[aria-disabled="true"] { border-color: #68758e; color: #b6bfd0; }
 @media (max-width: 632px) {
   #play[data-situation="Boarding Party"] .flight-stage { grid-template-columns: minmax(0, 480px); }
   #play[data-situation="Boarding Party"] .action-rail { flex-direction: row; justify-content: flex-end; padding-bottom: env(safe-area-inset-bottom, 0px); }

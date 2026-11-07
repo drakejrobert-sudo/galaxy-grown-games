@@ -1558,7 +1558,8 @@ export function boardingCover(slot: number, depth: number) {
   const d = BOARDING_DEPTHS[depth];
   return { x: 240 + (slot % 2 ? 1 : -1) * (d.spread + (slot >= 2 ? 15 : -15)), y: d.y + (slot >= 2 ? 22 : -12) };
 }
-export const BOARDING_COVER = [0, 1, 2, 3].map(slot => boardingCover(slot, 0));
+export const BOARDING_INTERIOR_SLOTS = [0, 1] as const;
+export const BOARDING_COVER = BOARDING_INTERIOR_SLOTS.map(slot => boardingCover(slot, 0));
 export const BOARDING_AIRLOCKS = [{ x: 20, y: 90, width: 95, height: 380 }, { x: 365, y: 90, width: 95, height: 380 }];
 export interface BoardingPod {
   kind: 'probe' | 'shuttle';
@@ -1599,14 +1600,18 @@ export interface BoardingLaser {
   duration: number;
   remaining: number;
 }
+export const BOARDING_EJECTION_TIME = .45;
+// Generous touch-sized targets, separate from the enemy crossing zones.
+export const BOARDING_AIRLOCK_TARGETS = [{ x: 100, y: 280, radius: 23 }, { x: 380, y: 280, radius: 23 }];
+export interface BoardingEjection {
+  x: number; y: number; scale: number; side: number; remaining: number;
+}
 export interface BoardingAirlock {
+  openRemaining: number;
   cooldown: number;
   warning: number | null;
 }
-export interface BoardingInput extends SpaceGunnerInput, Partial<SpaceBattleBomberInput> {
-  ventLeft?: boolean;
-  ventRight?: boolean;
-}
+export interface BoardingInput extends SpaceGunnerInput, Partial<SpaceBattleBomberInput> {}
 export interface BoardingState {
   role: Role;
   x: number;
@@ -1633,6 +1638,7 @@ export interface BoardingState {
   probesIntercepted: number;
   shuttlesIntercepted: number;
   airlocks: BoardingAirlock[];
+  ejections: BoardingEjection[];
   spawnIn: number;
   nextId: number;
   cooldown: number;
@@ -1656,7 +1662,7 @@ export function createBoarding(role: Role): BoardingState {
   return { role, x: 240, y: 140, elapsed: 0, hull: role === 'Life Support' ? 5 : 3, grace: 0,
     aimAngle: Math.PI / 2, aimDistance: 100, crosshairX: 240, crosshairY: 300,
     carrier: { startX: 240, x: 240, y: 500, targetX: 240, cycle: -1, hp, maxHp: hp },
-    pods: [], mines: [], explosions: [], boarders: [], lasers: [], impactFlash: 0, impactSide: 0, hitFlash: 0, hitX: 0, hitY: 0, launchedCraft: 0, probesIntercepted: 0, shuttlesIntercepted: 0, airlocks: [{ cooldown: 0, warning: null }, { cooldown: 0, warning: null }],
+    pods: [], mines: [], explosions: [], boarders: [], lasers: [], impactFlash: 0, impactSide: 0, hitFlash: 0, hitX: 0, hitY: 0, launchedCraft: 0, probesIntercepted: 0, shuttlesIntercepted: 0, ejections: [], airlocks: [{ openRemaining: 0, cooldown: 0, warning: null }, { openRemaining: 0, cooldown: 0, warning: null }],
     spawnIn: role === 'Pilot' ? 1 : 2, nextId: 1, cooldown: 0, shots: 0, minesPlaced: 0, intercepted: 0, carrierDamage: 0,
     disabled: false, hits: 0, breaches: 0, shotBoarders: 0, ejected: 0, beamTime: 0, beamX: 240, beamY: 300,
     finished: false, endReason: null };
@@ -1732,6 +1738,12 @@ export function boardingBoarderPose(b: BoardingBoarder) {
   return { x: a.x + (z.x - a.x) * t, y: a.y + (z.y - a.y) * t,
     scale: BOARDING_DEPTHS[b.depth].scale + (BOARDING_DEPTHS[next].scale - BOARDING_DEPTHS[b.depth].scale) * progress };
 }
+/** A control lights only during approach/occupancy, never during departure. */
+export function boardingAirlockTargetActive(s: BoardingState, side: number): boolean {
+  const lock = s.airlocks[side];
+  return lock.cooldown <= 0 && lock.warning === null && s.boarders.some(b =>
+    b.slot % 2 === side && b.phase === 'relocating' && b.remaining >= BOARDING_RELOCATION_TIME / 3 - 1e-9);
+}
 function stepBoardingInterior(s: BoardingState, config: FlightConfig, input: BoardingInput, dt: number, random: () => number, oldGrace: number) {
   const tuning = BOARDING_TUNING[difficultyFor(config.total)];
   const recharge = BOARDING_VENT_RECHARGE * (config.naturalOne ? 2 : 1);
@@ -1739,10 +1751,16 @@ function stepBoardingInterior(s: BoardingState, config: FlightConfig, input: Boa
     time: number;
     side: number;
   }[] = [];
+  s.ejections = s.ejections.map(e => ({ ...e, remaining: e.remaining - dt })).filter(e => e.remaining > 0);
+  boardingAim(s, input, dt);
+  // A fired rifle round can hit exactly one lit control or one exposed boarder.
+  const shot = input.firing && s.cooldown <= 0;
+  const control = shot ? BOARDING_AIRLOCK_TARGETS.findIndex((target, side) => boardingAirlockTargetActive(s, side) &&
+    Math.hypot(target.x - s.crosshairX, target.y - s.crosshairY) <= target.radius) : -1;
   for (const [side, lock] of s.airlocks.entries()) {
-    const ready = lock.cooldown <= 0 && lock.warning === null;
+    lock.openRemaining = Math.max(0, lock.openRemaining - dt);
     lock.cooldown = Math.max(0, lock.cooldown - dt);
-    if ((side === 0 ? input.ventLeft : input.ventRight) && ready) {
+    if (side === control) {
       lock.warning = BOARDING_VENT_WARNING;
       lock.cooldown = recharge;
     }
@@ -1755,14 +1773,13 @@ function stepBoardingInterior(s: BoardingState, config: FlightConfig, input: Boa
         lock.warning -= dt;
     }
   }
-  boardingAim(s, input, dt);
-  if (input.firing && s.cooldown <= 0) {
+  if (shot) {
     s.shots++;
     s.cooldown = tuning.fireEvery;
     s.beamTime = .09;
     s.beamX = s.crosshairX;
     s.beamY = s.crosshairY;
-    const b = s.boarders.filter(b => b.phase === 'exposed' && Math.hypot(b.x - s.crosshairX, b.y - s.crosshairY) <= BOARDING_DEPTHS[b.depth].radius)
+    const b = control >= 0 ? undefined : s.boarders.filter(b => b.phase === 'exposed' && Math.hypot(b.x - s.crosshairX, b.y - s.crosshairY) <= BOARDING_DEPTHS[b.depth].radius)
       .sort((a, b) => Math.hypot(a.x - s.crosshairX, a.y - s.crosshairY) - Math.hypot(b.x - s.crosshairX, b.y - s.crosshairY) || a.id - b.id)[0];
     if (b) {
       s.boarders = s.boarders.filter(x => x.id !== b.id);
@@ -1790,6 +1807,11 @@ function stepBoardingInterior(s: BoardingState, config: FlightConfig, input: Boa
     time += span;
     for (const e of ventEvents.filter(e => Math.abs(e.time - time) < 1e-8)) {
       const ids = new Set(s.boarders.filter(b => boardingInAirlock(b, e.side)).map(b => b.id));
+      s.airlocks[e.side].openRemaining = Math.max(0, BOARDING_EJECTION_TIME - (dt - time));
+      for (const b of s.boarders.filter(b => ids.has(b.id))) {
+        const remaining = BOARDING_EJECTION_TIME - (dt - time);
+        if (remaining > 0) s.ejections.push({ x: b.x, y: b.y, scale: boardingBoarderPose(b).scale, side: e.side, remaining });
+      }
       s.ejected += ids.size;
       s.boarders = s.boarders.filter(b => !ids.has(b.id));
       e.time = -1;
@@ -1830,7 +1852,10 @@ function stepBoardingInterior(s: BoardingState, config: FlightConfig, input: Boa
     return;
   s.spawnIn -= dt;
   while (s.spawnIn <= 0) {
-    const start = Math.floor(random() * 4), slot = [0, 1, 2, 3].map(i => (start + i) % 4).find(slot => !s.boarders.some(b => b.slot === slot));
+    const start = Math.floor(random() * BOARDING_INTERIOR_SLOTS.length);
+    const slot = s.boarders.length < BOARDING_INTERIOR_SLOTS.length
+      ? BOARDING_INTERIOR_SLOTS.map((_, i) => BOARDING_INTERIOR_SLOTS[(start + i) % BOARDING_INTERIOR_SLOTS.length]).find(slot => !s.boarders.some(b => b.slot === slot))
+      : undefined;
     if (slot !== undefined)
       s.boarders.push({ id: s.nextId++, ...boardingCover(slot, 0), depth: 0, slot, phase: 'warning', remaining: BOARDING_COVER_WARNING });
     s.spawnIn += tuning.boarderEvery;

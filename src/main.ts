@@ -2,7 +2,7 @@ import type Phaser from 'phaser';
 import './style.css';
 import './bomber.css';
 import type { FlightScene } from './game/scene';
-import { createBomberInput, createGunnerInput, createInput, createLifeSupportInput, createSpaceBomberInput, createSpaceLifeInput, createSpaceGunnerInput, createBoardingVentInput } from './game/input';
+import { createBomberInput, createGunnerInput, createInput, createLifeSupportInput, createSpaceBomberInput, createSpaceLifeInput, createSpaceGunnerInput } from './game/input';
 import {
   boardingScoreFor, boardingScoreMode, boardingResultText,
   spaceGunnerResultText, spaceGunnerScoreFor,
@@ -40,7 +40,6 @@ app.innerHTML = `
   <div class="hud"><div><span>TIME LEFT</span><strong id="time">60s</strong></div><div><span id="health-label">HULL</span><strong id="hull">3 / 3</strong></div><div id="fuel-wrap" hidden><span>FUEL</span><strong id="fuel">18.0s</strong></div><div><span>SCORE</span><strong id="score">300</strong></div></div>
   <p id="flight-status" class="flight-status"></p>
   <div class="flight-stage"><div class="flight-wrap"><div id="canvas" aria-label="Asteroid field. Steer with arrow keys, WASD, or touch." role="application" tabindex="0"></div><div id="pause-overlay" hidden><h2>Challenge paused</h2><p id="pause-reason">Your timer is stopped.</p><button id="resume" class="primary" type="button">Resume challenge</button><button id="abandon" type="button">Back to setup</button></div></div><div id="action-rail" class="action-rail" hidden><button id="fire-action" class="action action-fire" type="button" hidden>Fire</button><button id="action" class="action action-mine" type="button" hidden>Launch mine</button></div></div>
-  <div id="vent-controls" class="vent-controls" hidden><button id="vent-left" type="button">Vent left · Q</button><button id="vent-right" type="button">Vent right · E</button></div>
   <div id="route-controls" class="route-controls" aria-label="Life Support routing switch" hidden><button id="route-thrusters" type="button" aria-pressed="false"><span>▲</span>Thrusters<small>1</small></button><button id="route-shields" type="button" aria-pressed="true"><span>●</span>Shields<small>2</small></button><button id="route-guns" type="button" aria-pressed="false"><span>✛</span>Guns<small>3</small></button></div>
   <div id="platform-controls" class="platform-controls" aria-label="Platformer controls" hidden><button id="move-left" type="button">◀ Left</button><button id="move-right" type="button">Right ▶</button><button id="jump" type="button">Jump</button></div>
   <div id="routing-info" class="routing-info" hidden><p class="help">Match power symbols to their bays. Hearts → Shields: restore up to 1 integrity. Overloads → Guns: a mistake costs 2 integrity; other mistakes cost 1. Packets route when they reach the switch.</p><p id="routing-status" class="routing-status" role="status" aria-live="polite" aria-atomic="true"></p></div>
@@ -72,13 +71,11 @@ const platformControls = get('platform-controls');
 const routeButtons = [get<HTMLButtonElement>('route-thrusters'), get<HTMLButtonElement>('route-shields'), get<HTMLButtonElement>('route-guns')];
 const input = createInput(canvas);
 const gunnerInput = createGunnerInput(canvas);
-const ventControls = get('vent-controls');
-const boardingVents = createBoardingVentInput(get('vent-left'), get('vent-right'));
 const boardingHelp: Record<Role, string> = {
   Pilot: 'Evade the carrier’s marked approach and boarding pods. Arrow keys / WASD or hold and drag to steer.',
   Gunner: 'Ship flies automatically. Small probes take one hit; shuttles take two. Shoot during launch warnings or before they cross the boarding line; damage the carrier between threats. Touch/mouse aims; hold Fire to shoot. Mouse click or Space/Enter also fires. Arrow keys / WASD aims.',
   Bomber: 'Automatic flight. Aim aft: tap/drag-release or mouse release launches. Left/Right or A/D rotates; Down/S aims straight aft. Space/Enter or Launch mine fires once. Intercept probes and shuttles during their launch warning or diagonal approach; mine the carrier when it closes.',
-  'Life Support': 'Shoot boarders when they raise rifles. Red lasers hurt on arrival and keep coming after a kill; surviving enemies advance. When a side bay lights up, use Vent left/right (Q/E). Aim with touch/mouse or arrows/WASD; Fire, mouse click or Space/Enter shoots.',
+  'Life Support': 'Shoot boarders when they raise rifles. Red lasers hurt on arrival and keep coming after a kill; surviving enemies advance. Shoot the glowing target beside a side door while boarders cross its bay to vent them. Late shots can miss the crossing. Aim with touch/mouse or arrows/WASD; Fire, mouse click or Space/Enter shoots.',
 };
 const spaceGunnerInput = createSpaceGunnerInput(canvas, fireAction);
 const spaceGunnerHelp = 'Ship flies automatically. Touch/mouse aims; touch aim never fires. Hold Fire to shoot. Mouse primary click also fires. Arrow keys / WASD aims; Space / Enter fires.';
@@ -210,7 +207,6 @@ function setPaused(value: boolean, interrupted = false) {
   spaceBomberInput.enable(!value && situation !== 'Asteroid Field' && role === 'Bomber');
   lifeSupportInput.enable(!value && situation === 'Asteroid Field' && role === 'Life Support');
   spaceLifeInput.enable(!value && situation === 'Space Battle' && role === 'Life Support');
-  boardingVents.enable(!value && situation === 'Boarding Party' && role === 'Life Support');
   get('pause-reason').textContent = interrupted
     ? 'Play paused after an interruption. Resume when ready.' : 'Your timer is stopped.';
   get('pause-overlay').hidden = !value;
@@ -227,7 +223,7 @@ document.addEventListener('visibilitychange', () => {
 });
 function resetSetup() {
   launchPending = false; pauseOnReady = false;
-  inFlight = false; if (scene) scene.activeFlight = false; input.enable(false); gunnerInput.enable(false); spaceGunnerInput.enable(false); bomberInput.enable(false); spaceBomberInput.enable(false); lifeSupportInput.enable(false); spaceLifeInput.enable(false); boardingVents.enable(false); paused = false;
+  inFlight = false; if (scene) scene.activeFlight = false; input.enable(false); gunnerInput.enable(false); spaceGunnerInput.enable(false); bomberInput.enable(false); spaceBomberInput.enable(false); lifeSupportInput.enable(false); spaceLifeInput.enable(false); paused = false;
   get('pause-overlay').hidden = true; show('setup'); total.focus();
 }
 get('abandon').addEventListener('click', resetSetup); get('again').addEventListener('click', resetSetup);
@@ -242,7 +238,6 @@ function preparePlayLayout() {
   actionRail.hidden = role !== 'Bomber' && !rifle;
   routeControls.hidden = role !== 'Life Support' || situation !== 'Asteroid Field';
   get('routing-info').hidden = routeControls.hidden;
-  ventControls.hidden = situation !== 'Boarding Party' || role !== 'Life Support';
   platformControls.hidden = role !== 'Life Support' || situation !== 'Space Battle';
 }
 function launch() {
@@ -263,8 +258,6 @@ function launch() {
   spaceBomberInput.enable(situation !== 'Asteroid Field' && role === 'Bomber');
   lifeSupportInput.enable(situation === 'Asteroid Field' && role === 'Life Support');
   spaceLifeInput.enable(situation === 'Space Battle' && role === 'Life Support');
-  for (const [i,id] of ['vent-left','vent-right'].entries()) { get(id).textContent = `Vent ${i === 0 ? 'left · Q' : 'right · E'} · Ready`; get(id).setAttribute('aria-disabled','false'); }
-  boardingVents.enable(situation === 'Boarding Party' && role === 'Life Support');
   inFlight = true; paused = false;
   get('pause').textContent = 'Pause'; get('pause-overlay').hidden = true;
   get('fuel-wrap').hidden = situation !== 'Space Battle' || role !== 'Pilot';
@@ -339,10 +332,10 @@ get('flight-form').addEventListener('submit', async e => {
         scene = new FlightScene('flight');
         scene.onTimingInterruption = () => setPaused(true, true);
         scene.readBoardingFrame = () => {
-          const aim = spaceGunnerInput.readFrame(), mines = spaceBomberInput.readFrame(), vents = boardingVents.read();
+          const aim = spaceGunnerInput.readFrame(), mines = spaceBomberInput.readFrame();
           return {
-            first: {...aim.first, ...(role === 'Bomber' ? mines.first : {}), ...vents},
-            continued: {...aim.continued, ...(role === 'Bomber' ? mines.continued : {}), ventLeft: false, ventRight: false},
+            first: {...aim.first, ...(role === 'Bomber' ? mines.first : {})},
+            continued: {...aim.continued, ...(role === 'Bomber' ? mines.continued : {})},
           };
         };
         scene.readInput = input.read;
@@ -380,16 +373,11 @@ scene.onBoardingStep = s => {
   get('time').textContent = `${Math.ceil(DURATION-s.elapsed)}s`;
   get('hull').textContent = `${s.hull} / ${s.role === 'Life Support' ? 5 : 3}`;
   get('score').textContent = String(boardingScoreFor(s));
-  if (s.role === 'Life Support') s.airlocks.forEach((lock,side) => {
-    const button = get<HTMLButtonElement>(side === 0 ? 'vent-left' : 'vent-right');
-    button.textContent = `Vent ${side === 0 ? 'left · Q' : 'right · E'} · ${lock.warning !== null ? 'VENTING' : lock.cooldown > 0 ? Math.ceil(lock.cooldown)+'s' : 'Ready'}`;
-    button.setAttribute('aria-disabled', String(lock.cooldown > 0));
-  });
   if (s.role === 'Life Support') get('flight-status').textContent = `${difficultyFor(config.total)} · Check ${config.total}${config.naturalOne ? ' · Natural 1: double airlock recharge' : ''} · Boarders ${s.boarders.length} · Incoming lasers ${s.lasers.length}`;
   else get('flight-status').textContent = `${difficultyFor(config.total)} · Check ${config.total}${config.naturalOne ? ' · Natural 1' : ''} · Carrier ${s.disabled ? 'disabled' : s.carrier.hp+'/'+s.carrier.maxHp} · Craft intercepted ${s.intercepted} · Breaches ${s.breaches}`;
   if (!s.finished) return;
   inFlight = false; input.enable(false); gunnerInput.enable(false); spaceGunnerInput.enable(false);
-  bomberInput.enable(false); spaceBomberInput.enable(false); lifeSupportInput.enable(false); spaceLifeInput.enable(false); boardingVents.enable(false);
+  bomberInput.enable(false); spaceBomberInput.enable(false); lifeSupportInput.enable(false); spaceLifeInput.enable(false);
   show('results'); get('outcome').textContent = s.hull <= 0 ? 'Defense overwhelmed.' : 'Defense complete.';
   showRatedResult(boardingScoreMode(s.role), boardingScoreFor(s), s.hull <= 0);
   fillSummary(boardingResultText(config,s)); get('copy-status').textContent = ''; get('copy').focus();

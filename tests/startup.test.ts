@@ -89,7 +89,6 @@ test('deferred first launch recovers from load failure, starts once, and retry r
       createBomberInput: () => ({ read: () => ({ x: 1, y: 0, placing: true }), enable: (v: boolean) => bomberInputEnabled = v }),
       createSpaceBomberInput: () => ({ read: () => ({ placing: true }), enable: (v: boolean) => spaceBomberInputEnabled = v }),
       createLifeSupportInput: () => ({ read: () => ({ route: 'Shields' }), enable: (v: boolean) => lifeSupportInputEnabled = v, reset() {} }),
-      createBoardingVentInput: () => ({ read: () => ({ ventLeft: false, ventRight: false }), enable() {} }),
       createSpaceLifeInput: () => ({ read: () => ({ x: 0, jump: false }), enable: (v: boolean) => spaceLifeInputEnabled = v }),
     },
   }, {
@@ -346,7 +345,6 @@ test('deferred first launch recovers from load failure, starts once, and retry r
     element('again').listeners.get('click')(); element('situation').value='Boarding Party'; element('role').value=role;
     element('situation').listeners.get('change')(); await submit();
     assert.equal(readyScene.situation,'Boarding Party');assert.equal(readyScene.boarding.role,role);
-    assert.equal(element('vent-controls').hidden,role!=='Life Support');
     assert.equal(spaceGunnerInputEnabled,role==='Gunner'||role==='Life Support');
     assert.equal(spaceBomberInputEnabled,role==='Bomber');assert.equal(inputEnabled,role==='Pilot');
     readyScene.boarding.crosshairX=123;readyScene.boarding.aimDistance=42;
@@ -416,7 +414,7 @@ test('a deferred launch stays paused after switching away until explicit resume'
       './game/input': {
         createInput: () => ({ read: () => ({ x: 0, y: 0 }), enable: (value: boolean) => inputEnabled = value }),
         createSpaceGunnerInput: () => ({ read: () => ({ x: 0, y: 0, firing: false }), enable: (v: boolean) => spaceGunnerInputEnabled = v }), createGunnerInput: idleInput, createBomberInput: idleInput,
-        createBoardingVentInput: idleInput, createSpaceBomberInput: idleInput, createLifeSupportInput: idleInput, createSpaceLifeInput: idleInput,
+        createSpaceBomberInput: idleInput, createLifeSupportInput: idleInput, createSpaceLifeInput: idleInput,
       },
     }, {
       document: { querySelector: () => element('app'), getElementById: element,

@@ -166,13 +166,14 @@ test('Boarding Party snapshots actions once per raw frame; substeps, pause, inte
   for(const role of ['Pilot','Gunner','Bomber','Life Support'] as const) {
     const h=harness(),scene=h.scene,cfg={total:10,naturalOne:true};scene.begin(cfg,'Boarding Party',role);
     scene.boarding.spawnIn=100;let reads=0,hud=0;
-    const first={x:0,y:0,firing:true,placing:true,ventLeft:true},continued={...first,placing:false,ventLeft:false};
+    const first={x:0,y:0,firing:true,placing:true},continued={...first,placing:false};
     scene.readInput=()=>({x:0,y:0});scene.readBoardingFrame=()=>{reads++;return {first,continued};};scene.onBoardingStep=()=>hud++;
     const baseline=structuredClone(scene.boarding);h.tick(1000);assert.equal(reads,0);h.tick(250);
     for(let i=0;i<5;i++)rules.stepBoarding(baseline,cfg,i?continued:first,.05,()=>.5);
     assert.deepEqual(scene.boarding,baseline);assert.equal(reads,1);assert.equal(hud,1);
+    scene.boarding.ejections=[{x:65,y:280,scale:.9,side:0,remaining:.3}];scene.boarding.airlocks[0].openRemaining=.3;
     const snapshot=JSON.stringify(scene.boarding);scene.activeFlight=false;h.tick(200);assert.equal(JSON.stringify(scene.boarding),snapshot);
     scene.activeFlight=true;h.tick(1000);h.tick(251);assert.equal(JSON.stringify(scene.boarding),snapshot);assert.equal(scene.activeFlight,false);
-    scene.begin(cfg,'Boarding Party',role);assert.equal(scene.boarding.elapsed,0);assert.equal(scene.boarding.aimDistance,100);assert.equal(scene.boarding.airlocks[0].cooldown,0);
+    scene.begin(cfg,'Boarding Party',role);assert.equal(scene.boarding.elapsed,0);assert.equal(scene.boarding.aimDistance,100);assert.equal(scene.boarding.airlocks[0].cooldown,0);assert.equal(scene.boarding.ejections.length,0);assert.equal(scene.boarding.airlocks[0].openRemaining,0);
   }
 });
