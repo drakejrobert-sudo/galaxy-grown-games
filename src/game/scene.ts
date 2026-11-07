@@ -348,7 +348,9 @@ export class FlightScene extends Phaser.Scene {
         if (b.phase === 'warning') {
           // A ducked helmet peeks above the stack; no hidden body can leak below its base.
           enemyGraphics.fillStyle(0x684d58);
-          enemyGraphics.fillCircle(b.x, b.y + 15 * scale, 9 * scale);
+          enemyGraphics.fillCircle(b.x, b.y + 2 * scale, 9 * scale);
+          enemyGraphics.fillStyle(0xd7a45c);
+          enemyGraphics.fillRect(b.x - 5 * scale, b.y - scale, 10 * scale, 2 * scale);
         } else if (!this.drawArt('boarding-boarder', b.x, b.y + offset, width, height, 0, 1, false, this.interiorDepth(b.y))) {
           enemyGraphics.fillStyle(0x925f69);
           enemyGraphics.fillCircle(b.x, b.y + offset - 34 * scale, 10 * scale);

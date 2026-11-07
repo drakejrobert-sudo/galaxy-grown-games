@@ -8,6 +8,54 @@ const os = require('node:os');
 const base = process.env.BASE_URL || 'http://127.0.0.1:5187/galaxy-grown-games/';
 const out = process.env.QA_OUTPUT || fs.mkdtempSync(path.join(os.tmpdir(), 'boarding-qa-'));
 fs.mkdirSync(out, { recursive: true });
+// Pixel comparisons catch a helmet that is drawn but fully hidden by its own cargo.
+async function checkCoveredHelmets(page, width, fallback = false) {
+  const evidence = [];
+  if (fallback) await page.evaluate(() => { qaScene.qaTextureExists = qaScene.textures.exists; qaScene.textures.exists = () => false; });
+  try {
+    for (const depth of [0,1,2]) {
+      const samples = await page.evaluate(async ({depth,base}) => {
+        const {boardingCover,BOARDING_DEPTHS} = await import(new URL('src/game/rules.ts',base).href);
+        const s=qaScene.boarding;qaScene.activeFlight=false;s.elapsed=10;s.lasers=[];s.ejections=[];
+        s.beamTime=0;s.hitFlash=0;s.impactFlash=0;s.grace=0;s.crosshairX=240;s.crosshairY=300;
+        s.airlocks.forEach(l=>{l.warning=null;l.cooldown=0;l.openRemaining=0;});
+        const canvas=document.querySelector('canvas'),ctx=canvas.getContext('2d');
+        // Graphics commands are submitted by paint; wait for Phaser's Canvas render before sampling pixels.
+        const render=async()=>{qaScene.paint();await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));};
+        s.boarders=[];await render();const baseline=ctx.getImageData(0,0,canvas.width,canvas.height).data;
+        const scale=BOARDING_DEPTHS[depth].scale,results=[];
+        for(const slot of [0,1]) {
+          const c=boardingCover(slot,depth);
+          s.boarders=[{id:900+slot,...c,slot,depth,phase:'warning',remaining:.5}];await render();
+          const pixels=ctx.getImageData(0,0,canvas.width,canvas.height).data;
+          let visible=0,amber=0,hidden=0;
+          for(let y=Math.floor(c.y-9*scale);y<Math.ceil(c.y+90*scale);y++)for(let x=Math.floor(c.x-20*scale);x<Math.ceil(c.x+20*scale);x++) {
+            const i=(y*canvas.width+x)*4;
+            const changed=Math.abs(pixels[i]-baseline[i])+Math.abs(pixels[i+1]-baseline[i+1])+Math.abs(pixels[i+2]-baseline[i+2])>3;
+            if(!changed)continue;
+            if(y<c.y+6*scale) {
+              visible++;if(pixels[i]>160&&pixels[i+1]>100&&pixels[i+2]<150)amber++;
+            }
+            if(y>=c.y+14*scale)hidden++;
+          }
+          results.push({slot,depth,visible,amber,hidden});
+        }
+        s.boarders=[0,1].map(slot=>({id:900+slot,...boardingCover(slot,depth),slot,depth,phase:'warning',remaining:.5}));
+        qaScene.onBoardingStep(s);await render();return results;
+      },{depth,base});
+      for(const sample of samples) {
+        assert.ok(sample.visible>0,`helmet visible above cargo: ${JSON.stringify(sample)}`);
+        assert.ok(sample.amber>0,`visor visible above cargo: ${JSON.stringify(sample)}`);
+        assert.equal(sample.hidden,0,`body stays hidden: ${JSON.stringify(sample)}`);
+      }
+      evidence.push(...samples);
+      await page.locator('canvas').screenshot({path:path.join(out,`helmet-${fallback?'fallback':'art'}-${depth}-${width}.png`)});
+    }
+  } finally {
+    if(fallback)await page.evaluate(()=>{qaScene.textures.exists=qaScene.qaTextureExists;delete qaScene.qaTextureExists;});
+  }
+  fs.writeFileSync(path.join(out,`helmet-pixels-${fallback?'fallback':'art'}-${width}.json`),JSON.stringify(evidence,null,2));
+}
 (async () => {
   const browser = await chromium.launch({ headless: true });
   const errors = [], checks = [];
@@ -134,6 +182,7 @@ fs.mkdirSync(out, { recursive: true });
             await page.locator('canvas').screenshot({path:path.join(out,`corridor-${phase}-${width}.png`)});
           }
         }
+        if(role==='Life Support') { await checkCoveredHelmets(page,width); await checkCoveredHelmets(page,width,true); }
         // Finish using a synthetic end-boundary fixture, verify the actual report UI and retry.
         await page.evaluate(() => { const s=qaScene.boarding;s.elapsed=59.98;s.pods=[];s.boarders=[];s.lasers=[];s.carrier.hp=0;s.disabled=true;s.spawnIn=100;qaScene.activeFlight=true; });
         await page.locator('#results:not([hidden])').waitFor();

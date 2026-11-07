@@ -475,3 +475,25 @@ test('textured airlock panels slide within two reused masks and release crops/ma
   h.scene.situation='Boarding Party';h.scene.role='Life Support';h.scene.textures.exists=(key:string)=>key!=='illustrated-boarding-corridor';h.paint();
   assert.equal(panels().length,0);assert.ok(h.commands.some(c=>c[0]==='fillPoints'),'perspective door fallback stays usable');
 });
+
+test('covered helmets clear their own cargo silhouette on both sides at every depth, with hidden bodies',()=>{
+  for(const slot of [0,1])for(const depth of [0,1,2]) {
+    const h=harness();h.scene.begin({total:10,naturalOne:false},'Boarding Party','Life Support');
+    const c=rules.boardingCover(slot,depth),scale=rules.BOARDING_DEPTHS[depth].scale;
+    h.scene.boarding.boarders=[{id:1,...c,slot,depth,phase:'warning',remaining:.5}];
+    h.scene.boarding.elapsed=10;const before=JSON.stringify(h.scene.boarding);h.paint();
+    const helmetLayer=h.layers.find(l=>l.visible&&l.commands.some(p=>p[0]==='fillCircle'&&p[1]===c.x&&p[3]===9*scale))!;
+    assert.ok(helmetLayer,'warning helmet has a render layer');
+    const helmet=helmetLayer.commands.find(p=>p[0]==='fillCircle')!,headY=helmet[2] as number,radius=helmet[3] as number;
+    const cargoTop=c.y+6*scale;
+    assert.ok(headY-radius<=cargoTop-6*scale,'a visible cap clears the upper case top face');
+    assert.ok(headY+radius>cargoTop,'the lower helmet remains behind the case');
+    const cargo=h.layers.find(l=>l.visible&&l.commands.some(p=>p[0]==='fillEllipse'&&p[1]===c.x&&p[2]===c.y+83*scale))!;
+    assert.ok(cargo.depth>helmetLayer.depth,'cargo masks the lower helmet and body');
+    assert.ok(!helmetLayer.commands.some(p=>p[0]==='fillRoundedRect'),'no ducked body can leak below cargo');
+    const visor=helmetLayer.commands.find(p=>p[0]==='fillRect')!;
+    assert.ok(visor,'amber visor supplies a readable warning cue');
+    assert.ok((visor[2] as number)+(visor[4] as number)<cargoTop,'visor stays above the occluding face');
+    assert.equal(JSON.stringify(h.scene.boarding),before);
+  }
+});
