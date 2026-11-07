@@ -382,7 +382,7 @@ test('illustrated sprites reuse a bounded pool, hide retired objects and leave a
 
 test('Boarding Party renderers keep frozen threats, cover, airlocks, warnings and HUD geometry finite',()=>{
   const h=harness();
-  for(const role of ['Pilot','Gunner','Bomber','Life Support'] as const) {
+  for(const role of ['Gunner','Bomber','Life Support'] as const) {
     h.scene.begin({total:5,naturalOne:true},'Boarding Party',role);
     const s=h.scene.boarding;s.grace=.5;s.beamTime=.05;s.carrier.targetX=120;
     s.pods=[{id:1,x:200,y:300,vx:10,vy:-160,radius:12,kind:'probe',hp:1,maxHp:1,warningRemaining:.3,hitFlash:.1}];
@@ -496,4 +496,46 @@ test('covered helmets clear their own cargo silhouette on both sides at every de
     assert.ok((visor[2] as number)+(visor[4] as number)<cargoTop,'visor stays above the occluding face');
     assert.equal(JSON.stringify(h.scene.boarding),before);
   }
+});
+
+test('cockpit perspective paints a frozen debris detour without mutating its course', () => {
+  const h = harness();
+  h.scene.begin({total:5,naturalOne:true}, 'Boarding Party', 'Pilot');
+  const s = h.scene.boardingPilot;
+  s.elapsed = 9;
+  const before = JSON.stringify(s);
+  freeze(s);
+  h.paint();
+  assert.equal(JSON.stringify(s), before);
+  assert.ok(h.commands.some(c => c[0] === 'strokeCircle' && c.slice(1).every(Number.isFinite)));
+  assert.ok(h.commands.some(c => c[0] === 'strokeRect' && c.slice(1).every(Number.isFinite)));
+});
+
+test('cockpit debris stays visible past its center plane until contact or retirement', () => {
+  const h = harness();
+  const config = { total: 10, naturalOne: false };
+  h.scene.begin(config, 'Boarding Party', 'Pilot');
+  const s: rules.BoardingPilotState = h.scene.boardingPilot;
+  const asteroid = s.debris.find(rock => rock.kind === 'asteroid')!;
+  s.debris = [asteroid];
+  s.rings = s.rings.filter(ring => ring.time > asteroid.time);
+  Object.assign(s, { elapsed: asteroid.time + .01, x: asteroid.x + 40, y: asteroid.y });
+  const paintsAsteroid = () => {
+    h.paint();
+    return h.commands.some(c => c[0] === 'fillStyle' && c[1] === 0x4d3344);
+  };
+
+  assert.equal(paintsAsteroid(), true);
+  const contact = structuredClone(s);
+  rules.stepBoardingPilot(contact, config, { x: -1, y: 0 }, .05);
+  assert.equal(contact.hull, 2);
+  h.scene.boardingPilot = contact;
+  assert.equal(paintsAsteroid(), false);
+
+  h.scene.boardingPilot = s;
+  rules.stepBoardingPilot(s, config, { x: 0, y: 0 }, .05);
+  assert.equal(paintsAsteroid(), true);
+  for (let i = 0; i < 4; i++) rules.stepBoardingPilot(s, config, { x: 0, y: 0 }, .05);
+  assert.equal(s.hull, 3);
+  assert.equal(paintsAsteroid(), false);
 });

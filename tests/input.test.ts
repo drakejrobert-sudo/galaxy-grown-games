@@ -204,3 +204,34 @@ test(name + ' Bomber consumes pointer targets after release/hover and retains ac
 });
 
 }
+
+test('cockpit drag measures displacement from the owned pointer and clears on cancel or pause', () => {
+  const listeners = new Map<string, Function>();
+  const oldWindow = globalThis.window;
+  globalThis.window = { addEventListener() {} } as any;
+  try {
+    const surface = {
+      addEventListener: (type: string, listener: Function) => listeners.set(type, listener),
+      querySelector: () => ({ getBoundingClientRect: () => ({left:10,top:20,width:240,height:280}) }),
+      setPointerCapture() {},
+    } as any;
+    const input = createInput(surface);
+    const send = (type: string, pointerId: number, clientX: number, clientY: number) =>
+      listeners.get(type)!({pointerId, clientX, clientY, pointerType:'touch', preventDefault() {}});
+    input.enable(true, true);
+    send('pointerdown', 1, 130, 160);
+    assert.deepEqual(input.read(240, 280), {x:0,y:0});
+    send('pointermove', 1, 154, 184);
+    const diagonal = input.read(240, 280);
+    assert.ok(Math.abs(Math.hypot(diagonal.x, diagonal.y) - 1) < 1e-9);
+    send('pointerup', 2, 154, 184);
+    assert.deepEqual(input.read(240, 280), diagonal);
+    send('pointercancel', 1, 154, 184);
+    assert.deepEqual(input.read(240, 280), {x:0,y:0});
+    send('pointerdown', 3, 130, 160);
+    send('pointermove', 3, 170, 160);
+    input.enable(false, true);
+    input.enable(true, true);
+    assert.deepEqual(input.read(240, 280), {x:0,y:0});
+  } finally { globalThis.window = oldWindow; }
+});

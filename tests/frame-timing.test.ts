@@ -163,7 +163,7 @@ test('fatal collision stops the frame before later steps can move, heal or award
 });
 
 test('Boarding Party snapshots actions once per raw frame; substeps, pause, interruption and retry preserve the contract',()=>{
-  for(const role of ['Pilot','Gunner','Bomber','Life Support'] as const) {
+  for(const role of ['Gunner','Bomber','Life Support'] as const) {
     const h=harness(),scene=h.scene,cfg={total:10,naturalOne:true};scene.begin(cfg,'Boarding Party',role);
     scene.boarding.spawnIn=100;let reads=0,hud=0;
     const first={x:0,y:0,firing:true,placing:true},continued={...first,placing:false};
@@ -176,4 +176,24 @@ test('Boarding Party snapshots actions once per raw frame; substeps, pause, inte
     scene.activeFlight=true;h.tick(1000);h.tick(251);assert.equal(JSON.stringify(scene.boarding),snapshot);assert.equal(scene.activeFlight,false);
     scene.begin(cfg,'Boarding Party',role);assert.equal(scene.boarding.elapsed,0);assert.equal(scene.boarding.aimDistance,100);assert.equal(scene.boarding.airlocks[0].cooldown,0);assert.equal(scene.boarding.ejections.length,0);assert.equal(scene.boarding.airlocks[0].openRemaining,0);
   }
+});
+
+test('cockpit flight shares bounded scene stepping, explicit interruption and retry', () => {
+  const h = harness(), scene = h.scene;
+  const config = { total: 10, naturalOne: true };
+  scene.begin(config, 'Boarding Party', 'Pilot');
+  scene.readInput = () => ({x: 1, y: -1});
+  let updates = 0;
+  scene.onBoardingPilotStep = () => updates++;
+  const expected = rules.createBoardingPilot(config);
+  h.tick(1000);
+  h.tick(250);
+  for (let i = 0; i < 5; i++) rules.stepBoardingPilot(expected, config, {x: 1, y: -1}, .05);
+  assert.deepEqual(scene.boardingPilot, expected);
+  assert.equal(updates, 1);
+  h.tick(251);
+  assert.equal(scene.activeFlight, false);
+  assert.deepEqual(scene.boardingPilot, expected);
+  scene.begin(config, 'Boarding Party', 'Pilot');
+  assert.deepEqual(scene.boardingPilot, rules.createBoardingPilot(config));
 });

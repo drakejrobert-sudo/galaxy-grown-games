@@ -149,3 +149,9 @@ The PR #74 carrier-cycle review fix corrects a discontinuity at staging boundari
 The cargo/airlock follow-up updates the engaged Life Support profile to shoot lit door targets using its rifle, rather than sending removed vent requests. Re-running all 288 samples per mode preserves every observed percentile, including Life Support **61 / 3100 / 4900** (P10/P50/P90). Rewards, fixed anchors, and report version v0.7 remain unchanged. See [validation and owner checks](boarding-cargo-airlocks.md).
 
 The cleaner-corridor revision caps active Life Support boarders at two, one per side. Its 288 seeded runs keep P10/P50/P90 at **61/3100/4900** and maximum 4900; the minimum changes from **55 to 57**. Every other mode's samples remain unchanged. Existing anchors, rewards and v0.7 remain in place pending human balance acceptance.
+
+## First-person Boarding Party Pilot — v0.8
+
+Pilot now earns 100 points per required ring and 50 per bonus ring. The new rating anchors are the theoretical floor and ceiling, **0–1,650**. A missed-ring or hull failure caps the advisory band at Success. Other stations still report v0.7 and retain their anchors.
+
+The 288 synthetic samples give Pilot **100 / 1,500 / 1,650** at P10/P50/P90. The fixed course and scripted controls intentionally test repeatable scoring and reachability. Human difficulty and rating balance still need playtesting.

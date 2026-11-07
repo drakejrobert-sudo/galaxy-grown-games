@@ -1,6 +1,6 @@
 /** Repeatable, deliberately synthetic score samples. Run: node --import tsx scripts/calibrate-scores.ts */
 import {
-  createBoarding, stepBoarding, boardingScoreFor, boardingAirlockTargetActive, BOARDING_AIRLOCK_TARGETS, BOARDING_TUNING, difficultyFor,
+  createBoarding, stepBoarding, boardingScoreFor, boardingAirlockTargetActive, BOARDING_AIRLOCK_TARGETS, createBoardingPilot, stepBoardingPilot, boardingPilotScore,
   createSpaceGunner, stepSpaceGunner, spaceGunnerScoreFor, SPACE_GUNNER_DEFENSE_LINE,
   DURATION, HEIGHT, WIDTH, createFlight, stepFlight, scoreFor,
   createGunner, stepGunner, gunnerScoreFor,
@@ -44,8 +44,19 @@ function pilotDirection(s: { x: number; y: number }, hazards: { x: number; y: nu
 }
 function run(mode: ScoreMode, config: FlightConfig, profile: Profile, seed: number): number {
   const random = seeded(seed);
+  if (mode === 'boarding-pilot') {
+    const s = createBoardingPilot(config);
+    while (!s.endReason) {
+      const next = s.rings.find(r => r.kind === 'required' || profile === 'engaged')!;
+      const drift = profile === 'routine' ? 50 * Math.sin(s.elapsed + seed) : 0;
+      const movement = profile === 'passive' ? { x: 0, y: 0 }
+        : direction(s, { x: next.x + drift, y: next.y });
+      stepBoardingPilot(s, config, movement, step);
+    }
+    return boardingPilotScore(s);
+  }
   if (mode.startsWith('boarding-')) {
-    const role = mode === 'boarding-pilot' ? 'Pilot' : mode === 'boarding-gunner' ? 'Gunner' : mode === 'boarding-bomber' ? 'Bomber' : 'Life Support';
+    const role = mode === 'boarding-gunner' ? 'Gunner' : mode === 'boarding-bomber' ? 'Bomber' : 'Life Support';
     const s = createBoarding(role);
     while (!s.finished) {
       const active = profile !== 'passive';
@@ -57,27 +68,8 @@ function run(mode: ScoreMode, config: FlightConfig, profile: Profile, seed: numb
       const mineTarget = profile === 'engaged' ? [...s.pods, ...(s.carrier.hp>0?[s.carrier]:[])]
         .filter(p=>p.y>=rack.y && Math.hypot(p.x-rack.x,p.y-rack.y)<=100)
         .sort((a,b)=>a.y-b.y)[0] : undefined;
-      // Engaged sweeps at a steady pace; routine's sine path slows near the edges.
-      const targetX = profile === 'engaged' ? 40+Math.abs((s.elapsed*190)%800-400)
-        : 240+Math.sin(s.elapsed/2)*150;
-      let movement = active ? direction(s,{x:targetX,y:110}) : {x:0,y:0};
-      if (role === 'Pilot' && profile === 'engaged') {
-        const speed = BOARDING_TUNING[difficultyFor(config.total)].moveSpeed * (config.naturalOne ? .6 : 1);
-        // Forecast fixed pod paths for one second; choose the least exposed of eight headings or staying still.
-        const candidates = [{x:0,y:0}, ...Array.from({length:8},(_,i)=>({x:Math.cos(i*Math.PI/4),y:Math.sin(i*Math.PI/4)}))];
-        const risk = (v: {x:number;y:number}) => {
-          let cost = 0;
-          for (const t of [.2,.4,.6,.8,1]) {
-            const x = Math.max(22,Math.min(458,s.x+v.x*speed*t)), y = Math.max(22,Math.min(538,s.y+v.y*speed*t));
-            for (const p of s.pods) cost += Math.exp(-((x-p.x-p.vx*t)**2+(y-p.y-p.vy*t)**2)/(50**2));
-            cost += Math.exp(-((x-s.carrier.x)**2+(y-s.carrier.y)**2)/(85**2));
-          }
-          return cost + .000001*((s.x+v.x*speed-240)**2+(s.y+v.y*speed-120)**2);
-        };
-        movement = candidates.sort((a,b)=>risk(a)-risk(b))[0];
-      }
       stepBoarding(s,config,{
-        ...movement, firing:active && !!target && (profile==='engaged'||Math.floor(s.elapsed)%2===0),
+        x:0, y:0, firing:active && !!target && (profile==='engaged'||Math.floor(s.elapsed)%2===0),
         aimX:active?target?.x:undefined, aimY:active?target?.y:undefined,
         placing:active && s.cooldown<=0 && (profile==='routine'||!!mineTarget),
         ...(mineTarget?{launch:{x:mineTarget.x,y:mineTarget.y}}:{}),
