@@ -510,3 +510,32 @@ test('cockpit perspective paints a frozen debris detour without mutating its cou
   assert.ok(h.commands.some(c => c[0] === 'strokeCircle' && c.slice(1).every(Number.isFinite)));
   assert.ok(h.commands.some(c => c[0] === 'strokeRect' && c.slice(1).every(Number.isFinite)));
 });
+
+test('cockpit debris stays visible past its center plane until contact or retirement', () => {
+  const h = harness();
+  const config = { total: 10, naturalOne: false };
+  h.scene.begin(config, 'Boarding Party', 'Pilot');
+  const s: rules.BoardingPilotState = h.scene.boardingPilot;
+  const asteroid = s.debris.find(rock => rock.kind === 'asteroid')!;
+  s.debris = [asteroid];
+  s.rings = s.rings.filter(ring => ring.time > asteroid.time);
+  Object.assign(s, { elapsed: asteroid.time + .01, x: asteroid.x + 40, y: asteroid.y });
+  const paintsAsteroid = () => {
+    h.paint();
+    return h.commands.some(c => c[0] === 'fillStyle' && c[1] === 0x4d3344);
+  };
+
+  assert.equal(paintsAsteroid(), true);
+  const contact = structuredClone(s);
+  rules.stepBoardingPilot(contact, config, { x: -1, y: 0 }, .05);
+  assert.equal(contact.hull, 2);
+  h.scene.boardingPilot = contact;
+  assert.equal(paintsAsteroid(), false);
+
+  h.scene.boardingPilot = s;
+  rules.stepBoardingPilot(s, config, { x: 0, y: 0 }, .05);
+  assert.equal(paintsAsteroid(), true);
+  for (let i = 0; i < 4; i++) rules.stepBoardingPilot(s, config, { x: 0, y: 0 }, .05);
+  assert.equal(s.hull, 3);
+  assert.equal(paintsAsteroid(), false);
+});

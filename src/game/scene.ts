@@ -307,7 +307,8 @@ export class FlightScene extends Phaser.Scene {
       return { x: cx + (obj.x - s.x) * scale, y: cy + (obj.y - s.y) * scale, r: obj.radius * scale, scale };
     };
     const next = s.rings.find(ring => ring.kind === 'required');
-    const objects = [...s.rings, ...s.debris].filter(obj => obj.time >= s.elapsed && obj.time <= s.elapsed + 7)
+    // Debris stays in the course state until its swept collision window ends.
+    const objects = [...s.rings, ...s.debris].filter(obj => obj.time <= s.elapsed + 7)
       .sort((a, b) => b.time - a.time);
     for (const obj of objects) {
       const { x, y, r, scale } = project(obj);
