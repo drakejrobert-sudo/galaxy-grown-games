@@ -2,7 +2,7 @@ import Phaser from 'phaser';
 import type { InputFrame } from './input';
 import {
   createBoardingPilot, stepBoardingPilot, boardingPilotAttackPosition, BOARDING_PILOT_FORWARD_SPEED, type BoardingPilotState,
-  createBoarding, stepBoarding, BOARDING_INTERIOR_SLOTS, BOARDING_DEPTHS, boardingCover, boardingBoarderPose, boardingAirlockTargetActive, BOARDING_AIRLOCK_TARGETS, BOARDING_EJECTION_TIME, BOARDING_VENT_WARNING, BOARDING_VENT_RECHARGE, difficultyFor, BOARDING_LINE, BOARDING_CYCLE, BOARDING_WARNING, BOARDING_CARRIER_RADIUS, BOARDING_MINE_LIFETIME, BOARDING_BLAST_RADIUS, type BoardingState, type BoardingInput,
+  createBoarding, stepBoarding, BOARDING_INTERIOR_SLOTS, BOARDING_DEPTHS, boardingCover, boardingBoarderPose, boardingAirlockTargetActive, BOARDING_AIRLOCK_TARGETS, BOARDING_EJECTION_TIME, BOARDING_VENT_WARNING, BOARDING_VENT_RECHARGE, difficultyFor, BOARDING_LINE, BOARDING_CYCLE, BOARDING_WARNING, BOARDING_CARRIER_RADIUS, BOARDING_GUNNER_AIM_PADDING, BOARDING_MINE_LIFETIME, BOARDING_BLAST_RADIUS, type BoardingState, type BoardingInput,
   createSpaceGunner, stepSpaceGunner, SPACE_GUNNER_DEFENSE_LINE, type SpaceGunnerInput, type SpaceGunnerState, type SpaceGunnerAttacker,
   gunnerTargetAt, gunnerFireEvery, GUNNER_SHOT_FEEDBACK_SECONDS, type GunnerShotFeedback,
   createBomber, createFlight, createGunner, createLifeSupport, createSpaceBattleBomber, createSpaceBattlePilot, stepBomber,
@@ -16,6 +16,13 @@ import {
   createSpaceLifeSupport, stepSpaceLifeSupport, SPACE_LIFE_PLATFORMS, SPACE_LIFE_SPARK_WARNING, SPACE_LIFE_REPAIR_SECONDS,
   type SpaceLifeInput, type SpaceLifeState, type Mine, type Explosion,
 } from './rules';
+
+// Reflect the old plan view without scaling its aim distances or keyboard speed.
+const turretY = (y: number) => HEIGHT - y;
+
+function boardingTurretInput(input: BoardingInput): BoardingInput {
+  return { ...input, y: -input.y, aimY: input.aimY === undefined ? undefined : turretY(input.aimY) };
+}
 
 export class FlightScene extends Phaser.Scene {
   boarding = createBoarding('Gunner');
@@ -35,7 +42,7 @@ export class FlightScene extends Phaser.Scene {
   private artUsed = 0;
   private interiorLayers: Phaser.GameObjects.Graphics[] = [];
   private interiorUsed = 0;
-  private interiorLayer(depth: number) {
+  private graphicsLayer(depth: number) {
     const layer = this.interiorLayers[this.interiorUsed] ?? this.add.graphics();
     this.interiorLayers[this.interiorUsed++] = layer;
     layer.setDepth(depth).setVisible(true);
@@ -72,7 +79,7 @@ export class FlightScene extends Phaser.Scene {
   }
 
   private paintCargo(x: number, y: number, scale: number) {
-    const g = this.interiorLayer(this.interiorDepth(y + 1));
+    const g = this.graphicsLayer(this.interiorDepth(y + 1));
     // Two weight-bearing cases: smaller top case sits flush on the wider base.
     g.fillStyle(0x00070d, .5);
     g.fillEllipse(x, y + 83 * scale, 98 * scale, 15 * scale);
@@ -223,7 +230,8 @@ export class FlightScene extends Phaser.Scene {
       const frame = this.readBoardingFrame();
       for (let i = 0; i < Math.ceil(milliseconds / 50); i++) {
         const input = i === 0 ? frame.first : frame.continued;
-        stepBoarding(this.boarding, this.config, input, Math.min(50, milliseconds-i*50)/1000);
+        stepBoarding(this.boarding, this.config, this.role === 'Gunner' ? boardingTurretInput(input) : input,
+          Math.min(50, milliseconds - i * 50) / 1000);
         if (this.boarding.finished) { this.activeFlight = false; break; }
       }
       this.onBoardingStep(this.boarding); return;
@@ -282,6 +290,7 @@ export class FlightScene extends Phaser.Scene {
           : this.role === 'Bomber' ? this.bomber.elapsed : this.lifeSupport.elapsed;
     this.paintBackground(this.backgroundGraphics, this.role === 'Pilot' || this.role === 'Bomber' || (this.situation === 'Asteroid Field' && (this.role === 'Gunner' || this.role === 'Life Support')) ? this.decorativeTime(elapsed) : elapsed);
     if (cockpit) this.paintBoardingPilot(g);
+    else if (this.situation === 'Boarding Party' && this.role === 'Gunner') this.paintBoardingTurret(g);
     else if (this.situation === 'Boarding Party') this.paintBoardingMode(g);
     else if (this.situation === 'Space Battle') {
       if (this.role === 'Life Support') this.paintSpaceLifeMode(g);
@@ -463,6 +472,125 @@ export class FlightScene extends Phaser.Scene {
     }
   }
 
+  private paintBoardingTurret(g: Phaser.GameObjects.Graphics) {
+    const s = this.boarding;
+    const cx = WIDTH / 2, breach = turretY(BOARDING_LINE);
+    const muzzle = { x: cx, y: 463 };
+    const ready = s.cooldown <= 0;
+    const lamp = ready ? 0x85f7e0 : 0xffca83;
+
+    // A fixed canopy leaves the entire approach clear, including targets near the sides.
+    g.fillStyle(0x0e192c);
+    g.fillPoints([{x: 0, y: 0}, {x: 85, y: 0}, {x: 18, y: 30}, {x: 0, y: 84}], true);
+    g.fillPoints([{x: WIDTH, y: 0}, {x: WIDTH - 85, y: 0}, {x: WIDTH - 18, y: 30}, {x: WIDTH, y: 84}], true);
+    g.fillPoints([{x: 0, y: 478}, {x: 100, y: 506}, {x: 380, y: 506}, {x: WIDTH, y: 478},
+      {x: WIDTH, y: HEIGHT}, {x: 0, y: HEIGHT}], true);
+    g.lineStyle(3, 0x507b93);
+    for (const side of [0, WIDTH]) {
+      const inward = side === 0 ? 1 : -1;
+      g.lineBetween(side + inward * 85, 0, side + inward * 18, 30);
+      g.lineBetween(side + inward * 18, 30, side, 84);
+      g.lineBetween(side, 478, side + inward * 100, 506);
+    }
+
+    // The gun is foreground scenery. The reticle still moves across the whole window.
+    g.fillStyle(0x172638);
+    g.fillPoints([{x: 174, y: 520}, {x: 198, y: 486}, {x: 220, y: 478}, {x: 260, y: 478},
+      {x: 282, y: 486}, {x: 306, y: 520}], true);
+    g.lineStyle(2, 0x507b93);
+    g.lineBetween(174, 520, 198, 486); g.lineBetween(306, 520, 282, 486);
+    g.fillStyle(0x32485b);
+    g.fillPoints([{x: 214, y: 499}, {x: 226, y: muzzle.y}, {x: 254, y: muzzle.y}, {x: 266, y: 499}], true);
+    g.fillStyle(0x071321);
+    g.fillRect(226, muzzle.y, 28, 6);
+    g.lineStyle(2, 0x6b8797);
+    g.lineBetween(226, muzzle.y + 6, 215, 499);
+    g.lineBetween(254, muzzle.y + 6, 265, 499);
+    g.fillStyle(0x1f3246);
+    g.fillRoundedRect(209, 496, 62, 16, 4);
+    g.fillStyle(lamp);
+    g.fillRect(230, muzzle.y + 9, 20, 3);
+    g.fillStyle(0x708f9e);
+    for (const x of [217, 263]) g.fillCircle(x, 503, 2);
+
+    const danger = s.grace > 0;
+    const thresholdColor = danger ? 0xff827b : 0xffbd6b;
+    g.lineStyle(danger ? 3 : 2, thresholdColor, danger ? .95 : .65);
+    for (let x = 16; x < WIDTH - 16; x += 24)
+      g.lineBetween(x, breach, x + 12, breach);
+    this.drawLabel('BREACH LINE', cx, breach + 12, 13, '#ffca83');
+
+    const c = s.carrier;
+    if (c.hp > 0) {
+      const y = turretY(c.y);
+      const scale = .67 + .33 * Math.max(0, Math.min(1, (y - 60) / 250));
+      const r = BOARDING_CARRIER_RADIUS + BOARDING_GUNNER_AIM_PADDING;
+      if (!this.drawArt('boarding-carrier', c.x, y, 70 * scale, 70 * scale, Math.PI)) {
+        g.fillStyle(0x68485f);
+        g.fillRoundedRect(c.x - 33 * scale, y - 23 * scale, 66 * scale, 46 * scale, 8);
+        g.fillStyle(0xff9781);
+        g.fillRect(c.x - 20 * scale, y + 4 * scale, 40 * scale, 6 * scale);
+      }
+      g.lineStyle(2, 0xff9781, .75);
+      g.strokeCircle(c.x, y, r);
+      g.fillStyle(0x20283e);
+      g.fillRect(c.x - 30, y - r - 8, 60, 4);
+      g.fillStyle(0xff9781);
+      g.fillRect(c.x - 30, y - r - 8, 60 * c.hp / c.maxHp, 4);
+    }
+
+    for (const p of s.pods) {
+      const y = turretY(p.y), r = p.radius + BOARDING_GUNNER_AIM_PADDING;
+      const shuttle = p.kind === 'shuttle', warning = p.warningRemaining > 0;
+      const color = warning ? 0xffca83 : shuttle ? 0xffa9bc : 0xffd593;
+      const scale = .68 + .32 * Math.max(0, Math.min(1, y / breach));
+      const rotation = Math.atan2(-p.vy, p.vx) + Math.PI / 2;
+      if (!warning) {
+        g.lineStyle(2, color, .45);
+        g.lineBetween(p.x, y, p.x - p.vx * .16, y + p.vy * .16);
+      }
+      if (!this.drawArt(shuttle ? 'boarding-shuttle' : 'boarding-probe', p.x, y,
+        (shuttle ? 38 : 24) * scale, (shuttle ? 38 : 26) * scale, rotation)) {
+        const d = p.radius * scale;
+        g.fillStyle(shuttle ? 0xa5688b : 0xc58a53);
+        if (shuttle) g.fillRoundedRect(p.x - d, y - d * .68, 2 * d, 1.36 * d, 5);
+        else g.fillPoints([{x: p.x, y: y - d}, {x: p.x + d, y}, {x: p.x, y: y + d}, {x: p.x - d, y}], true);
+      }
+      g.lineStyle(warning || p.hitFlash > 0 ? 3 : 1.5, p.hitFlash > 0 ? 0xffffff : color, warning ? 1 : .8);
+      g.strokeCircle(p.x, y, r);
+      if (warning) this.drawLabel('LAUNCH', Math.max(30, Math.min(WIDTH - 30, p.x)), y + r + 11, 13, '#ffca83');
+      if (shuttle) for (let i = 0; i < p.maxHp; i++) {
+        g.fillStyle(i < p.hp ? 0xffb6a0 : 0x45344e);
+        g.fillRect(p.x - 9 + i * 10, y - r - 7, 8, 4);
+      }
+    }
+
+    if (s.beamTime > 0) {
+      const y = turretY(s.beamY);
+      if (!this.reducedMotion?.matches) {
+        g.lineStyle(8, 0x79e1ce, .23);
+        g.lineBetween(muzzle.x, muzzle.y, s.beamX, y);
+      }
+      g.lineStyle(2, 0xadffee, .9);
+      g.lineBetween(muzzle.x, muzzle.y, s.beamX, y);
+    }
+    if (s.hitFlash > 0) {
+      const x = s.hitX, y = turretY(s.hitY);
+      g.lineStyle(2, 0xffffff);
+      for (const side of [-1, 1]) {
+        g.lineBetween(x + side * 6, y - 6, x + side * 12, y - 12);
+        g.lineBetween(x + side * 6, y + 6, x + side * 12, y + 12);
+      }
+    }
+
+    g.fillStyle(0x071321);
+    g.fillRoundedRect(16, 518, WIDTH - 32, 27, 5);
+    this.drawLabel(c.hp > 0 ? 'CARRIER ' + c.hp + '/' + c.maxHp : 'CARRIER DISABLED', 94, 531, 14, '#ffb39f');
+    this.drawLabel(ready ? 'READY' : 'COOLING', cx, 531, 14, ready ? '#a6f7e5' : '#ffca83');
+    this.drawLabel('BREACHES ' + s.breaches, WIDTH - 89, 531, 14, danger ? '#ffb39f' : '#c3e3ec');
+    this.paintWeaponTarget(this.graphicsLayer(3), s.crosshairX, turretY(s.crosshairY), 14, lamp, true);
+  }
+
   private paintBoardingMode(g: Phaser.GameObjects.Graphics) {
     const s = this.boarding;
     if (s.role === 'Life Support') {
@@ -471,7 +599,7 @@ export class FlightScene extends Phaser.Scene {
         this.drawLabel('HOLD THE CORRIDOR', 240, 28, 15, '#79e1ce');
         this.drawLabel('Shoot raised rifles • Shoot glowing door targets', 240, 51, 11);
       }
-      const doors = this.interiorLayer(-1.95);
+      const doors = this.graphicsLayer(-1.95);
       for (const i of [0,1]) {
         const lock = s.airlocks[i], active = boardingAirlockTargetActive(s, i), target = BOARDING_AIRLOCK_TARGETS[i];
         const opening = lock.warning !== null ? (1 - lock.warning / BOARDING_VENT_WARNING) ** 2
@@ -480,7 +608,7 @@ export class FlightScene extends Phaser.Scene {
         doors.fillStyle(0x03080d); doors.fillPoints(outline, true);
         if (!this.paintAirlockPanels(i, opening)) {
           // Perspective fallback with a widening central opening, never a luminous flat rectangle.
-          const shell = this.interiorLayer(-1.94), outer = i ? 468 : 12, inner = i ? 390 : 90;
+          const shell = this.graphicsLayer(-1.94), outer = i ? 468 : 12, inner = i ? 390 : 90;
           const point = (u: number, v: number) => ({x: outer + (inner - outer) * u,
             y: (114 + 65 * u) * (1 - v) + (395 - 45 * u) * v});
           for (const [from,to] of [[0,(1-opening)/2],[1-(1-opening)/2,1]]) {
@@ -491,7 +619,7 @@ export class FlightScene extends Phaser.Scene {
           }
         }
         if (lock.openRemaining > 0) {
-          const fx = this.interiorLayer(-.55), phase = this.decorativeTime(s.elapsed), endX = i ? 430 : 50;
+          const fx = this.graphicsLayer(-.55), phase = this.decorativeTime(s.elapsed), endX = i ? 430 : 50;
           for (let n = 0; n < 7; n++) {
             const t = ((phase * 2 + n / 7) % 1), startX = i ? 355 : 125, startY = 235 + n * 17;
             const x = startX + (endX - startX) * t, y = startY + (285 - startY) * t;
@@ -522,7 +650,7 @@ export class FlightScene extends Phaser.Scene {
       for (const b of [...s.boarders].sort((a, b) => a.depth - b.depth || a.y - b.y || a.id - b.id)) {
         const scale = boardingBoarderPose(b).scale, exposed = b.phase === 'exposed';
         const height = 126 * scale, width = 53 * scale, offset = 9 * scale;
-        const enemyGraphics = this.interiorLayer(this.interiorDepth(b.y));
+        const enemyGraphics = this.graphicsLayer(this.interiorDepth(b.y));
         if (b.phase === 'warning') {
           // A ducked helmet peeks above the stack; no hidden body can leak below its base.
           enemyGraphics.fillStyle(0x684d58);
@@ -556,7 +684,7 @@ export class FlightScene extends Phaser.Scene {
         const x = e.x + (endX - e.x) * t, y = e.y + (285 - e.y) * t;
         const scale = e.scale * (1 - .85 * t), alpha = 1 - t;
         if (!this.drawArt('boarding-boarder', x, y, 53 * scale, 126 * scale, this.reducedMotion?.matches ? 0 : (e.side ? 1 : -1) * t, alpha, false, -.5)) {
-          const fx = this.interiorLayer(-.5);
+          const fx = this.graphicsLayer(-.5);
           fx.fillStyle(0x925f69, alpha); fx.fillCircle(x, y - 20 * scale, 10 * scale);
           fx.fillRoundedRect(x - 15 * scale, y - 12 * scale, 30 * scale, 45 * scale, 4);
         }
@@ -663,10 +791,10 @@ export class FlightScene extends Phaser.Scene {
       g.lineStyle(4, 0x79e1ce, .7);
       g.strokeRect(12, 12, 456, 536);
     }
-    if (s.role === 'Gunner' || s.role === 'Life Support') {
+    if (s.role === 'Life Support') {
       if (s.beamTime > 0) {
         g.lineStyle(3, 0x79e1ce, .85);
-        g.lineBetween(s.role === 'Life Support' ? 285 : s.x, s.role === 'Life Support' ? 445 : s.y, s.beamX, s.beamY);
+        g.lineBetween(285, 445, s.beamX, s.beamY);
       }
       this.paintWeaponTarget(g, s.crosshairX, s.crosshairY, 14, 0x79e1ce, s.cooldown <= 0);
     }

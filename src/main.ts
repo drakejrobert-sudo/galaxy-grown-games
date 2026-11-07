@@ -74,7 +74,7 @@ const input = createInput(canvas);
 const gunnerInput = createGunnerInput(canvas);
 const boardingHelp: Record<Role, string> = {
   Pilot: 'Follow the teal rings and dodge missiles or probes after a miss. Steer with arrows / WASD or hold and drag from where you touch. Diamond rings mark salvage bonuses. Plus rings repair hull.',
-  Gunner: 'Ship flies automatically. Small probes take one hit; shuttles take two. Shoot during launch warnings or before they cross the boarding line; damage the carrier between threats. Touch/mouse aims; hold Fire to shoot. Mouse click or Space/Enter also fires. Arrow keys / WASD aims.',
+  Gunner: 'Aim from the turret. Shoot probes once and armored shuttles twice before they cross the breach line. Target the carrier between launches. Touch to aim and hold Fire; mouse click or Space/Enter also fires. Aim with mouse or arrows/WASD. Flight is automatic.',
   Bomber: 'Automatic flight. Aim aft: tap/drag-release or mouse release launches. Left/Right or A/D rotates; Down/S aims straight aft. Space/Enter or Launch mine fires once. Intercept probes and shuttles during their launch warning or diagonal approach; mine the carrier when it closes.',
   'Life Support': 'Shoot boarders when they raise rifles. Red lasers hurt on arrival and keep coming after a kill; surviving enemies advance. Shoot the glowing target beside a side door while boarders cross its bay to vent them. Late shots can miss the crossing. Aim with touch/mouse or arrows/WASD; Fire, mouse click or Space/Enter shoots.',
 };
@@ -305,7 +305,8 @@ function launch() {
       : role === 'Bomber' ? 'Standard mine blast target' : situation === 'Space Battle' ? 'Standard icon mix' : 'Standard packet mix';
   get('flight-status').textContent = `${difficultyFor(config.total)} · Check ${config.total} · ${config.naturalOne ? `Natural 1: ${impairment}` : standard}`;
   if (situation === 'Boarding Party') {
-    get('mode-heading').textContent = role === 'Life Support' ? 'Hold the corridor. Repel boarders.' : role === 'Pilot' ? 'Fly the rings. Escape the pursuit.' : 'Break the boarding pursuit.';
+    get('mode-heading').textContent = role === 'Life Support' ? 'Hold the corridor. Repel boarders.' : role === 'Pilot' ? 'Fly the rings. Escape the pursuit.'
+      : role === 'Gunner' ? 'Defend the ship from the turret.' : 'Break the boarding pursuit.';
     get('play-help').textContent = boardingHelp[role];
     canvas.setAttribute('aria-label', `Boarding Party / ${role}. ${boardingHelp[role]}`);
     get('flight-status').textContent = `${difficultyFor(config.total)} · Check ${config.total} · ${config.naturalOne ? 'Natural 1: ' + (role === 'Life Support' ? 'double airlock recharge' : impairment) : 'Standard station systems'}`;
