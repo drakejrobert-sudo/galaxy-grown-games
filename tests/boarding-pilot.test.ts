@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  BOARDING_TUNING, boardingPilotResultText, boardingPilotScore, createBoardingPilot,
+  BOARDING_TUNING, boardingPilotAttackPosition, boardingPilotResultText, boardingPilotScore, createBoardingPilot,
   difficultyFor, rateScore, stepBoardingPilot,
 } from '../src/game/rules.ts';
 
@@ -23,23 +23,53 @@ test('rings use position at crossing, include the opening edge, and resolve only
   assert.equal(s.rings.length, 19);
 });
 
-test('the third total miss ends at the ring plane, including misses separated by a clear', () => {
-  const s = createBoardingPilot(config);
-  s.misses = 2;
-  s.elapsed = 3.99;
-  stepBoardingPilot(s, config, idle, .05);
-  assert.equal(s.cleared, 1);
-  assert.equal(s.misses, 2);
-  s.elapsed = 7.99;
-  stepBoardingPilot(s, config, idle, .05);
-  assert.equal(s.misses, 3);
-  assert.equal(s.endReason, 'misses');
-  near(s.elapsed, 8);
-  const ended = structuredClone(s);
-  stepBoardingPilot(s, config, { x: 1, y: 1 }, .05);
-  assert.deepEqual(s, ended);
-  assert.match(boardingPilotResultText(config, s), /Miss limit reached/);
-  assert.deepEqual(rateScore('boarding-pilot', 1650, true), { rating: 100, band: 'Success', capped: true });
+test('three missed gates each launch one dodgeable attack, including a miss at the final gate', () => {
+  const cfg = { total: 5, naturalOne: true };
+  for (const dt of [1 / 60, 1 / 30, .05]) {
+    const s = createBoardingPilot(cfg);
+    const gates = s.rings.filter(ring => ring.kind === 'required');
+    s.rings = [gates[0], gates[1], gates.at(-1)!];
+    s.debris = [];
+    for (const [index, ring] of [...s.rings].entries()) {
+      Object.assign(s, { x: 22, y: 22, elapsed: ring.time - .02 });
+      while (s.elapsed < ring.time) stepBoardingPilot(s, cfg, idle, dt);
+      const attack = s.attack!;
+      assert.equal(s.misses, index + 1);
+      assert.equal(attack.kind, index % 2 ? 'probe' : 'missile');
+      near(attack.launchAt, ring.time + .35);
+      near(attack.time, ring.time + 1);
+      assert.deepEqual(boardingPilotAttackPosition(attack, attack.time), { x: 22, y: 22, z: 0 });
+      assert.equal(s.hull, 3);
+      while (s.attack) stepBoardingPilot(s, cfg, { x: 0, y: 1 }, dt);
+      assert.equal(s.hull, 3);
+      assert.equal(s.endReason, null);
+    }
+    while (!s.endReason) stepBoardingPilot(s, cfg, idle, dt);
+    assert.equal(s.endReason, 'complete');
+    assert.match(boardingPilotResultText(cfg, s), /Misses: 3 •/);
+  }
+});
+
+test('missiles and probes hit a stationary pilot after the warning and respect collision grace', () => {
+  for (const kind of ['missile', 'probe']) for (const dt of [1 / 60, 1 / 30, .05]) {
+    const s = createBoardingPilot(config);
+    Object.assign(s, { x: 440, elapsed: 3.99, misses: kind === 'probe' ? 1 : 0 });
+    stepBoardingPilot(s, config, idle, dt);
+    const attack = s.attack!;
+    assert.equal(attack.kind, kind);
+    const guarded = structuredClone(s);
+    guarded.protectedUntil = attack.time + .2;
+    while (s.elapsed < attack.launchAt) {
+      stepBoardingPilot(s, config, idle, dt);
+      assert.equal(s.hull, 3);
+    }
+    while (s.attack) stepBoardingPilot(s, config, idle, dt);
+    while (guarded.attack) stepBoardingPilot(guarded, config, idle, dt);
+    assert.equal(s.hull, 2);
+    assert.equal(guarded.hull, 3);
+    assert.equal(s.feedback?.text, kind.toUpperCase() + ' IMPACT');
+    assert.ok(s.elapsed < attack.time);
+  }
 });
 
 test('swept debris contacts damage once with grace, and hull failure wins an exact repair tie', () => {
@@ -62,9 +92,13 @@ test('swept debris contacts damage once with grace, and hull failure wins an exa
   assert.equal(s.repairs, 0);
   assert.equal(s.rings.length, 1);
   assert.match(boardingPilotResultText(config, s), /Hull depleted/);
+  const ended = structuredClone(s);
+  stepBoardingPilot(s, config, { x: 1, y: 1 }, .05);
+  assert.deepEqual(s, ended);
+  assert.deepEqual(rateScore('boarding-pilot', 1650, true), { rating: 100, band: 'Success', capped: true });
 });
 
-test('repair rings cap hull at three, and the final ring resolves before time completion', () => {
+test('repair rings cap hull at three, and clearing the final gate leaves time to escape', () => {
   const s = createBoardingPilot(config);
   const repair = s.rings.find(r => r.kind === 'repair')!;
   s.rings = [repair, s.rings.at(-1)!];
@@ -73,9 +107,11 @@ test('repair rings cap hull at three, and the final ring resolves before time co
   assert.equal(s.hull, 3);
   assert.equal(s.repairs, 0);
   assert.equal(boardingPilotScore(s), 0);
-  Object.assign(s, { elapsed: 59.99, x: 240, y: 280 });
+  Object.assign(s, { elapsed: 57.99, x: 240, y: 280 });
   stepBoardingPilot(s, config, idle, .05);
   assert.equal(s.cleared, 1);
+  assert.equal(s.endReason, null);
+  while (!s.endReason) stepBoardingPilot(s, config, idle, .05);
   assert.equal(s.elapsed, 60);
   assert.equal(s.endReason, 'complete');
 });
@@ -88,7 +124,11 @@ test('all bands and Natural 1 can clear the safe course or every detour at 60Hz,
       const s = createBoardingPilot(cfg);
       if (detours) s.hull = 1;
       while (!s.endReason) {
-        const next = s.rings.find(r => detours || r.kind === 'required')!;
+        const next = s.rings.find(r => detours || r.kind === 'required');
+        if (!next) {
+          stepBoardingPilot(s, cfg, idle, dt);
+          continue;
+        }
         const time = Math.max(next.time - s.elapsed, dt);
         const input = { x: (next.x - s.x) / (time * speed), y: (next.y - s.y) / (time * speed) };
         assert.ok(Math.hypot(input.x, input.y) <= 1, `unreachable ring at ${next.time}`);

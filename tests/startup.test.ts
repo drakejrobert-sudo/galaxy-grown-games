@@ -348,12 +348,13 @@ test('deferred first launch recovers from load failure, starts once, and retry r
     if (role === 'Pilot') {
       assert.equal(inputEnabled, true);
       assert.equal(readyScene.boardingPilot.rings.length, 20);
-      assert.match(element('play-help').textContent, /Three misses/);
-      readyScene.boardingPilot.endReason = 'misses';
+      assert.match(element('play-help').textContent, /dodge missiles or probes/);
+      readyScene.boardingPilot.endReason = 'hull';
+      readyScene.boardingPilot.hull = 0;
       readyScene.boardingPilot.misses = 3;
       readyScene.onBoardingPilotStep(readyScene.boardingPilot);
       assert.equal(inputEnabled, false);
-      assert.match(element('summary').value, /Misses: 3\/3/);
+      assert.match(element('summary').value, /Misses: 3 •/);
       continue;
     }
     assert.equal(readyScene.boarding.role,role);

@@ -152,6 +152,6 @@ The cleaner-corridor revision caps active Life Support boarders at two, one per 
 
 ## First-person Boarding Party Pilot — v0.8
 
-Pilot now earns 100 points per required ring and 50 per bonus ring. The new rating anchors are the theoretical floor and ceiling, **0–1,650**. A missed-ring or hull failure caps the advisory band at Success. Other stations still report v0.7 and retain their anchors.
+Pilot now earns 100 points per required ring and 50 per bonus ring. The new rating anchors are the theoretical floor and ceiling, **0–1,650**. Hull depletion caps the advisory band at Success. Misses affect points and expose the ship to attacks. Other stations still report v0.7 and retain their anchors.
 
-The 288 synthetic samples give Pilot **100 / 1,500 / 1,650** at P10/P50/P90. The fixed course and scripted controls intentionally test repeatable scoring and reachability. Human difficulty and rating balance still need playtesting.
+After replacing the miss cutoff with dodgeable attacks, rerunning the 288 synthetic samples gives Pilot **100 / 1,500 / 1,650** at P10/P50/P90. The fixed course and scripted controls intentionally test repeatable scoring and reachability. Human difficulty and rating balance still need playtesting.
