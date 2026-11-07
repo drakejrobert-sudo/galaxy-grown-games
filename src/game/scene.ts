@@ -1,7 +1,7 @@
 import Phaser from 'phaser';
 import type { InputFrame } from './input';
 import {
-  createBoardingPilot, stepBoardingPilot, BOARDING_PILOT_FORWARD_SPEED, type BoardingPilotState,
+  createBoardingPilot, stepBoardingPilot, boardingPilotAttackPosition, BOARDING_PILOT_FORWARD_SPEED, type BoardingPilotState,
   createBoarding, stepBoarding, BOARDING_INTERIOR_SLOTS, BOARDING_DEPTHS, boardingCover, boardingBoarderPose, boardingAirlockTargetActive, BOARDING_AIRLOCK_TARGETS, BOARDING_EJECTION_TIME, BOARDING_VENT_WARNING, BOARDING_VENT_RECHARGE, difficultyFor, BOARDING_LINE, BOARDING_CYCLE, BOARDING_WARNING, BOARDING_CARRIER_RADIUS, BOARDING_MINE_LIFETIME, BOARDING_BLAST_RADIUS, type BoardingState, type BoardingInput,
   createSpaceGunner, stepSpaceGunner, SPACE_GUNNER_DEFENSE_LINE, type SpaceGunnerInput, type SpaceGunnerState, type SpaceGunnerAttacker,
   gunnerTargetAt, gunnerFireEvery, GUNNER_SHOT_FEEDBACK_SECONDS, type GunnerShotFeedback,
@@ -301,10 +301,13 @@ export class FlightScene extends Phaser.Scene {
   private paintBoardingPilot(g: Phaser.GameObjects.Graphics) {
     const s = this.boardingPilot;
     const cx = WIDTH / 2, cy = HEIGHT / 2;
+    const projectPoint = (point: { x: number; y: number; z: number }) => {
+      const scale = 260 / (140 + Math.max(0, point.z));
+      return { x: cx + (point.x - s.x) * scale, y: cy + (point.y - s.y) * scale, scale };
+    };
     const project = (obj: { x: number; y: number; time: number; radius: number }) => {
-      const depth = Math.max(0, obj.time - s.elapsed) * BOARDING_PILOT_FORWARD_SPEED;
-      const scale = 260 / (140 + depth);
-      return { x: cx + (obj.x - s.x) * scale, y: cy + (obj.y - s.y) * scale, r: obj.radius * scale, scale };
+      const point = projectPoint({ ...obj, z: (obj.time - s.elapsed) * BOARDING_PILOT_FORWARD_SPEED });
+      return { ...point, r: obj.radius * point.scale };
     };
     const next = s.rings.find(ring => ring.kind === 'required');
     // Debris stays in the course state until its swept collision window ends.
@@ -313,26 +316,60 @@ export class FlightScene extends Phaser.Scene {
     for (const obj of objects) {
       const { x, y, r, scale } = project(obj);
       if (obj.kind === 'asteroid') {
-        const points = [.91, .8, .96, .78, .97, .9, .8].map((size, i) => ({
-          x: x + Math.cos(i * Math.PI * 2 / 7) * r * size,
-          y: y + Math.sin(i * Math.PI * 2 / 7) * r * size,
-        }));
-        g.fillStyle(0x4d3344); g.fillPoints(points, true);
-        g.lineStyle(Math.max(1, 2 * scale), 0xffaa87); g.strokePoints(points, true);
-        g.lineStyle(1, 0xffaa87, .6); g.lineBetween(x - r * .5, y + r * .24, x + r * .48, y - r * .35);
+        const rotation = this.decorativeTime(s.elapsed) * .27 + obj.time;
+        if (!this.drawArt('asteroid', x, y, 2 * r, 2 * r, rotation)) {
+          const points = [.91, .8, .96, .78, .97, .9, .8].map((size, i) => ({
+            x: x + Math.cos(rotation + i * Math.PI * 2 / 7) * r * size,
+            y: y + Math.sin(rotation + i * Math.PI * 2 / 7) * r * size,
+          }));
+          g.fillStyle(0x4d3344); g.fillPoints(points, true);
+        }
+        g.lineStyle(Math.max(1, 1.4 * scale), 0xffaa87, .8); g.strokeCircle(x, y, r);
       } else if (obj.kind === 'junk') {
-        g.fillStyle(0x372d45); g.fillRect(x - r * .68, y - r * .68, r * 1.36, r * 1.36);
-        g.lineStyle(Math.max(1, 2 * scale), 0xffaa87); g.strokeRect(x - r * .68, y - r * .68, r * 1.36, r * 1.36);
-        g.lineBetween(x - r * .68, y + r * .68, x + r * .68, y - r * .68);
+        const angle = obj.time + this.decorativeTime(s.elapsed) * (obj.shape === 'antenna' ? .7 : .18);
+        const wreckage = obj.shape === 'rib'
+          ? [[-.82, -.43], [.78, -.65], [.48, -.08], [-.1, -.1], [-.46, .76], [-.78, .52]]
+          : obj.shape === 'antenna'
+            ? [[-.92, -.12], [-.23, -.13], [.05, -.8], [.22, -.74], [.14, -.1], [.8, .2], [.6, .53], [-.89, .12]]
+            : [[-.72, -.52], [.49, -.72], [.84, -.15], [.32, .14], [.58, .53], [-.45, .7]];
+        const panels = wreckage.map(([dx, dy]) => ({
+          x: x + r * (dx * Math.cos(angle) - dy * Math.sin(angle)),
+          y: y + r * (dx * Math.sin(angle) + dy * Math.cos(angle)),
+        }));
+        g.fillStyle(0x4f5963); g.fillPoints(panels, true);
+        g.lineStyle(Math.max(1, 1.6 * scale), 0xc6a48e); g.strokePoints(panels, true);
+        g.lineBetween(panels[0].x, panels[0].y, panels[3].x, panels[3].y);
+        g.lineStyle(Math.max(1, 1.4 * scale), 0xffaa87, .8); g.strokeCircle(x, y, r);
       } else {
         const color = obj.kind === 'required' ? 0x85f7e0 : obj.kind === 'bonus' ? 0xffcd78 : 0xa3bdff;
-        const alpha = obj.kind === 'required' && obj !== next ? .48 : 1;
-        g.lineStyle(Math.max(2, 5 * scale), color, alpha * .2); g.strokeCircle(x, y, r + 2);
+        const alpha = obj.kind === 'required' && obj !== next ? .52 : 1;
+        const rim = Math.max(2.5, 10 * scale);
+        g.lineStyle(rim, 0x1e2a37, alpha); g.strokeCircle(x, y, r + rim / 2);
+        g.lineStyle(rim * .35, 0x81929a, alpha); g.strokeCircle(x, y, r + rim * .75);
         g.lineStyle(Math.max(1.5, 2.4 * scale), color, alpha); g.strokeCircle(x, y, r);
+        const tilt = 'tilt' in obj ? obj.tilt ?? 0 : 0;
+        for (let i = 0; i < 6; i++) {
+          const angle = tilt + i * Math.PI / 3;
+          const inner = r + rim * .25, outer = r + rim * (tilt && i % 2 ? 1.25 : .9);
+          g.lineStyle(Math.max(1, 2.5 * scale), i % 2 ? 0x9aabae : color, alpha);
+          g.lineBetween(x + Math.cos(angle) * inner, y + Math.sin(angle) * inner,
+            x + Math.cos(angle) * outer, y + Math.sin(angle) * outer);
+        }
         if (obj.kind === 'required') {
           for (const side of [-1, 1]) g.lineBetween(x + side * r, y, x + side * (r + 5 * scale), y);
         } else if (obj.kind === 'bonus') {
           const mark = Math.max(4, 7 * scale);
+          const rejoin = s.rings.find(ring => ring.kind === 'required' && ring.time > obj.time);
+          if (rejoin) {
+            const target = project(rejoin);
+            const angle = Math.atan2(target.y - y, target.x - x);
+            for (let i = 0; i < 3; i++) {
+              const distance = r + rim + (i + 1) * mark;
+              g.fillStyle(color, .75 - i * .18);
+              g.fillCircle(x + Math.cos(angle) * distance, y + Math.sin(angle) * distance, Math.max(1.3, mark * .25));
+            }
+          }
+          g.lineStyle(Math.max(1.5, 2.4 * scale), color, alpha);
           g.strokePoints([{x, y: y - r - 2 * mark}, {x: x + mark, y: y - r - mark},
             {x, y: y - r}, {x: x - mark, y: y - r - mark}], true);
         } else {
@@ -343,18 +380,51 @@ export class FlightScene extends Phaser.Scene {
       }
     }
 
+    const attack = s.attack;
+    const incoming = attack && projectPoint(boardingPilotAttackPosition(attack, s.elapsed));
+    if (attack && incoming && s.elapsed >= attack.launchAt) {
+      const { x, y, scale } = incoming;
+      const radius = attack.radius * scale;
+      if (attack.kind === 'missile') {
+        const tail = projectPoint(boardingPilotAttackPosition(attack, s.elapsed - .14));
+        g.lineStyle(radius, 0xff803e, .45); g.lineBetween(x, y, tail.x, tail.y);
+        g.lineStyle(radius * .33, 0xffd79f); g.lineBetween(x, y, tail.x, tail.y);
+        g.fillStyle(0xffe0b3); g.fillCircle(x, y, radius * .55);
+      } else {
+        if (!this.drawArt('boarding-probe', x, y, radius * 2, radius * 2, attack.offsetX > 0 ? -.45 : .45)) {
+          g.fillStyle(0x62576d);
+          g.fillPoints([{ x, y: y - radius }, { x: x + radius, y }, { x, y: y + radius }, { x: x - radius, y }], true);
+        }
+        g.fillStyle(0xc898ff);
+        for (const side of [-1, 1]) g.fillCircle(x + side * radius * .55, y - radius * .3, radius * .18);
+      }
+      g.lineStyle(1.5, 0xff967d, .8); g.strokeCircle(x, y, radius);
+    }
+
     // Keep the canopy outside the reticle and the scoring plane.
     g.fillStyle(0x0e192c);
     g.fillPoints([{x: 0, y: 0}, {x: 90, y: 0}, {x: 26, y: 86}, {x: 0, y: 226}], true);
     g.fillPoints([{x: WIDTH, y: 0}, {x: WIDTH - 90, y: 0}, {x: WIDTH - 26, y: 86}, {x: WIDTH, y: 226}], true);
     g.fillPoints([{x: 0, y: 482}, {x: 87, y: 519}, {x: 393, y: 519}, {x: WIDTH, y: 482},
       {x: WIDTH, y: HEIGHT}, {x: 0, y: HEIGHT}], true);
+    g.fillStyle(0x223444);
+    g.fillPoints([{x: 0, y: 487}, {x: 87, y: 521}, {x: 393, y: 521}, {x: WIDTH, y: 487},
+      {x: WIDTH, y: 506}, {x: 397, y: 529}, {x: 83, y: 529}, {x: 0, y: 506}], true);
+    g.lineStyle(5, 0x263d4e);
+    g.lineBetween(20, 0, 3, 105); g.lineBetween(WIDTH - 20, 0, WIDTH - 3, 105);
     g.lineStyle(3, 0x507b93);
     g.lineBetween(89, 0, 26, 86); g.lineBetween(WIDTH - 89, 0, WIDTH - 26, 86);
     g.lineBetween(0, 482, 87, 519); g.lineBetween(393, 519, WIDTH, 482);
     g.lineBetween(87, 519, 393, 519);
     g.fillStyle(0x071321); g.fillRoundedRect(72, 526, 336, 25, 5);
-    this.drawLabel(`RINGS ${s.cleared}/15     MISSES ${s.misses}/3     HULL ${s.hull}/3`, cx, 539, 14, '#c3e3ec');
+    for (const side of [-1, 1]) {
+      const panelX = cx + side * 185;
+      for (let i = 0; i < 3; i++) {
+        g.fillStyle(i < s.hull ? 0x70d8c7 : 0x344957);
+        g.fillRect(panelX - 14 + i * 10, 533, 6, 4);
+      }
+    }
+    this.drawLabel(`RINGS ${s.cleared}/15     HULL ${s.hull}/3`, cx, 539, 14, '#c3e3ec');
 
     g.lineStyle(2, 0xe8fafb, .9);
     for (const side of [-1, 1]) {
@@ -372,6 +442,19 @@ export class FlightScene extends Phaser.Scene {
         const right = { x: x + Math.cos(angle - 2.4) * 9, y: y + Math.sin(angle - 2.4) * 9 };
         g.fillStyle(0x85f7e0); g.fillPoints([tip, left, right], true);
       }
+    }
+    if (attack && incoming) {
+      const x = Math.max(48, Math.min(WIDTH - 48, incoming.x));
+      const markerGap = s.elapsed >= attack.launchAt ? attack.radius * incoming.scale + 14 : 0;
+      const markerY = incoming.y + (incoming.y < 125 ? markerGap : -markerGap);
+      const y = Math.max(95, Math.min(HEIGHT - 115, markerY));
+      const angle = Math.atan2(incoming.y - cy, incoming.x - cx);
+      const tip = { x: x + Math.cos(angle) * 9, y: y + Math.sin(angle) * 9 };
+      const left = { x: x + Math.cos(angle + 2.4) * 8, y: y + Math.sin(angle + 2.4) * 8 };
+      const right = { x: x + Math.cos(angle - 2.4) * 8, y: y + Math.sin(angle - 2.4) * 8 };
+      g.fillStyle(0x281720, .96); g.fillCircle(x, y, 12);
+      g.fillStyle(0xff967d); g.fillPoints([tip, left, right], true);
+      this.drawLabel(`INCOMING ${attack.kind.toUpperCase()}`, cx, 72, 15, '#ffb39f');
     }
     if (s.feedback && s.feedback.until > s.elapsed) {
       const color = s.feedback.danger ? '#ffb39f' : '#a6f7e5';

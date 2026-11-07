@@ -508,7 +508,7 @@ test('cockpit perspective paints a frozen debris detour without mutating its cou
   h.paint();
   assert.equal(JSON.stringify(s), before);
   assert.ok(h.commands.some(c => c[0] === 'strokeCircle' && c.slice(1).every(Number.isFinite)));
-  assert.ok(h.commands.some(c => c[0] === 'strokeRect' && c.slice(1).every(Number.isFinite)));
+  assert.ok(h.commands.some(c => c[0] === 'strokePoints'));
 });
 
 test('cockpit debris stays visible past its center plane until contact or retirement', () => {
@@ -538,4 +538,25 @@ test('cockpit debris stays visible past its center plane until contact or retire
   for (let i = 0; i < 4; i++) rules.stepBoardingPilot(s, config, { x: 0, y: 0 }, .05);
   assert.equal(s.hull, 3);
   assert.equal(paintsAsteroid(), false);
+});
+
+test('cockpit attack warnings remain visible in reduced motion before the hazard is live', () => {
+  const h = harness();
+  const config = { total: 10, naturalOne: false };
+  h.scene.begin(config, 'Boarding Party', 'Pilot');
+  h.setReduced(true);
+  const s: rules.BoardingPilotState = h.scene.boardingPilot;
+  Object.assign(s, { x: 440, elapsed: 3.99 });
+  rules.stepBoardingPilot(s, config, { x: 0, y: 0 }, .05);
+  assert.ok(s.attack);
+  const warning = () => h.commands.some(c => c[0] === 'fillStyle' && c[1] === 0xff967d);
+  const trail = () => h.commands.some(c => c[0] === 'lineStyle' && c[2] === 0xff803e);
+  h.paint();
+  assert.ok(warning());
+  assert.equal(trail(), false);
+  s.elapsed = s.attack.launchAt + .2;
+  freeze(s);
+  h.paint();
+  assert.ok(warning());
+  assert.ok(trail());
 });

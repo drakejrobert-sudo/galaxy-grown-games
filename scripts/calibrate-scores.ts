@@ -47,9 +47,9 @@ function run(mode: ScoreMode, config: FlightConfig, profile: Profile, seed: numb
   if (mode === 'boarding-pilot') {
     const s = createBoardingPilot(config);
     while (!s.endReason) {
-      const next = s.rings.find(r => r.kind === 'required' || profile === 'engaged')!;
+      const next = s.rings.find(r => r.kind === 'required' || profile === 'engaged');
       const drift = profile === 'routine' ? 50 * Math.sin(s.elapsed + seed) : 0;
-      const movement = profile === 'passive' ? { x: 0, y: 0 }
+      const movement = profile === 'passive' || !next ? { x: 0, y: 0 }
         : direction(s, { x: next.x + drift, y: next.y });
       stepBoardingPilot(s, config, movement, step);
     }

@@ -73,7 +73,7 @@ const routeButtons = [get<HTMLButtonElement>('route-thrusters'), get<HTMLButtonE
 const input = createInput(canvas);
 const gunnerInput = createGunnerInput(canvas);
 const boardingHelp: Record<Role, string> = {
-  Pilot: 'Fly through the teal rings. Three misses end the run. Arrow keys / WASD or hold and drag from where you touch. Optional diamond rings award points, and plus rings repair hull. Avoid debris.',
+  Pilot: 'Follow the teal rings and dodge missiles or probes after a miss. Steer with arrows / WASD or hold and drag from where you touch. Diamond rings mark salvage bonuses. Plus rings repair hull.',
   Gunner: 'Ship flies automatically. Small probes take one hit; shuttles take two. Shoot during launch warnings or before they cross the boarding line; damage the carrier between threats. Touch/mouse aims; hold Fire to shoot. Mouse click or Space/Enter also fires. Arrow keys / WASD aims.',
   Bomber: 'Automatic flight. Aim aft: tap/drag-release or mouse release launches. Left/Right or A/D rotates; Down/S aims straight aft. Space/Enter or Launch mine fires once. Intercept probes and shuttles during their launch warning or diagonal approach; mine the carrier when it closes.',
   'Life Support': 'Shoot boarders when they raise rifles. Red lasers hurt on arrival and keep coming after a kill; surviving enemies advance. Shoot the glowing target beside a side door while boarders cross its bay to vent them. Late shots can miss the crossing. Aim with touch/mouse or arrows/WASD; Fire, mouse click or Space/Enter shoots.',
@@ -378,11 +378,11 @@ scene.onBoardingPilotStep = s => {
   get('time').textContent = `${Math.ceil(DURATION - s.elapsed)}s`;
   get('hull').textContent = `${s.hull} / 3`;
   get('score').textContent = String(points);
-  get('flight-status').textContent = `${difficultyFor(config.total)} · Check ${config.total}${config.naturalOne ? ' · Natural 1: 60% strafe' : ''} · Rings ${s.cleared}/15 · Misses ${s.misses}/3`;
+  get('flight-status').textContent = `${difficultyFor(config.total)} · Check ${config.total}${config.naturalOne ? ' · Natural 1: 60% strafe' : ''} · Rings ${s.cleared}/15`;
   if (!s.endReason) return;
   inFlight = false; input.enable(false);
   show('results'); get('outcome').textContent = boardingPilotOutcome(s);
-  showRatedResult('boarding-pilot', points, s.endReason !== 'complete');
+  showRatedResult('boarding-pilot', points, s.endReason === 'hull');
   fillSummary(boardingPilotResultText(config, s));
   get('copy-status').textContent = ''; get('copy').focus();
 };
