@@ -6,27 +6,42 @@ export function createInput(surface: HTMLElement) {
   const keys = new Set<string>();
   let touch: { x: number; y: number } | null = null;
   let pointer: number | null = null;
+  let dragOrigin: { x: number; y: number } | null = null;
+  let relativeDrag = false;
   const controls = ['ArrowLeft','ArrowRight','ArrowUp','ArrowDown','KeyW','KeyA','KeyS','KeyD'];
   let enabled = false;
   const down = (e: KeyboardEvent) => { if (enabled && controls.includes(e.code)) { e.preventDefault(); keys.add(e.code); } };
   const up = (e: KeyboardEvent) => keys.delete(e.code);
-  const clear = () => { keys.clear(); touch = null; pointer = null; };
+  const clear = () => { keys.clear(); touch = null; dragOrigin = null; pointer = null; };
   const setTouch = (e: PointerEvent) => {
     const box = surface.querySelector('canvas')?.getBoundingClientRect();
     if (box) touch = { x: (e.clientX - box.left) / box.width * 480, y: (e.clientY - box.top) / box.height * 560 };
   };
   surface.addEventListener('pointerdown', e => {
-    if (!enabled || pointer !== null) return;
+    if (!enabled || pointer !== null || (relativeDrag && e.pointerType === 'mouse' && e.button !== 0)) return;
     e.preventDefault(); pointer = e.pointerId; surface.setPointerCapture(pointer); setTouch(e);
+    if (relativeDrag) dragOrigin = touch;
   });
   surface.addEventListener('pointermove', e => { if (enabled && e.pointerId === pointer) { e.preventDefault(); setTouch(e); } });
-  for (const event of ['pointerup', 'pointercancel', 'lostpointercapture']) surface.addEventListener(event, clear);
+  for (const event of ['pointerup', 'pointercancel', 'lostpointercapture']) {
+    surface.addEventListener(event, ((e: PointerEvent) => {
+      if (!relativeDrag) clear();
+      else if (e.pointerId === pointer) { touch = null; dragOrigin = null; pointer = null; }
+    }) as EventListener);
+  }
   window.addEventListener('keydown', down);
   window.addEventListener('keyup', up);
   window.addEventListener('blur', clear);
   return {
-    enable(value: boolean) { enabled = value; clear(); },
+    enable(value: boolean, drag = false) { enabled = value; relativeDrag = drag; clear(); },
     read(x: number, y: number) {
+      if (touch && dragOrigin) {
+        const dx = touch.x - dragOrigin.x, dy = touch.y - dragOrigin.y;
+        const distance = Math.hypot(dx, dy);
+        if (distance <= 6) return { x: 0, y: 0 };
+        const power = Math.min(1, (distance - 6) / 42);
+        return { x: dx / distance * power, y: dy / distance * power };
+      }
       if (touch) {
         // Touch sets a destination; it never teleports or bypasses engine impairment.
         const dx = touch.x - x, dy = touch.y - y;

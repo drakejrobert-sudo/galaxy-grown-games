@@ -1,6 +1,6 @@
 # Boarding Party — repel boarders
 
-**Current follow-up:** [clearer threats, easier defense and first-person Life Support](boarding-party-clarity.md) supersedes this initial implementation’s artwork, traffic and interior details. The record below describes the original #73 handoff.
+**Current follow-up:** [clearer threats, easier defense and first-person Life Support](boarding-party-clarity.md) supersedes this initial implementation’s artwork, traffic and interior details. The [first-person Pilot course](boarding-pilot-cockpit.md) supersedes the original Pilot design. The record below describes the original #73 handoff.
 
 Drake approved the defensive framing, four activities, controls and Natural 1 effects on 2026-11-06, then requested implementation. This supersedes the pending offensive/defensive comparison in [#11](https://github.com/drakejrobert-sudo/galaxy-grown-games/issues/11). Offensive boarding remains outside this design. Engineering implementation and device/gameplay acceptance are separate; final owner acceptance belongs to #39.
 

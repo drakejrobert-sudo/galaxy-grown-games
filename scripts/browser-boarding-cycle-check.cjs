@@ -16,7 +16,7 @@ fs.mkdirSync(out, { recursive: true });
       const page = await context.newPage();
       page.on('pageerror',e=>errors.push(e.message));
       page.on('console',e=>{if(e.type()==='error')errors.push(e.text());});
-      for (const role of ['Pilot','Gunner','Bomber']) {
+      for (const role of ['Gunner','Bomber']) {
         await page.goto(base+'?situation=boarding-party');
         await page.evaluate(async base=>{
           const {FlightScene}=await import(new URL('src/game/runtime.ts',base).href);
@@ -31,10 +31,10 @@ fs.mkdirSync(out, { recursive: true });
         for (const boundary of [12,24]) {
           const result=await page.evaluate(({role,boundary})=>{
             const q=qaScene,s=qaRules.createBoarding(role);q.activeFlight=false;q.boarding=s;
-            s.elapsed=boundary-.01;s.spawnIn=1000;if(role==='Pilot'){s.x=boundary===12?300:180;s.y=500;}
+            s.elapsed=boundary-.01;s.spawnIn=1000;
             const cycle=boundary/12-1,startX=cycle?360:240,stage=cycle%2?120:360;
             Object.assign(s.carrier,{cycle,startX,targetX:200,x:startX+(stage-startX)*2.99/3,y:500});
-            q.readInput=()=>({x:0,y:0});q.readBoardingFrame=()=>({first:{x:0,y:0,firing:false},continued:{x:0,y:0,firing:false}});
+            q.readBoardingFrame=()=>({first:{x:0,y:0,firing:false},continued:{x:0,y:0,firing:false}});
             q.activeFlight=true;q.timingPrimed=true;q.game.loop.rawDelta=1000/60;q.update(0,1000/60);q.activeFlight=false;
             return {elapsed:s.elapsed,x:s.carrier.x,startX:s.carrier.startX,cycle:s.carrier.cycle,hull:s.hull,stage};
           },{role,boundary});
@@ -43,13 +43,6 @@ fs.mkdirSync(out, { recursive: true });
           results.push({width,role,boundary,...result});
         }
         await page.screenshot({path:path.join(out,`${role}-${width}.png`),fullPage:true});
-        if(role==='Pilot') {
-          const hull=await page.evaluate(()=>{
-            const q=qaScene,s=qaRules.createBoarding('Pilot');q.boarding=s;s.elapsed=11.99;s.spawnIn=1000;s.x=350;s.y=500;
-            Object.assign(s.carrier,{cycle:0,startX:240,targetX:200,x:359.6,y:500});
-            q.activeFlight=true;q.timingPrimed=true;q.game.loop.rawDelta=50;q.update(0,50);q.activeFlight=false;return s.hull;
-          });assert.equal(hull,2,'legitimate contact still damages');
-        }
         if(role==='Bomber') {
           const result=await page.evaluate(()=>{
             const q=qaScene,s=qaRules.createBoarding('Bomber');q.boarding=s;s.elapsed=11.99;s.spawnIn=1000;
@@ -68,6 +61,6 @@ fs.mkdirSync(out, { recursive: true });
       await context.close();
     }
     assert.deepEqual(errors,[]);fs.writeFileSync(path.join(out,'boundaries.json'),JSON.stringify(results,null,2));
-    console.log(`PASS: first two cycle boundaries, no phantom hull hit, legitimate contact, single mine damage, pause/resume at desktop/390/320; ${out}`);
+    console.log(`PASS: first two cycle boundaries, single mine damage, pause/resume at desktop/390/320; ${out}`);
   } finally { await browser.close(); }
 })().catch(e=>{console.error(e);process.exitCode=1;});

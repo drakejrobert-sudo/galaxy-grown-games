@@ -16,29 +16,6 @@ function pod(id=1,x=240,y=300,vy=-100) {return {id,x,y,vx:0,vy,radius:12,kind:'p
 function boarder(id=1,phase:BoardingBoarder['phase']='exposed',remaining=1,x=145,y=180):BoardingBoarder {
   return {id,phase,remaining,x,y,slot:0,depth:0};
 }
-test('carrier locks warning target, closes into aft-mine reach, then withdraws without homing',()=>{
-  const s=state('Pilot'); tick(s);const target=s.carrier.targetX;
-  run(s,1,{x:1});assert.equal(s.carrier.targetX,target);assert.equal(s.carrier.y,500);
-  run(s,3);assert.ok(s.carrier.y<=251);assert.equal(s.carrier.targetX,target);
-  run(s,5);assert.ok(s.carrier.y>=499);
-});
-test('pods launch fixed vectors and clean Pilot misses retire without breaches',()=>{
-  const s=state('Pilot');s.spawnIn=0;tick(s);const p=s.pods[0];assert.ok(p.vy<0);
-  const velocity=[p.vx,p.vy];tick(s,{x:1});assert.deepEqual([p.vx,p.vy],velocity);
-  s.pods=[pod(99,20,-39,-100)];tick(s);assert.equal(s.pods.length,0);assert.equal(s.hull,3);assert.equal(s.breaches,0);
-});
-test('Pilot keyboard and pointer direction share diagonal normalization and 60% Natural 1 in all bands',()=>{
-  for(const total of [5,10,15,16]) for(const naturalOne of [false,true]) {
-    const s=state('Pilot');tick(s,{x:1,y:-1},.05,{total,naturalOne});
-    const speed=BOARDING_TUNING[total<=5?'Hard':total<=10?'Medium':total<=15?'Easy':'Very Easy'].moveSpeed;
-    assert.ok(Math.abs(Math.hypot(s.x-240,s.y-140)-speed*.05*(naturalOne?.6:1))<1e-8);
-  }
-});
-test('swept Pilot contact removes pods, applies one damage and protects simultaneous contacts',()=>{
-  const s=state('Pilot');s.pods=[pod(1,240,175,-1500),pod(2,240,175,-1500)];tick(s);
-  assert.equal(s.hull,2);assert.equal(s.hits,1);assert.equal(s.pods.length,0);assert.ok(s.grace>1.2);
-  s.pods=[pod(3,s.x,s.y,0)];tick(s);assert.equal(s.hull,2);assert.equal(s.pods.length,0);
-});
 test('Gunner chooses one closest target, pod before carrier on a tie; miss consumes cooldown',()=>{
   const s=state('Gunner');s.pods=[pod(1,240,500,0)];tick(s,{aimX:240,aimY:500,firing:true});
   assert.equal(s.intercepted,1);assert.equal(s.carrierDamage,0);assert.equal(s.shots,1);
@@ -168,9 +145,9 @@ test('ejection awards once and preserves fired lasers; bounded visual effects ex
   const fresh=createBoarding('Life Support');assert.deepEqual(fresh.ejections,[]);assert.ok(fresh.airlocks.every(l=>l.openRemaining===0&&l.cooldown===0&&l.warning===null));
 });
 test('health failure wins a time tie; all four terminal states are immutable and reports contain GM context',()=>{
-  for(const role of ['Pilot','Gunner','Bomber','Life Support'] as const) {
+  for(const role of ['Gunner','Bomber','Life Support'] as const) {
     const s=state(role);s.elapsed=59.99;s.hull=1;
-    if(role==='Life Support')s.lasers=[{id:9,x:145,y:180,side:0,duration:.9,remaining:.005}];else s.pods=[pod(1,240,role==='Pilot'?140:172,-100)];
+    if(role==='Life Support')s.lasers=[{id:9,x:145,y:180,side:0,duration:.9,remaining:.005}];else s.pods=[pod(1,240,172,-100)];
     tick(s);assert.equal(s.finished,true);assert.equal(s.endReason,'hull');
     const before=structuredClone(s);tick(s,{firing:true,placing:true});assert.deepEqual(s,before);
     const report=boardingResultText({total:-2,naturalOne:true},s);
@@ -182,11 +159,6 @@ test('a disabled carrier allows timed completion without prematurely discarding 
   assert.equal(s.elapsed,60);assert.equal(s.finished,true);assert.equal(s.endReason,'time');assert.equal(s.pods.length,1);
 });
 
-test('Pilot pod launch leads current movement, then commits without homing',()=>{
-  const s=state('Pilot');s.spawnIn=0;tick(s,{x:1});const p=s.pods[0];
-  const flight=(s.y-p.y)/p.vy,aimedX=p.x+p.vx*flight;
-  assert.ok(aimedX>s.x+100);const v={x:p.vx,y:p.vy};tick(s,{x:-1});assert.deepEqual({x:p.vx,y:p.vy},v);
-});
 test('interior failure prevents a later same-step ejection from awarding points',()=>{
   const s=state('Life Support');s.hull=1;s.boarders=[boarder(1,'exposed',.01),{...boarder(2,'warning',1,70,350),slot:2}];
   s.lasers=[{id:9,x:145,y:180,side:0,duration:.9,remaining:.01}];s.airlocks[0].warning=.04;tick(s);assert.equal(s.finished,true);assert.equal(s.ejected,0);
@@ -229,12 +201,6 @@ test('Gunner/Bomber opening and minimum warning plus flight window hold at close
     while(s.pods.some(q=>q.id===p.id)&&s.elapsed-spawn<10)tick(s,{},.05,cfg);
     assert.ok(s.elapsed-spawn>=BOARDING_LAUNCH_WARNING+BOARDING_MIN_FLIGHT-1e-8);assert.equal(s.breaches,1);
   }
-});
-test('check 10 receives gentler Medium defense tuning without changing turret/mines or Pilot movement',()=>{
-  assert.deepEqual(BOARDING_DEFENSE_TUNING.Medium,{podSpeed:125,launchEvery:1.8});
-  assert.ok(BOARDING_DEFENSE_TUNING.Medium.podSpeed<BOARDING_TUNING.Medium.podSpeed);
-  assert.ok(BOARDING_DEFENSE_TUNING.Medium.launchEvery>BOARDING_TUNING.Medium.launchEvery);
-  const s=state('Pilot');s.spawnIn=0;tick(s);assert.ok(Math.abs(s.spawnIn-(BOARDING_TUNING.Medium.launchEvery*.8-.05))<1e-8);
 });
 test('carrier approaches and repositions laterally while preserving its locked target',()=>{
   const s=state('Bomber');tick(s);const target=s.carrier.targetX,from=s.carrier.x;

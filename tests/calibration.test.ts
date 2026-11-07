@@ -22,7 +22,10 @@ test('seeded calibration preserves unchanged references and records redesigned s
   for (const row of rows) {
     const [mode, count, min, low, median, high, max] = row.split('\t');
     assert.equal(Number(count), 288, mode);
-    if (mode.startsWith('boarding-')) {
+    if (mode === 'boarding-pilot') {
+      assert.deepEqual(SCORE_ANCHORS[mode], { low: 0, high: 1650 });
+      assert.deepEqual([min, low, median, high, max].map(Number), [100, 100, 1500, 1650, 1650]);
+    } else if (mode.startsWith('boarding-')) {
       assert.deepEqual({ low: Number(low), high: Number(high) }, SCORE_ANCHORS[mode as ScoreMode]);
     } else if (mode === 'space-gunner') {
       assert.deepEqual(SCORE_ANCHORS[mode], { low: 37, high: 5000 });

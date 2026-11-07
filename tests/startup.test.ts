@@ -344,7 +344,19 @@ test('deferred first launch recovers from load failure, starts once, and retry r
   for (const role of ['Pilot','Gunner','Bomber','Life Support']) {
     element('again').listeners.get('click')(); element('situation').value='Boarding Party'; element('role').value=role;
     element('situation').listeners.get('change')(); await submit();
-    assert.equal(readyScene.situation,'Boarding Party');assert.equal(readyScene.boarding.role,role);
+    assert.equal(readyScene.situation,'Boarding Party');
+    if (role === 'Pilot') {
+      assert.equal(inputEnabled, true);
+      assert.equal(readyScene.boardingPilot.rings.length, 20);
+      assert.match(element('play-help').textContent, /Three misses/);
+      readyScene.boardingPilot.endReason = 'misses';
+      readyScene.boardingPilot.misses = 3;
+      readyScene.onBoardingPilotStep(readyScene.boardingPilot);
+      assert.equal(inputEnabled, false);
+      assert.match(element('summary').value, /Misses: 3\/3/);
+      continue;
+    }
+    assert.equal(readyScene.boarding.role,role);
     assert.equal(spaceGunnerInputEnabled,role==='Gunner'||role==='Life Support');
     assert.equal(spaceBomberInputEnabled,role==='Bomber');assert.equal(inputEnabled,role==='Pilot');
     readyScene.boarding.crosshairX=123;readyScene.boarding.aimDistance=42;

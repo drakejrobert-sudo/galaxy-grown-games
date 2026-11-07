@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import type { InputFrame } from './input';
 import {
+  createBoardingPilot, stepBoardingPilot, BOARDING_PILOT_FORWARD_SPEED, type BoardingPilotState,
   createBoarding, stepBoarding, BOARDING_INTERIOR_SLOTS, BOARDING_DEPTHS, boardingCover, boardingBoarderPose, boardingAirlockTargetActive, BOARDING_AIRLOCK_TARGETS, BOARDING_EJECTION_TIME, BOARDING_VENT_WARNING, BOARDING_VENT_RECHARGE, difficultyFor, BOARDING_LINE, BOARDING_CYCLE, BOARDING_WARNING, BOARDING_CARRIER_RADIUS, BOARDING_MINE_LIFETIME, BOARDING_BLAST_RADIUS, type BoardingState, type BoardingInput,
   createSpaceGunner, stepSpaceGunner, SPACE_GUNNER_DEFENSE_LINE, type SpaceGunnerInput, type SpaceGunnerState, type SpaceGunnerAttacker,
   gunnerTargetAt, gunnerFireEvery, GUNNER_SHOT_FEEDBACK_SECONDS, type GunnerShotFeedback,
@@ -17,7 +18,9 @@ import {
 } from './rules';
 
 export class FlightScene extends Phaser.Scene {
-  boarding = createBoarding('Pilot');
+  boarding = createBoarding('Gunner');
+  boardingPilot = createBoardingPilot({ total: 10, naturalOne: false });
+  onBoardingPilotStep: (state: BoardingPilotState) => void = () => {};
   readBoardingFrame: () => InputFrame<BoardingInput> = () => ({ first: {x:0,y:0,firing:false}, continued: {x:0,y:0,firing:false} });
   onBoardingStep: (state: BoardingState) => void = () => {};
   flight = createFlight();
@@ -172,7 +175,8 @@ export class FlightScene extends Phaser.Scene {
     this.config = config;
     this.situation = situation;
     this.role = role;
-    this.boarding = createBoarding(role);
+    if (situation === 'Boarding Party' && role === 'Pilot') this.boardingPilot = createBoardingPilot(config);
+    else if (situation === 'Boarding Party' && role !== 'Pilot') this.boarding = createBoarding(role);
     this.flight = createFlight();
     this.gunner = createGunner();
     this.spaceGunner = createSpaceGunner();
@@ -205,14 +209,21 @@ export class FlightScene extends Phaser.Scene {
   }
 
   private advanceFrame(milliseconds: number) {
+    if (this.situation === 'Boarding Party' && this.role === 'Pilot') {
+      const s = this.boardingPilot;
+      for (let offset = 0; offset < milliseconds && !s.endReason; offset += 50) {
+        stepBoardingPilot(s, this.config, this.readInput(s.x, s.y), Math.min(50, milliseconds - offset) / 1000);
+      }
+      if (s.endReason) this.activeFlight = false;
+      this.onBoardingPilotStep(s);
+      return;
+    }
     if (this.situation === 'Boarding Party') {
       if (this.boarding.finished) { this.activeFlight = false; return; }
       const frame = this.readBoardingFrame();
       for (let i = 0; i < Math.ceil(milliseconds / 50); i++) {
         const input = i === 0 ? frame.first : frame.continued;
-        stepBoarding(this.boarding, this.config, this.role === 'Pilot'
-          ? {...input, ...this.readInput(this.boarding.x, this.boarding.y)} : input,
-          Math.min(50, milliseconds-i*50)/1000);
+        stepBoarding(this.boarding, this.config, input, Math.min(50, milliseconds-i*50)/1000);
         if (this.boarding.finished) { this.activeFlight = false; break; }
       }
       this.onBoardingStep(this.boarding); return;
@@ -263,13 +274,15 @@ export class FlightScene extends Phaser.Scene {
     this.labelsUsed = 0;
     for (const layer of this.interiorLayers) layer.clear().setVisible(false);
     this.interiorUsed = 0;
-    const elapsed = this.situation === 'Boarding Party' ? this.boarding.elapsed : this.situation === 'Space Battle'
+    const cockpit = this.situation === 'Boarding Party' && this.role === 'Pilot';
+    const elapsed = cockpit ? this.boardingPilot.elapsed : this.situation === 'Boarding Party' ? this.boarding.elapsed : this.situation === 'Space Battle'
       ? this.role === 'Life Support' ? this.spaceLife.elapsed : this.role === 'Bomber' ? this.spaceBomber.elapsed : this.role === 'Gunner' ? this.spaceGunner.elapsed : this.spacePilot.elapsed
       : this.role === 'Pilot' ? this.flight.elapsed
         : this.role === 'Gunner' ? this.gunner.elapsed
           : this.role === 'Bomber' ? this.bomber.elapsed : this.lifeSupport.elapsed;
     this.paintBackground(this.backgroundGraphics, this.role === 'Pilot' || this.role === 'Bomber' || (this.situation === 'Asteroid Field' && (this.role === 'Gunner' || this.role === 'Life Support')) ? this.decorativeTime(elapsed) : elapsed);
-    if (this.situation === 'Boarding Party') this.paintBoardingMode(g);
+    if (cockpit) this.paintBoardingPilot(g);
+    else if (this.situation === 'Boarding Party') this.paintBoardingMode(g);
     else if (this.situation === 'Space Battle') {
       if (this.role === 'Life Support') this.paintSpaceLifeMode(g);
       else if (this.role === 'Gunner') this.paintSpaceGunnerMode(g);
@@ -283,6 +296,87 @@ export class FlightScene extends Phaser.Scene {
     this.paintFrame(g);
     for (let i = this.artUsed; i < this.artPool.length; i++) this.artPool[i].setVisible(false);
     for (let i = this.labelsUsed; i < this.labelPool.length; i++) this.labelPool[i].setVisible(false);
+  }
+
+  private paintBoardingPilot(g: Phaser.GameObjects.Graphics) {
+    const s = this.boardingPilot;
+    const cx = WIDTH / 2, cy = HEIGHT / 2;
+    const project = (obj: { x: number; y: number; time: number; radius: number }) => {
+      const depth = Math.max(0, obj.time - s.elapsed) * BOARDING_PILOT_FORWARD_SPEED;
+      const scale = 260 / (140 + depth);
+      return { x: cx + (obj.x - s.x) * scale, y: cy + (obj.y - s.y) * scale, r: obj.radius * scale, scale };
+    };
+    const next = s.rings.find(ring => ring.kind === 'required');
+    const objects = [...s.rings, ...s.debris].filter(obj => obj.time >= s.elapsed && obj.time <= s.elapsed + 7)
+      .sort((a, b) => b.time - a.time);
+    for (const obj of objects) {
+      const { x, y, r, scale } = project(obj);
+      if (obj.kind === 'asteroid') {
+        const points = [.91, .8, .96, .78, .97, .9, .8].map((size, i) => ({
+          x: x + Math.cos(i * Math.PI * 2 / 7) * r * size,
+          y: y + Math.sin(i * Math.PI * 2 / 7) * r * size,
+        }));
+        g.fillStyle(0x4d3344); g.fillPoints(points, true);
+        g.lineStyle(Math.max(1, 2 * scale), 0xffaa87); g.strokePoints(points, true);
+        g.lineStyle(1, 0xffaa87, .6); g.lineBetween(x - r * .5, y + r * .24, x + r * .48, y - r * .35);
+      } else if (obj.kind === 'junk') {
+        g.fillStyle(0x372d45); g.fillRect(x - r * .68, y - r * .68, r * 1.36, r * 1.36);
+        g.lineStyle(Math.max(1, 2 * scale), 0xffaa87); g.strokeRect(x - r * .68, y - r * .68, r * 1.36, r * 1.36);
+        g.lineBetween(x - r * .68, y + r * .68, x + r * .68, y - r * .68);
+      } else {
+        const color = obj.kind === 'required' ? 0x85f7e0 : obj.kind === 'bonus' ? 0xffcd78 : 0xa3bdff;
+        const alpha = obj.kind === 'required' && obj !== next ? .48 : 1;
+        g.lineStyle(Math.max(2, 5 * scale), color, alpha * .2); g.strokeCircle(x, y, r + 2);
+        g.lineStyle(Math.max(1.5, 2.4 * scale), color, alpha); g.strokeCircle(x, y, r);
+        if (obj.kind === 'required') {
+          for (const side of [-1, 1]) g.lineBetween(x + side * r, y, x + side * (r + 5 * scale), y);
+        } else if (obj.kind === 'bonus') {
+          const mark = Math.max(4, 7 * scale);
+          g.strokePoints([{x, y: y - r - 2 * mark}, {x: x + mark, y: y - r - mark},
+            {x, y: y - r}, {x: x - mark, y: y - r - mark}], true);
+        } else {
+          const mark = Math.max(4, 7 * scale);
+          g.lineBetween(x - mark, y - r - mark, x + mark, y - r - mark);
+          g.lineBetween(x, y - r - 2 * mark, x, y - r);
+        }
+      }
+    }
+
+    // Keep the canopy outside the reticle and the scoring plane.
+    g.fillStyle(0x0e192c);
+    g.fillPoints([{x: 0, y: 0}, {x: 90, y: 0}, {x: 26, y: 86}, {x: 0, y: 226}], true);
+    g.fillPoints([{x: WIDTH, y: 0}, {x: WIDTH - 90, y: 0}, {x: WIDTH - 26, y: 86}, {x: WIDTH, y: 226}], true);
+    g.fillPoints([{x: 0, y: 482}, {x: 87, y: 519}, {x: 393, y: 519}, {x: WIDTH, y: 482},
+      {x: WIDTH, y: HEIGHT}, {x: 0, y: HEIGHT}], true);
+    g.lineStyle(3, 0x507b93);
+    g.lineBetween(89, 0, 26, 86); g.lineBetween(WIDTH - 89, 0, WIDTH - 26, 86);
+    g.lineBetween(0, 482, 87, 519); g.lineBetween(393, 519, WIDTH, 482);
+    g.lineBetween(87, 519, 393, 519);
+    g.fillStyle(0x071321); g.fillRoundedRect(72, 526, 336, 25, 5);
+    this.drawLabel(`RINGS ${s.cleared}/15     MISSES ${s.misses}/3     HULL ${s.hull}/3`, cx, 539, 14, '#c3e3ec');
+
+    g.lineStyle(2, 0xe8fafb, .9);
+    for (const side of [-1, 1]) {
+      g.lineBetween(cx + side * 7, cy, cx + side * 17, cy);
+      g.lineBetween(cx, cy + side * 7, cx, cy + side * 13);
+    }
+    if (next) {
+      const point = project(next);
+      const dx = point.x - cx, dy = point.y - cy;
+      const edge = Math.max(Math.abs(dx) / 200, Math.abs(dy) / 190);
+      if (edge > 1) {
+        const angle = Math.atan2(dy, dx), x = cx + dx / edge, y = cy + dy / edge;
+        const tip = { x: x + Math.cos(angle) * 10, y: y + Math.sin(angle) * 10 };
+        const left = { x: x + Math.cos(angle + 2.4) * 9, y: y + Math.sin(angle + 2.4) * 9 };
+        const right = { x: x + Math.cos(angle - 2.4) * 9, y: y + Math.sin(angle - 2.4) * 9 };
+        g.fillStyle(0x85f7e0); g.fillPoints([tip, left, right], true);
+      }
+    }
+    if (s.feedback && s.feedback.until > s.elapsed) {
+      const color = s.feedback.danger ? '#ffb39f' : '#a6f7e5';
+      g.fillStyle(0x0a172a, .9); g.fillRoundedRect(147, 450, 186, 28, 5);
+      this.drawLabel(s.feedback.text, cx, 464, 15, color);
+    }
   }
 
   private paintBoardingMode(g: Phaser.GameObjects.Graphics) {
@@ -406,12 +500,10 @@ export class FlightScene extends Phaser.Scene {
       }
     }
     else {
-      if (s.role !== 'Pilot') {
-        g.lineStyle(2, 0xffbd6b, .7);
-        g.lineBetween(16, BOARDING_LINE, 464, BOARDING_LINE);
-        for (const x of [24, 456])
-          g.strokeTriangle(x, BOARDING_LINE - 7, x - 5, BOARDING_LINE + 4, x + 5, BOARDING_LINE + 4);
-      }
+      g.lineStyle(2, 0xffbd6b, .7);
+      g.lineBetween(16, BOARDING_LINE, 464, BOARDING_LINE);
+      for (const x of [24, 456])
+        g.strokeTriangle(x, BOARDING_LINE - 7, x - 5, BOARDING_LINE + 4, x + 5, BOARDING_LINE + 4);
       const c = s.carrier, phase = s.elapsed % BOARDING_CYCLE;
       if (c.hp > 0) {
         if (phase < BOARDING_WARNING) {
