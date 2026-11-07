@@ -1544,6 +1544,7 @@ export const BOARDING_WARNING = 1.2;
 export const BOARDING_LINE = 160;
 export const BOARDING_CARRIER_RADIUS = 36;
 export const BOARDING_AIM_SPEED = 225;
+export const BOARDING_GUNNER_AIM_PADDING = 7;
 export const BOARDING_MINE_COOLDOWN = .85;
 export const BOARDING_MINE_LIFETIME = 4.5;
 export const BOARDING_BLAST_RADIUS = 58;
@@ -1948,7 +1949,7 @@ export function stepBoarding(s: BoardingState, config: FlightConfig, input: Boar
       s.beamY = s.crosshairY;
       const targets = [...s.pods.map(p => ({ ...p, carrier: false })), ...(s.carrier.hp > 0 ? [{ ...s.carrier, id: 0, radius: BOARDING_CARRIER_RADIUS, carrier: true }] : [])]
         .map(p => ({ ...p, distance: Math.hypot(p.x - s.crosshairX, p.y - s.crosshairY) }))
-        .filter(p => p.distance <= p.radius + 7).sort((a, b) => a.distance - b.distance || Number(a.carrier) - Number(b.carrier) || a.id - b.id);
+        .filter(p => p.distance <= p.radius + BOARDING_GUNNER_AIM_PADDING).sort((a, b) => a.distance - b.distance || Number(a.carrier) - Number(b.carrier) || a.id - b.id);
       const target = targets[0];
       if (target?.carrier)
         damageCarrier(s);
