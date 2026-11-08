@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  createBoarding, stepBoarding, boardingTurretPose, boardingTurretBreachSoon, boardingResultText, boardingScoreFor, boardingInAirlock,
+  createBoarding, stepBoarding, boardingTurretPose, boardingTurretBreachSoon, boardingResultText, boardingScoreFor, boardingVictoryBonus, boardingInAirlock,
   BOARDING_TUNING, BOARDING_AIM_SPEED, BOARDING_BLAST_RADIUS, BOARDING_VENT_RECHARGE, BOARDING_AIRLOCK_TARGETS, BOARDING_EJECTION_TIME, BOARDING_RELOCATION_TIME, boardingAirlockTargetActive,
   BOARDING_LINE, BOARDING_DEPTHS, boardingCover, BOARDING_DEFENSE_TUNING, BOARDING_LAUNCH_WARNING, BOARDING_MIN_FLIGHT, type BoardingInput, type BoardingState, type BoardingBoarder,
 } from '../src/game/rules.ts';
@@ -28,13 +28,37 @@ test('Gunner chooses one closest target, pod before carrier on a tie; miss consu
   assert.equal(s.intercepted,1);assert.equal(s.carrierDamage,0);assert.equal(s.shots,1);
   const miss=state('Gunner');tick(miss,{aimX:20,aimY:20,firing:true});assert.ok(miss.cooldown>0);assert.equal(miss.carrierDamage,0);
 });
-test('carrier disable stops launches, retains existing pods, scores once, and does not end the round',()=>{
-  const s=state('Gunner');s.carrier.hp=1;s.spawnIn=0;s.pods=[pod(9,40,400)];
-  tick(s,{...aimTurret(s.carrier),firing:true});assert.equal(s.disabled,true);assert.equal(s.carrierDamage,1);
-  assert.equal(s.pods.length,1);assert.equal(s.finished,false);const score=boardingScoreFor(s);
-  s.cooldown=0;tick(s,{...aimTurret(s.carrier),firing:true});assert.equal(s.carrierDamage,1);
-  assert.ok(boardingScoreFor(s)-score<10);
+test('the final Gunner shot wins before a pod can breach and awards one victory bonus', () => {
+  const s = state('Gunner');
+  s.elapsed = 12;
+  s.carrier.hp = 1;
+  s.carrierDamage = 35;
+  s.hull = 1;
+  s.spawnIn = 0;
+  s.pods = [pod(9, 40, BOARDING_LINE + 12)];
+  const aim = aimTurret(s.carrier);
+  tick(s, { ...aim, firing: true });
+  assert.equal(s.carrier.hp, 0);
+  assert.equal(s.disabled, true);
+  assert.equal(s.carrierDamage, 36);
+  assert.equal(s.finished, true);
+  assert.equal(s.endReason, 'victory');
+  assert.equal(s.elapsed, 12);
+  assert.equal(s.hull, 1);
+  assert.equal(s.breaches, 0);
+  assert.equal(s.pods.length, 1);
+  assert.equal(s.launchedCraft, 0);
+  assert.equal(boardingVictoryBonus(s), 740);
+  assert.equal(boardingScoreFor(s), 1620);
+  const report = boardingResultText(config, s);
+  assert.match(report, /Victory — carrier destroyed/);
+  assert.match(report, /Provisional v0\.9/);
+  assert.deepEqual(report.match(/Victory bonus: \+740 points/g), ['Victory bonus: +740 points']);
+  const before = structuredClone(s);
+  tick(s, { ...aim, firing: true });
+  assert.deepEqual(s, before);
 });
+
 test('Gunner Natural 1 doubles only cooldown; aim clamps and keyboard diagonals use approved cap',()=>{
   for(const total of [5,10,15,16]) {
     const normal=state('Gunner'), impaired=state('Gunner');
@@ -220,9 +244,85 @@ test('health failure wins a time tie; all four terminal states are immutable and
     for(const text of ['Boarding Party',role,'Check total: -2','Natural 1: Yes','Rating:','GM determines campaign outcome.'])assert.ok(report.includes(text));
   }
 });
-test('a disabled carrier allows timed completion without prematurely discarding surviving pods',()=>{
-  const s=state('Gunner');s.carrier.hp=0;s.disabled=true;s.elapsed=59.98;s.pods=[pod(1,20,450)];tick(s);
-  assert.equal(s.elapsed,60);assert.equal(s.finished,true);assert.equal(s.endReason,'time');assert.equal(s.pods.length,1);
+test('Gunner and Bomber survive to the timer with no victory bonus if the carrier is alive', () => {
+  for (const role of ['Gunner', 'Bomber'] as const) {
+    const s = state(role);
+    s.elapsed = 59.98;
+    tick(s);
+    assert.equal(s.elapsed, 60);
+    assert.equal(s.finished, true);
+    assert.equal(s.endReason, 'time');
+    assert.equal(boardingScoreFor(s), 600);
+    assert.equal(boardingVictoryBonus(s), 0);
+    assert.match(boardingResultText(config, s), /Defense complete/);
+    assert.doesNotMatch(boardingResultText(config, s), /Victory/);
+  }
+});
+
+function finalBomberMine(armIn: number, elapsed = 4) {
+  const s = state('Bomber');
+  s.elapsed = elapsed;
+  s.hull = 1;
+  s.carrierDamage = 4;
+  const holding = elapsed < 6;
+  const y = holding ? 250 : 500;
+  s.carrier = { ...s.carrier, x: 240, startX: 240, targetX: 240, y,
+    cycle: Math.floor(elapsed / 12), hp: 1 };
+  s.mines = [{ id: 4, x: 240, y, armIn, expiresIn: 4, blastRadius: 58 }];
+  return s;
+}
+
+test('Bomber wins at mine contact, credits the whole blast, and ignores later events', () => {
+  const s = finalBomberMine(.02);
+  s.pods = [
+    pod(1, 290, 250, 0), // Inside the final blast but outside its contact fuse.
+    pod(2, 40, BOARDING_LINE + 15), // Fatal breach at .03.
+    pod(3, 380, 300, 0), // Separate mine would intercept at .04.
+  ];
+  s.mines.push({ id: 5, x: 380, y: 300, armIn: .04, expiresIn: 4, blastRadius: 58 });
+  tick(s);
+  assert.equal(s.endReason, 'victory');
+  assert.equal(s.finished, true);
+  assert.equal(s.elapsed, 4.02);
+  assert.equal(s.hull, 1);
+  assert.equal(s.breaches, 0);
+  assert.equal(s.carrierDamage, 5);
+  assert.equal(s.intercepted, 1);
+  assert.deepEqual(s.pods.map(p => p.id), [2, 3]);
+  assert.equal(s.explosions.length, 1);
+  assert.equal(boardingVictoryBonus(s), 780);
+  assert.equal(boardingScoreFor(s), 1500);
+  const before = structuredClone(s);
+  tick(s, { placing: true });
+  assert.deepEqual(s, before);
+});
+
+test('an earlier fatal breach beats Bomber victory, and a tied breach yields to the mine', () => {
+  const earlier = finalBomberMine(.02);
+  earlier.pods = [pod(1, 40, BOARDING_LINE + 13)];
+  tick(earlier);
+  assert.equal(earlier.endReason, 'hull');
+  assert.equal(earlier.carrier.hp, 1);
+  assert.equal(earlier.hull, 0);
+  assert.equal(boardingVictoryBonus(earlier), 0);
+  const tied = finalBomberMine(0);
+  tied.pods = [pod(1, 40, BOARDING_LINE + 12)];
+  tick(tied);
+  assert.equal(tied.endReason, 'victory');
+  assert.equal(tied.elapsed, 4);
+  assert.equal(tied.hull, 1);
+  assert.equal(tied.breaches, 0);
+});
+
+test('a Bomber mine contacting the carrier at the timer boundary wins', () => {
+  const elapsed = 59.98;
+  const s = finalBomberMine(60 - elapsed, elapsed);
+  s.carrier.x = 240 + (360 - 240) * (elapsed - 57) / 3;
+  s.mines[0].x = 360;
+  tick(s);
+  assert.equal(s.elapsed, 60);
+  assert.equal(s.endReason, 'victory');
+  assert.equal(boardingVictoryBonus(s), 500);
 });
 
 test('interior failure prevents a later same-step ejection from awarding points',()=>{

@@ -2,7 +2,7 @@
 
 [Issue #78](https://github.com/drakejrobert-sudo/galaxy-grown-games/issues/78) follows the original Bomber station (#71). Owner validation is tracked in #39.
 
-Look out the rear window as the ship flies automatically. Probes and shuttles grow as they approach the dashed breach line; a bright ring marks a newly launched craft that can already be hit. After arming, mines rise toward the carrier in the aft window with a slight sideways sway. They can intercept craft or damage the carrier during launch or drift. Disabling the carrier stops new launches, while active craft and the round continue.
+Look out the rear window as the ship flies automatically. Probes and shuttles grow as they approach the dashed breach line; a bright ring marks a newly launched craft that can already be hit. After arming, mines rise toward the carrier in the aft window with a slight sideways sway. They can intercept craft or damage the carrier during launch or drift. Destroying the carrier ends the round at the winning blast, including credit for craft caught in that blast.
 
 Tap or drag and release above the rack to place a mine. Mouse hover previews; primary release launches. A release outside the window or below the rack is discarded. Left/Right or A/D rotates aim; Down/S selects straight aft. Space/Enter or **Launch mine** fires once at the previewed direction and distance. The rack's light is the zero-range launch point. The landing cross and projected blast outline show where a mine will arm and what area it can affect there.
 

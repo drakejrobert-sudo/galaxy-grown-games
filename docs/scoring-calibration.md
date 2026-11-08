@@ -155,3 +155,18 @@ The cleaner-corridor revision caps active Life Support boarders at two, one per 
 Pilot now earns 100 points per required ring and 50 per bonus ring. The new rating anchors are the theoretical floor and ceiling, **0–1,650**. Hull depletion caps the advisory band at Success. Misses affect points and expose the ship to attacks. Other stations still report v0.7 and retain their anchors.
 
 After replacing the miss cutoff with dodgeable attacks, rerunning the 288 synthetic samples gives Pilot **100 / 1,500 / 1,650** at P10/P50/P90. The fixed course and scripted controls intentionally test repeatable scoring and reachability. Human difficulty and rating balance still need playtesting.
+
+## Boarding Party carrier victory — v0.9
+
+Gunner and Bomber end the round on the final carrier hit. The report lists one victory bonus of 500 points plus the difference between full-round time points and earned time points (up to 300). The combined time and victory contribution is 800 points on any carrier win. Timer and hull endings use their existing formulas. The live Gunner (46–3,220) and Bomber (46–1,454) rating anchors remain provisional.
+
+Run `node --import tsx scripts/calibrate-scores.ts --carrier-victory` to compare outcome counts, median ratings, and ratings of 100 for each band and Natural 1 setting. The scripted profiles produce 36 runs per setting. Each pair below is normal / Natural 1. A dash means the profiles did not win.
+
+| Difficulty | Gunner victory median | Gunner other median | Bomber victory median | Bomber other median |
+| --- | ---: | ---: | ---: | ---: |
+| Hard | 100 / — | 0 / 5 | — / — | 21 / 21 |
+| Medium | 84 / 100 | 0 / 6 | — / — | 22 / 22 |
+| Easy | 72 / 100 | 0 / 0 | 100 / 100 | 15 / 22 |
+| Very Easy | 65 / 91 | 1 / 1 | 100 / 100 | 2 / 2 |
+
+All 26 scripted Bomber victories hit 100, including one win per Natural 1 setting on Easy and twelve per setting on Very Easy. In the live formula, a full carrier kill with two or more hull left reaches 100 even without a craft interception. A one-hull win with zero interceptions earns 1,400 points and a 96 rating. Across 288 samples per station, Gunner's raw P90 moved from 3,220 to 3,020 and Bomber's stayed at 1,700. Compare real victories and other endings during owner playtesting before retuning the anchors.
