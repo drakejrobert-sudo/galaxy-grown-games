@@ -186,7 +186,8 @@ test('cockpit flight shares bounded scene stepping, explicit interruption and re
   scene.readInput = () => ({x: 1, y: -1});
   let updates = 0;
   scene.onBoardingPilotStep = () => updates++;
-  const expected = rules.createBoardingPilot(config);
+  const initial = structuredClone(scene.boardingPilot);
+  const expected = structuredClone(initial);
   h.tick(1000);
   h.tick(250);
   for (let i = 0; i < 5; i++) rules.stepBoardingPilot(expected, config, {x: 1, y: -1}, .05);
@@ -196,7 +197,8 @@ test('cockpit flight shares bounded scene stepping, explicit interruption and re
   assert.equal(scene.activeFlight, false);
   assert.deepEqual(scene.boardingPilot, expected);
   scene.begin(config, 'Boarding Party', 'Pilot');
-  assert.deepEqual(scene.boardingPilot, rules.createBoardingPilot(config));
+  assert.notDeepEqual(scene.boardingPilot.debris, initial.debris);
+  assert.deepEqual({ ...scene.boardingPilot, debris: initial.debris }, initial);
 });
 
 test('Boarding Gunner honors projected hit boundaries at far, middle and near ranges', () => {

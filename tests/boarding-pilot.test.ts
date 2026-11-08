@@ -9,6 +9,62 @@ const config = { total: 10, naturalOne: false };
 const idle = { x: 0, y: 0 };
 const near = (actual: number, expected: number) => assert.ok(Math.abs(actual - expected) < 1e-8, `${actual} vs ${expected}`);
 
+function seeded(seed: number) {
+  return () => ((seed = (Math.imul(1664525, seed) + 1013904223) >>> 0) / 2 ** 32);
+}
+
+type Course = ReturnType<typeof createBoardingPilot>;
+function directHazards(s: Course) {
+  const gates = s.rings.filter(r => r.kind === 'required');
+  return gates.slice(1).flatMap((to, i) => {
+    const from = gates[i];
+    const dx = to.x - from.x, dy = to.y - from.y;
+    const rock = s.debris.find(rock => {
+      const fraction = (rock.time - from.time) / (to.time - from.time);
+      return fraction > 0 && fraction < 1 &&
+        Math.hypot(rock.x - from.x - dx * fraction, rock.y - from.y - dy * fraction) < 1e-8;
+    });
+    if (!rock) return [];
+    const offset = (i % 2 ? -66 : 66) / Math.hypot(dx, dy);
+    return [{ from, to, rock, dodge: { time: rock.time, x: rock.x - dy * offset, y: rock.y + dx * offset } }];
+  });
+}
+
+test('seeded hazards vary, preserve the authored detours and leave a flyable dodge around direct hazards', () => {
+  const first = createBoardingPilot(config, seeded(12));
+  assert.deepEqual(first, createBoardingPilot(config, seeded(12)));
+  assert.notDeepEqual(first.debris.slice(10), createBoardingPilot(config, seeded(44)).debris.slice(10));
+  for (const [total, count] of [[5, 7], [10, 6], [15, 5], [16, 4]]) {
+    for (let seed = 1; seed <= 24; seed++) {
+      const cfg = { total, naturalOne: true };
+      const s = createBoardingPilot(cfg, seeded(seed));
+      assert.deepEqual(s.debris.slice(0, 10), first.debris.slice(0, 10));
+      assert.ok(s.debris.length >= 10 + count + 5 && s.debris.length <= 10 + count + 7);
+      const threats = directHazards(s);
+      assert.equal(threats.length, count);
+      assert.ok(threats.some(({ rock }) => rock.time < 30));
+      assert.ok(threats.some(({ rock }) => rock.time > 30));
+      for (const rock of s.debris.slice(10)) {
+        assert.ok(rock.time > 4 && rock.time < 58);
+        assert.ok(s.debris.every(other => other === rock || Math.abs(other.time - rock.time) >= .7));
+        assert.ok(s.rings.every(ring => Math.abs(rock.time - ring.time) >= .5));
+      }
+    }
+  }
+});
+
+test('taking the direct line between gates hits a generated hazard', () => {
+  const cfg = { total: 5, naturalOne: true };
+  const s = createBoardingPilot(cfg, seeded(78));
+  const { from, to, rock } = directHazards(s)[0];
+  Object.assign(s, { x: from.x, y: from.y, elapsed: from.time, rings: [to] });
+  const distance = (to.time - from.time) * BOARDING_TUNING.Hard.moveSpeed * .6;
+  const straight = { x: (to.x - from.x) / distance, y: (to.y - from.y) / distance };
+  while (s.elapsed < rock.time) stepBoardingPilot(s, cfg, straight, .05);
+  assert.equal(s.hull, 2);
+  assert.match(s.feedback?.text ?? '', /IMPACT/);
+});
+
 test('rings use position at crossing, include the opening edge, and resolve only once', () => {
   const s = createBoardingPilot(config);
   const ring = s.rings[0];
@@ -116,15 +172,19 @@ test('repair rings cap hull at three, and clearing the final gate leaves time to
   assert.equal(s.endReason, 'complete');
 });
 
-test('all bands and Natural 1 can clear the safe course or every detour at 60Hz, 30Hz and 50ms', () => {
+test('all bands and Natural 1 can dodge debris and clear every gate at 60Hz, 30Hz and 50ms', () => {
   for (const total of [5, 10, 15, 16]) for (const naturalOne of [false, true]) {
     const cfg = { total, naturalOne };
     const speed = BOARDING_TUNING[difficultyFor(total)].moveSpeed * (naturalOne ? .6 : 1);
-    for (const dt of [1 / 60, 1 / 30, .05]) for (const detours of [false, true]) {
-      const s = createBoardingPilot(cfg);
+    for (const dt of [1 / 60, 1 / 30, .05]) for (const detours of [false, true]) for (const seed of [9, 17, 91]) {
+      const s = createBoardingPilot(cfg, seeded(seed));
+      const route = [
+        ...s.rings.filter(r => detours || r.kind === 'required'),
+        ...directHazards(s).map(({ dodge }) => dodge),
+      ].sort((a, b) => a.time - b.time);
       if (detours) s.hull = 1;
       while (!s.endReason) {
-        const next = s.rings.find(r => detours || r.kind === 'required');
+        const next = route.find(r => r.time > s.elapsed + 1e-9);
         if (!next) {
           stepBoardingPilot(s, cfg, idle, dt);
           continue;

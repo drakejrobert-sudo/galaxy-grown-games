@@ -549,7 +549,7 @@ test('cockpit debris stays visible past its center plane until contact or retire
   Object.assign(s, { elapsed: asteroid.time + .01, x: asteroid.x + 40, y: asteroid.y });
   const paintsAsteroid = () => {
     h.paint();
-    return h.commands.some(c => c[0] === 'fillStyle' && c[1] === 0x4d3344);
+    return h.commands.some(c => c[0] === 'fillStyle' && c[1] === 0x312d37);
   };
 
   assert.equal(paintsAsteroid(), true);
@@ -565,6 +565,26 @@ test('cockpit debris stays visible past its center plane until contact or retire
   for (let i = 0; i < 4; i++) rules.stepBoardingPilot(s, config, { x: 0, y: 0 }, .05);
   assert.equal(s.hull, 3);
   assert.equal(paintsAsteroid(), false);
+});
+
+test('cockpit debris warns only on the collision line and retains the cue in reduced motion', () => {
+  const h = harness();
+  h.scene.begin({ total: 10, naturalOne: false }, 'Boarding Party', 'Pilot');
+  h.setReduced(true);
+  const s: rules.BoardingPilotState = h.scene.boardingPilot;
+  const rock = s.debris.find(rock => rock.kind === 'asteroid')!;
+  s.debris = [rock];
+  s.rings = [];
+  const amber = () => {
+    h.paint();
+    return h.commands.some(c => c[0] === 'lineStyle' && c[2] === 0xffbb66);
+  };
+  Object.assign(s, { elapsed: rock.time - 2, x: rock.x, y: rock.y });
+  assert.equal(amber(), false);
+  s.elapsed = rock.time - 1.5;
+  assert.equal(amber(), true);
+  s.x += rock.radius + rules.PILOT_RADIUS + 1;
+  assert.equal(amber(), false);
 });
 
 test('cockpit attack warnings remain visible in reduced motion before the hazard is live', () => {

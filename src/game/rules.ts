@@ -2223,6 +2223,7 @@ export const BOARDING_PILOT_FORWARD_SPEED = 150;
 export const BOARDING_PILOT_ATTACK_WARNING = .35;
 const COCKPIT_ATTACK_FLIGHT = .65;
 const COCKPIT_RADIUS: Record<Difficulty, number> = { Hard: 46, Medium: 56, Easy: 66, 'Very Easy': 76 };
+const COCKPIT_ROUTE_HAZARDS: Record<Difficulty, number> = { Hard: 7, Medium: 6, Easy: 5, 'Very Easy': 4 };
 const COCKPIT_COURSE = [
   [0, 0], [-90, 0], [-25, -80], [95, -60], [70, 70],
   [-55, 85], [-115, -10], [10, -100], [110, -45], [90, 75],
@@ -2249,6 +2250,7 @@ interface CockpitDebris extends CockpitObject {
   kind: 'asteroid' | 'junk';
   shape?: 'rib' | 'panel' | 'antenna';
 }
+type CockpitWaypoint = Pick<CockpitObject, 'x' | 'y' | 'time'>;
 interface CockpitAttack extends CockpitObject {
   kind: 'missile' | 'probe';
   launchAt: number;
@@ -2282,9 +2284,66 @@ export interface BoardingPilotState {
   endReason: 'complete' | 'hull' | null;
 }
 
-export function createBoardingPilot(config: FlightConfig): BoardingPilotState {
+function addCockpitField(rings: CockpitRing[], debris: CockpitDebris[], band: Difficulty, random: () => number) {
+  const required = rings.filter(ring => ring.kind === 'required');
+  const gaps = required.slice(1).map((to, i) => ({ from: required[i], to, i }));
+  // Only block full-length gaps without a salvage or repair fork.
+  const eligible = gaps.filter(({ from, to }) => to.time - from.time === 4 &&
+    !rings.some(ring => ring.time > from.time && ring.time < to.time));
+  const sample = <T>(items: T[], count: number) => {
+    const pool = [...items];
+    return Array.from({ length: count }, () => pool.splice(Math.floor(random() * pool.length), 1)[0]);
+  };
+  const count = COCKPIT_ROUTE_HAZARDS[band];
+  const blocked = [
+    ...sample(eligible.filter(gap => gap.from.time < 28), Math.ceil(count / 2)),
+    ...sample(eligible.filter(gap => gap.from.time >= 28), Math.floor(count / 2)),
+  ];
+  const makeHazard = (point: CockpitWaypoint): CockpitDebris => {
+    const radius = 18 + 9 * random();
+    const shapes = ['rib', 'panel', 'antenna'] as const;
+    return random() < .55 ? { ...point, radius, kind: 'asteroid' }
+      : { ...point, radius, kind: 'junk', shape: shapes[Math.floor(random() * shapes.length)] };
+  };
+  const dodges: CockpitWaypoint[] = [];
+  for (const { from, to, i } of blocked) {
+    const fraction = .44 + .12 * random();
+    const dx = to.x - from.x, dy = to.y - from.y;
+    const point = { x: from.x + dx * fraction, y: from.y + dy * fraction,
+      time: from.time + (to.time - from.time) * fraction };
+    const offset = (i % 2 ? -66 : 66) / Math.hypot(dx, dy);
+    debris.push(makeHazard(point));
+    dodges.push({ x: point.x - dy * offset, y: point.y + dx * offset, time: point.time });
+  }
+  const routeSegments = [required, rings].flatMap(course => {
+    const route = [...course, ...dodges].sort((a, b) => a.time - b.time);
+    return route.slice(1).map((to, i) => ({ from: route[i], to }));
+  });
+  // The same 3D sweep as a hull contact, padded to leave room for imperfect steering.
+  const crossesRoute = (rock: CockpitDebris) => routeSegments.some(({ from, to }) => {
+    const clearance = rock.radius + PILOT_RADIUS + 8;
+    const z = (from.time - rock.time) * BOARDING_PILOT_FORWARD_SPEED;
+    const dz = (to.time - from.time) * BOARDING_PILOT_FORWARD_SPEED;
+    return z <= clearance && z + dz >= -clearance &&
+      sphereEntry(from.x - rock.x, from.y - rock.y, z, to.x - from.x, to.y - from.y, dz, clearance) !== null;
+  });
+  for (const { from, to } of sample(gaps.filter(gap => !blocked.includes(gap)), 7)) {
+    for (let attempt = 0; attempt < 12; attempt++) {
+      const rock = makeHazard({ x: 44 + random() * (WIDTH - 88), y: 55 + random() * (HEIGHT - 145),
+        time: from.time + .65 + random() * (to.time - from.time - 1.3) });
+      if (debris.some(other => Math.abs(other.time - rock.time) < .7) || crossesRoute(rock)) continue;
+      if (rings.some(ring => Math.hypot(ring.x - rock.x, ring.y - rock.y,
+        (ring.time - rock.time) * BOARDING_PILOT_FORWARD_SPEED) < ring.radius + rock.radius + PILOT_RADIUS + 8)) continue;
+      debris.push(rock);
+      break;
+    }
+  }
+}
+
+export function createBoardingPilot(config: FlightConfig, random: () => number = Math.random): BoardingPilotState {
   const x = WIDTH / 2, y = HEIGHT / 2;
-  const radius = COCKPIT_RADIUS[difficultyFor(config.total)];
+  const band = difficultyFor(config.total);
+  const radius = COCKPIT_RADIUS[band];
   const rings: CockpitRing[] = COCKPIT_COURSE.map(([dx, dy], i) => ({
     x: x + dx, y: y + dy, time: i === COCKPIT_COURSE.length - 1 ? 58 : (i + 1) * 4, radius, kind: 'required',
   }));
@@ -2306,6 +2365,7 @@ export function createBoardingPilot(config: FlightConfig): BoardingPilotState {
     );
   }
   rings.sort((a, b) => a.time - b.time);
+  addCockpitField(rings, debris, band, random);
   return { x, y, elapsed: 0, hull: 3, protectedUntil: 0, rings, debris, attack: null,
     cleared: 0, misses: 0, bonuses: 0, repairs: 0, feedback: null, endReason: null };
 }
