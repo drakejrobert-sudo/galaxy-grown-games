@@ -15,8 +15,10 @@ import {
   type SpaceBattlePilotState, type EnemyShip, type EnemyShot, type FuelCell, type SpaceBomberEnemy,
   SPACE_BOMBER_MINE_COOLDOWN, SPACE_BOMBER_MINE_LIFETIME,
   createSpaceLifeSupport, stepSpaceLifeSupport, SPACE_LIFE_PLATFORMS, SPACE_LIFE_SPARK_WARNING, SPACE_LIFE_REPAIR_SECONDS,
-  type SpaceLifeInput, type SpaceLifeState, type Mine, type Explosion,
+  type SpaceLifeInput, type SpaceLifeState, type SpaceBomberMine, type Explosion,
 } from './rules';
+
+type Point = { x: number; y: number };
 
 export class FlightScene extends Phaser.Scene {
   boarding = createBoarding('Gunner');
@@ -286,6 +288,7 @@ export class FlightScene extends Phaser.Scene {
         : this.role === 'Gunner' ? this.gunner.elapsed
           : this.role === 'Bomber' ? this.bomber.elapsed : this.lifeSupport.elapsed;
     this.paintBackground(this.backgroundGraphics, this.role === 'Pilot' || this.role === 'Bomber' || (this.situation === 'Boarding Party' && this.role === 'Gunner') || (this.situation === 'Asteroid Field' && (this.role === 'Gunner' || this.role === 'Life Support')) ? this.decorativeTime(elapsed) : elapsed);
+    if (this.role === 'Bomber') this.paintBomberCockpit(this.backgroundGraphics);
     if (cockpit) this.paintBoardingPilot(g);
     else if (this.situation === 'Boarding Party' && this.role === 'Gunner') this.paintBoardingTurret();
     else if (this.situation === 'Boarding Party' && this.role === 'Bomber') this.paintBoardingAft(g);
@@ -300,7 +303,7 @@ export class FlightScene extends Phaser.Scene {
     else if (this.role === 'Gunner') this.paintGunnerMode(g);
     else if (this.role === 'Bomber') this.paintBomberMode(g);
     else this.paintLifeSupportMode(g);
-    this.paintFrame(g);
+    if (this.role !== 'Bomber') this.paintFrame(g);
     for (let i = this.artUsed; i < this.artPool.length; i++) this.artPool[i].setVisible(false);
     for (let i = this.labelsUsed; i < this.labelPool.length; i++) this.labelPool[i].setVisible(false);
   }
@@ -601,26 +604,10 @@ export class FlightScene extends Phaser.Scene {
   private paintBoardingAft(g: Phaser.GameObjects.Graphics) {
     const s = this.boarding, rack = mineDropPosition(s);
     const view = (point: { x: number; y: number }) => projectAftPoint(point, rack);
-    const { x: cx, y: muzzle } = AFT_RACK_VIEW;
     const breach = view({ x: rack.x, y: BOARDING_LINE }).y;
-    const ready = s.cooldown <= 0, lamp = ready ? 0xffca83 : 0x8295a7;
-    const ring = (center: { x: number; y: number }, radius: number) => projectAftRing(center, radius, rack);
-    const trace = (from: { x: number; y: number }, to: { x: number; y: number }) =>
-      g.lineBetween(from.x, from.y, to.x, to.y);
-
-    // Window trim and a low console frame the view without covering the near breach cue.
-    for (const side of [0, WIDTH]) {
-      const inward = side === 0 ? 1 : -1;
-      const points = [{ x: side, y: 0 }, { x: side + inward * 77, y: 0 },
-        { x: side + inward * 18, y: 28 }, { x: side, y: 80 }];
-      g.fillStyle(0x101c2d); g.fillPoints(points, true);
-      g.lineStyle(2, 0x63798a); g.strokePoints(points, true);
-    }
-    const console = [{ x: 0, y: 501 }, { x: 94, y: 528 }, { x: 386, y: 528 },
-      { x: WIDTH, y: 501 }, { x: WIDTH, y: HEIGHT }, { x: 0, y: HEIGHT }];
-    g.fillStyle(0x111d2c); g.fillPoints(console, true);
-    g.lineStyle(2, 0x4a697d); g.strokePoints(console, true);
-    this.drawLabel('AFT VIEW', cx, 24, 12, '#a8c3d7');
+    const trace = (from: Point, to: Point) => g.lineBetween(from.x, from.y, to.x, to.y);
+    this.paintRackStatus(g, s.cooldown, BOARDING_MINE_COOLDOWN);
+    this.paintBomberRack(g, AFT_RACK_VIEW, s.cooldown, 1, 108);
 
     const c = s.carrier;
     if (c.hp > 0) {
@@ -662,53 +649,14 @@ export class FlightScene extends Phaser.Scene {
       }
     }
 
-    for (const m of s.mines) {
-      const p = view(m), r = 8 * p.scale;
-      const color = m.flight ? 0xffca83 : 0x85f7e0;
-      if (m.flight) {
-        g.lineStyle(2, color, .45); trace(p, view({ x: m.flight.targetX, y: m.flight.targetY }));
-      }
-      g.lineStyle(1, color, m.flight ? .18 : .36);
-      g.strokePoints(ring(m, m.blastRadius), true);
-      g.fillStyle(0x101528); g.fillCircle(p.x, p.y, r);
-      g.lineStyle(2, color); g.strokeCircle(p.x, p.y, r);
-      g.beginPath();
-      g.arc(p.x, p.y, r + 3, -Math.PI / 2, -Math.PI / 2 + 2 * Math.PI * m.expiresIn / BOARDING_MINE_LIFETIME);
-      g.strokePath();
-      g.fillStyle(color); g.fillCircle(p.x, p.y, Math.max(2, r / 3));
-    }
-    for (const e of s.explosions) {
-      const alpha = Math.min(1, e.remaining / .28);
-      const outline = ring(e, e.radius);
-      g.fillStyle(0xffba72, .18 * alpha); g.fillPoints(outline, true);
-      g.lineStyle(3, 0xffca83, .85 * alpha); g.strokePoints(outline, true);
-      g.lineStyle(2, 0xfff1b3, alpha); g.strokePoints(ring(e, e.radius * (1 - .6 * alpha)), true);
-    }
+    for (const mine of s.mines) this.paintMine(g, mine, s.elapsed, BOARDING_MINE_LIFETIME, rack);
+    for (const explosion of s.explosions) this.paintMineExplosion(g, explosion, rack);
 
     g.lineStyle(s.grace > 0 ? 3 : 2, s.grace > 0 ? 0xff827b : 0xffbd6b, .7);
     for (let x = 16; x < WIDTH - 16; x += 24) g.lineBetween(x, breach, x + 12, breach);
     this.drawLabel('BREACH LINE', 72, breach + 13, 12, '#ffca83');
 
-    // The rack is decorative; the light at its mouth marks the exact zero-range launch point.
-    g.fillStyle(0x253a4d);
-    g.fillPoints([{ x: cx - 20, y: muzzle }, { x: cx + 20, y: muzzle }, { x: cx + 53, y: 530 },
-      { x: cx - 53, y: 530 }], true);
-    g.lineStyle(3, 0x658093);
-    for (const sign of [-1, 1]) g.lineBetween(cx + sign * 20, muzzle, cx + sign * 46, 515);
-    g.fillStyle(0x081420); g.fillRoundedRect(cx - 18, muzzle - 5, 36, 11, 4);
-    g.fillStyle(lamp); g.fillCircle(cx, muzzle, 3);
-    this.drawLabel(ready ? 'RACK READY' : 'RACK COOLING', cx, 545, 12, ready ? '#ffca83' : '#adc1d2');
-    if (!ready) {
-      g.fillStyle(0x101a28); g.fillRect(cx - 26, 527, 52, 3);
-      g.fillStyle(0x85f7e0); g.fillRect(cx - 26, 527, 52 * (1 - s.cooldown / BOARDING_MINE_COOLDOWN), 3);
-    }
-
-    const target = spaceBomberLanding(s), marker = view(target);
-    g.lineStyle(2, lamp, .8); trace(AFT_RACK_VIEW, marker);
-    g.lineStyle(2, lamp, ready ? .82 : .55);
-    g.strokePoints(ring(target, boardingBlastRadius(this.config)), true);
-    g.lineBetween(marker.x - 6, marker.y, marker.x + 6, marker.y);
-    g.lineBetween(marker.x, marker.y - 6, marker.x, marker.y + 6);
+    this.paintMineAim(g, AFT_RACK_VIEW, spaceBomberLanding(s), boardingBlastRadius(this.config), s.cooldown, rack);
   }
 
   private paintBoardingMode(g: Phaser.GameObjects.Graphics) {
@@ -1022,12 +970,12 @@ export class FlightScene extends Phaser.Scene {
 
   private paintSpaceBattleBomberMode(g: Phaser.GameObjects.Graphics) {
     const s = this.spaceBomber;
-    const rack = mineDropPosition(s), landing = spaceBomberLanding(s);
-    g.lineStyle(2, 0xffca83, .65); g.lineBetween(rack.x, rack.y, landing.x, landing.y);
-    this.paintWeaponTarget(g, landing.x, landing.y, spaceBomberBlastRadius(this.config), 0xffca83, s.mineCooldown <= 0);
+    const rack = mineDropPosition(s);
+    this.paintRackStatus(g, s.mineCooldown, SPACE_BOMBER_MINE_COOLDOWN);
+    this.paintBomberRack(g, rack, s.mineCooldown, -1, 23);
     if (s.impactFlash) { g.fillStyle(0xff715b, 0.14); g.fillRect(9, 9, WIDTH - 18, HEIGHT - 18); }
     for (const explosion of s.explosions) this.paintMineExplosion(g, explosion);
-    for (const mine of s.mines) this.paintMine(g, mine, s.elapsed, SPACE_BOMBER_MINE_LIFETIME, !!mine.flight);
+    for (const mine of s.mines) this.paintMine(g, mine, s.elapsed, SPACE_BOMBER_MINE_LIFETIME);
     for (const enemy of s.enemies) {
       this.paintEnemyShip(g, enemy, s.elapsed, -1);
       this.paintBomberApproachMarker(g, enemy);
@@ -1040,20 +988,8 @@ export class FlightScene extends Phaser.Scene {
     if (s.invulnerable) this.paintProtection(g, s.x, s.y, 30, s.elapsed);
     if (!s.invulnerable || this.reducedMotion?.matches || Math.floor(s.elapsed * 10) % 2 !== 0) {
       this.paintPlayerShip(g, s.x, s.y, s.elapsed, false);
-      // Amber aft racks show mine readiness.
-      for (const dx of [-15, 15]) {
-        g.fillStyle(0x31435f); g.lineStyle(1, 0xa9bbcf); g.fillRoundedRect(s.x + dx - 3, s.y - 12, 6, 13, 2);
-        g.strokeRoundedRect(s.x + dx - 3, s.y - 12, 6, 13, 2);
-        g.fillStyle(0x33435e); g.lineStyle(1, 0xa9bbcf, .8);
-        g.fillRoundedRect(s.x + dx - 4, s.y + 5, 8, 13, 2);
-        g.strokeRoundedRect(s.x + dx - 4, s.y + 5, 8, 13, 2);
-        g.fillStyle(s.mineCooldown <= 0 ? 0xffca83 : 0x665a76); g.fillCircle(s.x + dx, s.y + 12, 2);
-      }
     }
-    if (s.mineCooldown > 0) {
-      g.lineStyle(2, 0xffca83, 0.75); g.beginPath();
-      g.arc(s.x, s.y, 29, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * (1 - s.mineCooldown / SPACE_BOMBER_MINE_COOLDOWN)); g.strokePath();
-    }
+    this.paintMineAim(g, rack, spaceBomberLanding(s), spaceBomberBlastRadius(this.config), s.mineCooldown);
   }
 
   private paintBomberApproachMarker(g: Phaser.GameObjects.Graphics, enemy: SpaceBomberEnemy) {
@@ -1432,45 +1368,180 @@ export class FlightScene extends Phaser.Scene {
     }
   }
 
-  private paintMine(g: Phaser.GameObjects.Graphics, mine: Mine, elapsed: number, lifetime: number, impactLive = false) {
-    const armed = mine.armIn <= 0 || impactLive;
-    const color = armed ? 0xffca83 : 0xbba6ff;
-    const pulse = .7 + Math.sin(this.decorativeTime(elapsed) * 12 + mine.id) * .12;
-    // Outer circle is the actual blast radius; the lifetime dial is separate hardware.
-    g.fillStyle(color, armed ? .035 : .02); g.fillCircle(mine.x, mine.y, mine.blastRadius);
-    g.lineStyle(1, color, armed ? .35 : .2); g.strokeCircle(mine.x, mine.y, mine.blastRadius);
-    g.fillStyle(0x101528, .9); g.fillCircle(mine.x, mine.y, 11);
-    g.fillStyle(0x33435e); g.lineStyle(2, color, .9);
-    g.fillCircle(mine.x, mine.y, 9); g.strokeCircle(mine.x, mine.y, 9);
-    for (let i = 0; i < 4; i++) {
-      const angle = i * Math.PI / 2;
-      const dx = Math.cos(angle), dy = Math.sin(angle);
-      g.lineStyle(3, 0x526984); g.lineBetween(mine.x + dx * 8, mine.y + dy * 8, mine.x + dx * 13, mine.y + dy * 13);
-      g.fillStyle(color, .9); g.fillCircle(mine.x + dx * 13, mine.y + dy * 13, 1.5);
+  private paintBomberCockpit(g: Phaser.GameObjects.Graphics) {
+    // The bezel is behind all contacts and targeting graphics. The display keeps the full aim area.
+    g.fillStyle(0x071620, .26); g.fillRect(8, 43, WIDTH - 16, HEIGHT - 55);
+    g.fillStyle(0x71bbcc, .04);
+    g.fillPoints([{ x: 12, y: 56 }, { x: 305, y: 56 }, { x: 12, y: 209 }], true);
+    g.fillStyle(0x0a0f17); g.fillRect(0, 0, WIDTH, 38);
+    g.fillStyle(0x293641);
+    g.fillPoints([{ x: 0, y: 16 }, { x: WIDTH, y: 16 }, { x: WIDTH, y: 76 }, { x: 447, y: 44 },
+      { x: 33, y: 44 }, { x: 0, y: 76 }], true);
+    g.lineStyle(2, 0x708590);
+    g.strokePoints([{ x: 0, y: 75 }, { x: 33, y: 43 }, { x: 447, y: 43 }, { x: WIDTH, y: 75 }]);
+    g.lineStyle(3, 0x101920); g.strokeRect(5, 46, WIDTH - 10, HEIGHT - 52);
+    g.lineStyle(1, 0x4f6f78, .7); g.strokeRect(9, 48, WIDTH - 18, HEIGHT - 59);
+    const boarding = this.situation === 'Boarding Party';
+    const sill = [{ x: 0, y: boarding ? 505 : 536 }, { x: 82, y: boarding ? 521 : 548 },
+      { x: WIDTH - 82, y: boarding ? 521 : 548 }, { x: WIDTH, y: boarding ? 505 : 536 }];
+    g.fillStyle(0x17232e);
+    g.fillPoints([...sill, { x: WIDTH, y: HEIGHT }, { x: 0, y: HEIGHT }], true);
+    g.lineStyle(2, 0x59707a); g.strokePoints(sill);
+    g.lineStyle(1, 0x0a1018); g.lineBetween(14, HEIGHT - 6, WIDTH - 14, HEIGHT - 6);
+    if (boarding) {
+      for (const x of [104, WIDTH - 104]) {
+        g.fillStyle(0x0b141c); g.fillRoundedRect(x - 32, 530, 64, 18, 4);
+        for (const offset of [-21, 0, 21]) {
+          g.fillStyle(offset === 0 ? 0xb08c5e : 0x486269); g.fillRect(x + offset - 4, 537, 8, 4);
+        }
+      }
     }
-    g.lineStyle(2, 0x405571, .65); g.strokeCircle(mine.x, mine.y, 18);
-    g.lineStyle(2, color, .9); g.beginPath();
-    g.arc(mine.x, mine.y, 18, -Math.PI / 2,
-      -Math.PI / 2 + Math.PI * 2 * Math.max(0, Math.min(1, mine.expiresIn / lifetime))); g.strokePath();
-    g.fillStyle(color, pulse);
-    if (armed) g.fillCircle(mine.x, mine.y, 3);
-    else { g.lineStyle(2, color, .95); g.strokeCircle(mine.x, mine.y, 3); }
+    for (const side of [0, WIDTH]) {
+      const inward = side === 0 ? 1 : -1;
+      g.fillStyle(0x15202b); g.fillRoundedRect(side === 0 ? 15 : WIDTH - 114, 20, 99, 16, 4);
+      for (let slot = 0; slot < 5; slot++) {
+        const x = side + inward * (24 + slot * 13);
+        g.lineStyle(2, 0x465962); g.lineBetween(x, 24, x + inward * 5, 30);
+      }
+      g.lineStyle(1, 0x91a3a9); g.strokeCircle(side + inward * 104, 28, 2.5);
+    }
+    this.drawLabel('AFT TACTICAL', WIDTH / 2, 15, 12, '#c7dce5');
   }
 
-  private paintMineExplosion(g: Phaser.GameObjects.Graphics, explosion: Explosion) {
-    const progress = Math.max(0, Math.min(1, explosion.remaining / .28));
-    const r = explosion.radius;
-    g.fillStyle(0xffb866, .06 + progress * .1); g.fillCircle(explosion.x, explosion.y, r);
-    // Keep the damage boundary exact, with shock rings and bounded fragments inside it.
-    g.lineStyle(3, 0xffca83, progress * .8); g.strokeCircle(explosion.x, explosion.y, r);
-    g.lineStyle(2, 0xfff1b3, progress * .75); g.strokeCircle(explosion.x, explosion.y, r * (.35 + (1 - progress) * .6));
-    for (let i = 0; i < 8; i++) {
-      const angle = i * Math.PI / 4;
-      const inner = r * (.2 + (1 - progress) * .45);
-      const outer = Math.min(r, inner + 8);
-      g.lineStyle(2, i % 2 ? 0xffca83 : 0xffffff, progress * .8);
-      g.lineBetween(explosion.x + Math.cos(angle) * inner, explosion.y + Math.sin(angle) * inner,
-        explosion.x + Math.cos(angle) * outer, explosion.y + Math.sin(angle) * outer);
+  private paintRackStatus(g: Phaser.GameObjects.Graphics, cooldown: number, duration: number) {
+    const ready = cooldown <= 0;
+    const lamp = ready ? 0xffca83 : 0xa6bac7;
+    const center = WIDTH / 2;
+    g.fillStyle(0x0b141c); g.fillRoundedRect(center - 94, 22, 188, 17, 4);
+    g.fillStyle(lamp); g.fillCircle(center - 81, 30, 2.5);
+    this.drawLabel(ready ? 'RACK READY' : 'RACK COOLING', center - 21, 30, 11, ready ? '#ffca83' : '#c1d2dd');
+    g.fillStyle(0x334853); g.fillRect(center + 39, 28, 44, 4);
+    g.fillStyle(lamp); g.fillRect(center + 39, 28, 44 * Math.max(0, 1 - cooldown / duration), 4);
+  }
+
+  private paintBomberRack(g: Phaser.GameObjects.Graphics, muzzle: Point, cooldown: number, inward: number, length: number) {
+    const { x, y } = muzzle;
+    const mouth = inward > 0 ? 19 : 9;
+    const base = mouth + length * .29;
+    const rear = y + inward * length;
+    const housing = [{ x: x - mouth, y }, { x: x + mouth, y }, { x: x + base, y: rear }, { x: x - base, y: rear }];
+    g.fillStyle(0x34444d); g.fillPoints(housing, true);
+    g.lineStyle(2, 0x899ca2); g.strokePoints(housing, true);
+    for (let rib = 1; rib <= 5; rib++) {
+      const depth = rib / 6;
+      const width = mouth + (base - mouth) * depth;
+      const ribY = y + inward * length * depth;
+      g.lineStyle(3, 0x15222c); g.lineBetween(x - width + 3, ribY, x + width - 3, ribY);
+      g.lineStyle(1, 0x5a6d75); g.lineBetween(x - width + 4, ribY + 2, x + width - 4, ribY + 2);
+    }
+    for (const side of [-1, 1]) {
+      g.lineStyle(3, 0xb0b9b9, .7);
+      g.lineBetween(x + side * (mouth - 5), y, x + side * (base - 8), rear);
+    }
+    g.fillStyle(0x090f17); g.fillRoundedRect(x - mouth, y - 4, mouth * 2, 8, 3);
+    g.lineStyle(1, 0x96a6a9); g.strokeRoundedRect(x - mouth, y - 4, mouth * 2, 8, 3);
+    g.fillStyle(cooldown <= 0 ? 0xffca83 : 0x91a6b4); g.fillCircle(x, y, 2.5);
+  }
+
+  private paintMineRadius(g: Phaser.GameObjects.Graphics, center: Point, radius: number, rack?: Point, fill = false) {
+    if (rack) {
+      const outline = projectAftRing(center, radius, rack);
+      if (fill) g.fillPoints(outline, true);
+      else g.strokePoints(outline, true);
+    } else if (fill) g.fillCircle(center.x, center.y, radius);
+    else g.strokeCircle(center.x, center.y, radius);
+  }
+
+  private paintMineAim(g: Phaser.GameObjects.Graphics, muzzle: Point, target: Point, radius: number, cooldown: number, rack?: Point) {
+    const marker = rack ? projectAftPoint(target, rack) : target;
+    const ready = cooldown <= 0;
+    const color = ready ? 0xffca83 : 0xa6bac7;
+    g.lineStyle(1, color, ready ? .62 : .37);
+    g.lineBetween(muzzle.x, muzzle.y, marker.x, marker.y);
+    g.lineStyle(2, color, ready ? .84 : .55);
+    this.paintMineRadius(g, target, radius, rack);
+    g.lineStyle(4, 0x0b1621, .9);
+    g.lineBetween(marker.x - 8, marker.y, marker.x + 8, marker.y);
+    g.lineBetween(marker.x, marker.y - 8, marker.x, marker.y + 8);
+    g.lineStyle(2, color);
+    g.lineBetween(marker.x - 8, marker.y, marker.x + 8, marker.y);
+    g.lineBetween(marker.x, marker.y - 8, marker.x, marker.y + 8);
+  }
+
+  private paintMine(g: Phaser.GameObjects.Graphics, mine: SpaceBomberMine, elapsed: number, lifetime: number, rack?: Point) {
+    const live = mine.armIn <= 0 || !!mine.flight;
+    const color = mine.flight ? 0x9ee1fb : live ? 0x81e5cf : 0xbba6ff;
+    const p = rack ? projectAftPoint(mine, rack) : { x: mine.x, y: mine.y, scale: 1 };
+    const scale = Math.max(.64, Math.min(1.2, p.scale));
+    g.lineStyle(1, color, mine.flight ? .25 : .44);
+    this.paintMineRadius(g, mine, mine.blastRadius, rack);
+
+    let angle = -Math.PI / 6;
+    if (mine.flight) {
+      const from = rack ? projectAftPoint(mine.flight, rack) : mine.flight;
+      const target = { x: mine.flight.targetX, y: mine.flight.targetY };
+      const to = rack ? projectAftPoint(target, rack) : target;
+      angle = Math.atan2(to.y - from.y, to.x - from.x);
+      if (!this.reducedMotion?.matches) {
+        const distance = Math.min(Math.hypot(p.x - from.x, p.y - from.y), 32 * scale);
+        const dx = Math.cos(angle) * distance, dy = Math.sin(angle) * distance;
+        g.lineStyle(4 * scale, color, .2); g.lineBetween(p.x - dx, p.y - dy, p.x, p.y);
+        g.lineStyle(1.5 * scale, 0xe2f9ff, .8); g.lineBetween(p.x - dx * .63, p.y - dy * .63, p.x, p.y);
+      }
+    }
+
+    this.paintMineCasing(g, p, scale, angle);
+    const dial = 18 * scale;
+    g.lineStyle(2, 0x0c1520, .85); g.strokeCircle(p.x, p.y, dial);
+    g.lineStyle(1.5, color, .92); g.beginPath();
+    g.arc(p.x, p.y, dial, -Math.PI / 2,
+      -Math.PI / 2 + Math.PI * 2 * Math.max(0, Math.min(1, mine.expiresIn / lifetime))); g.strokePath();
+    if (live) {
+      const pulse = .8 + Math.sin(this.decorativeTime(elapsed) * 12 + mine.id) * .14;
+      g.fillStyle(color, pulse); g.fillCircle(p.x, p.y, 3 * scale);
+    } else {
+      g.lineStyle(1.5, color); g.strokeCircle(p.x, p.y, 3 * scale);
+    }
+  }
+
+  private paintMineCasing(g: Phaser.GameObjects.Graphics, center: Point, scale: number, angle: number) {
+    g.save(); g.translateCanvas(center.x, center.y); g.rotateCanvas(angle); g.scaleCanvas(scale, scale);
+    g.fillStyle(0x0b1017); g.fillRoundedRect(-14, -8, 28, 16, 5);
+    g.fillStyle(0x485761); g.fillRoundedRect(-11, -7, 23, 14, 4);
+    g.fillStyle(0x7d8b8f); g.fillRoundedRect(-10, -6, 21, 7, 3);
+    g.fillStyle(0x333d45); g.fillRoundedRect(-10, 1, 21, 5, 2);
+    g.lineStyle(1, 0xadb5b0); g.strokeRoundedRect(-11, -7, 23, 14, 4);
+    for (const x of [-8, 7]) {
+      g.fillStyle(0x202d34); g.fillRect(x - 2, -8, 4, 16);
+      g.lineStyle(1, 0xb1a27e); g.lineBetween(x, -6, x, 6);
+    }
+    g.fillStyle(0x101c23); g.fillCircle(0, 0, 4.5);
+    g.restore();
+  }
+
+  private paintMineExplosion(g: Phaser.GameObjects.Graphics, explosion: Explosion, rack?: Point) {
+    const alpha = Math.max(0, Math.min(1, explosion.remaining / .28));
+    const reduced = this.reducedMotion?.matches;
+    const age = reduced ? .45 : 1 - alpha;
+    const radius = explosion.radius;
+    g.fillStyle(0xe9814d, .15 * alpha); this.paintMineRadius(g, explosion, radius, rack, true);
+    g.lineStyle(2, 0xffb674, .95 * alpha); this.paintMineRadius(g, explosion, radius, rack);
+    g.lineStyle(2, 0xffe4b2, .75 * alpha); this.paintMineRadius(g, explosion, radius * (.24 + age * .68), rack);
+    g.fillStyle(0xffab63, .75 * alpha); this.paintMineRadius(g, explosion, radius * (.31 - age * .16), rack, true);
+    g.fillStyle(0xfff1d0, .92 * alpha); this.paintMineRadius(g, explosion, radius * (.15 - age * .09), rack, true);
+    if (reduced) return;
+
+    // Cosmetic debris stays inside the same world-space circle as the damage test.
+    for (let i = 0; i < 10; i++) {
+      const angle = i * Math.PI * .2 + Math.sin(explosion.x + i * 3) * .18;
+      const inner = radius * (.14 + age * (.39 + i % 3 * .1));
+      const outer = Math.min(radius * .91, inner + radius * .17);
+      const near = { x: explosion.x + Math.cos(angle) * inner, y: explosion.y + Math.sin(angle) * inner };
+      const far = { x: explosion.x + Math.cos(angle) * outer, y: explosion.y + Math.sin(angle) * outer };
+      const from = rack ? projectAftPoint(near, rack) : near;
+      const to = rack ? projectAftPoint(far, rack) : far;
+      g.lineStyle(i % 3 === 0 ? 3 : 1.5, i % 2 === 0 ? 0xffebc6 : 0xfa9258, alpha);
+      g.lineBetween(from.x, from.y, to.x, to.y);
     }
   }
 
@@ -1483,31 +1554,17 @@ export class FlightScene extends Phaser.Scene {
 
   private paintBomberMode(g: Phaser.GameObjects.Graphics) {
     const s = this.bomber;
-    const rack = mineDropPosition(s), landing = spaceBomberLanding(s);
-    g.lineStyle(2, 0xffca83, .65); g.lineBetween(rack.x, rack.y, landing.x, landing.y);
-    this.paintWeaponTarget(g, landing.x, landing.y, bomberBlastRadius(this.config), 0xffca83, s.cooldown <= 0);
+    const rack = mineDropPosition(s);
+    this.paintRackStatus(g, s.cooldown, BOMBER_MINE_COOLDOWN);
+    this.paintBomberRack(g, rack, s.cooldown, -1, 23);
     if (s.impactFlash) { g.fillStyle(0xff715b, 0.14); g.fillRect(9, 9, WIDTH - 18, HEIGHT - 18); }
     for (const explosion of s.explosions) this.paintMineExplosion(g, explosion);
-    for (const mine of s.mines) this.paintMine(g, mine, s.elapsed, BOMBER_MINE_LIFETIME, !!mine.flight);
+    for (const mine of s.mines) this.paintMine(g, mine, s.elapsed, BOMBER_MINE_LIFETIME);
     for (const asteroid of s.asteroids) this.paintAsteroid(g, asteroid, false, false, -1);
     g.lineStyle(1, 0x79e1ce, 0.18); g.lineBetween(12, s.y + 34, WIDTH - 12, s.y + 34);
     this.paintPlayerShip(g, s.x, s.y, s.elapsed, false);
-    // Twin mine racks give this station a distinct silhouette using the shared ship art.
-    for (const dx of [-18, 18]) {
-      g.fillStyle(0x33435e); g.lineStyle(1, 0xa9bbcf);
-      g.fillRoundedRect(s.x + dx - 4, s.y + 3, 8, 15, 3);
-      g.strokeRoundedRect(s.x + dx - 4, s.y + 3, 8, 15, 3);
-      g.lineStyle(1, 0x101528);
-      for (let rail = 0; rail < 3; rail++) g.lineBetween(s.x + dx - 2, s.y + 5 + rail * 3, s.x + dx + 2, s.y + 5 + rail * 3);
-      g.fillStyle(s.cooldown <= 0 ? 0xffca83 : 0xbba6ff);
-      g.fillCircle(s.x + dx, s.y + 12, 2);
-    }
     if (s.invulnerable > 0) this.paintProtection(g, s.x, s.y, 32, s.elapsed);
-    if (s.cooldown > 0) {
-      const readyFraction = 1 - s.cooldown / BOMBER_MINE_COOLDOWN;
-      g.lineStyle(3, 0xbba6ff, 0.8);
-      g.beginPath(); g.arc(s.x, s.y, 27, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * readyFraction); g.strokePath();
-    }
+    this.paintMineAim(g, rack, spaceBomberLanding(s), bomberBlastRadius(this.config), s.cooldown);
   }
 
   private lifeSupportRouteX(route: LifeSupportRoute): number {
