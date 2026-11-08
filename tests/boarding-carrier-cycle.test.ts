@@ -6,6 +6,9 @@ const config = { total: 10, naturalOne: false };
 const idle = { x: 0, y: 0, firing: false };
 const rates = [1 / 60, 1 / 30, .05];
 function near(actual: number, expected: number, note = '') { assert.ok(Math.abs(actual-expected)<1e-7, `${note}: ${actual} != ${expected}`); }
+// Position the drifting fixtures so contact still falls on the shared endpoint.
+const endpointSway = 12 * Math.sin(.01 * 2 * Math.PI / 1.6);
+const endpointDrift = .01 * 70;
 function staging(cycle: number) { return cycle % 2 ? 120 : 360; }
 function beforeBoundary(boundary: number, offset: number, role: BoardingState['role'] = 'Gunner') {
   const s = createBoarding(role), cycle = boundary / 12 - 1;
@@ -51,15 +54,15 @@ test('each full-round frame follows a continuous bounded carrier course at 60 Hz
 
 test('a mine at a shared cycle endpoint damages the carrier once, never once per motion segment',()=>{
   const s=beforeBoundary(12,.01,'Bomber');
-  s.mines=[{id:90,x:360,y:544,armIn:0,expiresIn:2,blastRadius:58}];
+  s.mines=[{id:90,x:404+endpointSway-1e-9,y:500-endpointDrift,driftAge:.8,armIn:0,expiresIn:2,blastRadius:58}];
   stepBoarding(s,config,idle,.05,()=>.5);
-  assert.equal(s.carrierDamage,1);assert.equal(s.carrier.hp,4);assert.equal(s.mines.length,0);assert.equal(s.explosions.length,1);
+  assert.equal(s.carrierDamage,1);assert.equal(s.carrier.hp,4);assert.equal(s.mines.length,0);assert.equal(s.explosions.length,1);near(s.explosions[0].remaining,.24);
 });
 
 test('a carrier contact at the approach/hold turn resolves before a later mine expiry in the same step',()=>{
   const s=createBoarding('Bomber');s.elapsed=3.99;s.spawnIn=1000;
   Object.assign(s.carrier,{cycle:0,startX:240,targetX:240,x:240,y:250+(.01*250/2.8)});
-  s.mines=[{id:90,x:240,y:206,armIn:0,expiresIn:.025,blastRadius:58}];
+  s.mines=[{id:90,x:240-endpointSway,y:206-endpointDrift+1e-9,armIn:0,expiresIn:.025,blastRadius:58}];
   stepBoarding(s,config,idle,.05,()=>.5);
   assert.equal(s.carrierDamage,1);assert.equal(s.explosions.length,1);near(s.explosions[0].remaining,.24);
 });
@@ -67,7 +70,7 @@ test('a carrier contact at the approach/hold turn resolves before a later mine e
 test('a mine contact at the withdrawal/staging corner is not lost by sweeping across the corner',()=>{
   const s=createBoarding('Bomber');s.elapsed=8.99;s.spawnIn=1000;
   Object.assign(s.carrier,{cycle:0,startX:240,targetX:240,x:240,y:500-(.01*250/3)});
-  s.mines=[{id:90,x:240,y:544,armIn:0,expiresIn:.025,blastRadius:58}];
+  s.mines=[{id:90,x:240-endpointSway,y:544-endpointDrift-1e-9,armIn:0,expiresIn:.025,blastRadius:58}];
   stepBoarding(s,config,idle,.05,()=>.5);
   assert.equal(s.carrierDamage,1);assert.equal(s.explosions.length,1);near(s.explosions[0].remaining,.24);
 });

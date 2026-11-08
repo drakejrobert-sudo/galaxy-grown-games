@@ -2,7 +2,7 @@
 
 [Issue #76](https://github.com/drakejrobert-sudo/galaxy-grown-games/issues/76) follows the original Gunner station (#70) and [the first turret view](https://github.com/drakejrobert-sudo/galaxy-grown-games/pull/82). Owner acceptance is tracked in #39.
 
-The ship flies automatically. Aim through the glass from behind the turret. Probes and shuttles approach nose-first and grow as they close. **LAUNCH** marks a craft you can already shoot; **BREACH** means it has half a second or less before contact. A red canopy flash confirms hull damage. Probes take one hit and armored shuttles take two. Aim at the carrier between threats. Disabling it stops launches, and active craft and the round continue.
+The ship flies automatically. Aim through the glass from behind the turret. Probes and shuttles approach nose-first and grow as they close. A bright amber ring marks a craft you can already shoot. A red ring means it has half a second or less before contact. A red canopy flash confirms hull damage. Probes take one hit and armored shuttles take two. Aim at the carrier between threats. Disabling it stops launches, and active craft and the round continue.
 
 Touch the window to aim and use **Fire** separately. Mouse movement aims and primary click or hold fires. Arrows/WASD aim and Space/Enter fire. All inputs share the cooldown, which doubles on a Natural 1. The GM still receives a manual score report.
 
@@ -16,6 +16,6 @@ The camera projects the existing approach paths into screen space. The reticle, 
 
 ## Owner playtest after deployment
 
-- [ ] On desktop, iPhone Safari, and iPad Safari, track a launch, intercept a probe, and land two hits on a shuttle. Check aim alignment, canopy clearance near the sides, and whether the BREACH cue arrives in time to react.
+- [ ] On desktop, iPhone Safari, and iPad Safari, track a launch, intercept a probe, and land two hits on a shuttle. Check aim alignment, canopy clearance near the sides, and whether the red breach ring arrives in time to react.
 - [ ] Play each difficulty with and without Natural 1. Disable the carrier, intercept remaining craft, and confirm the round and report. Check pause, resume, rotation, and retry.
 - [ ] Record the deployed revision, device and control coverage, and explicit acceptance before closing the applicable issues.

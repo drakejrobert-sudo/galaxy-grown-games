@@ -5,6 +5,7 @@ import {
   BOARDING_TUNING, BOARDING_AIM_SPEED, BOARDING_BLAST_RADIUS, BOARDING_VENT_RECHARGE, BOARDING_AIRLOCK_TARGETS, BOARDING_EJECTION_TIME, BOARDING_RELOCATION_TIME, boardingAirlockTargetActive,
   BOARDING_LINE, BOARDING_DEPTHS, boardingCover, BOARDING_DEFENSE_TUNING, BOARDING_LAUNCH_WARNING, BOARDING_MIN_FLIGHT, type BoardingInput, type BoardingState, type BoardingBoarder,
 } from '../src/game/rules.ts';
+import { projectAftPoint } from '../src/game/boarding-aft-view.ts';
 const config = { total: 10, naturalOne: false };
 const idle: BoardingInput = { x: 0, y: 0, firing: false };
 function state(role: BoardingState['role']) { const s=createBoarding(role);s.spawnIn=100;return s; }
@@ -73,10 +74,45 @@ test('the turret breach marker begins a half-second out, and only damaging breac
   assert.equal(s.hull,2);
   assert.equal(s.impactFlash,0);
 });
-test('Bomber mines retain fixed landing positions and input attempts during cooldown never bank',()=>{
-  const s=state('Bomber');tick(s,{placing:true});assert.equal(s.minesPlaced,1);
-  run(s,.3);const point={x:s.mines[0].x,y:s.mines[0].y};run(s,.1,{placing:true});assert.equal(s.minesPlaced,1);
-  run(s,.6);assert.equal(s.minesPlaced,1);assert.deepEqual({x:s.mines[0].x,y:s.mines[0].y},point);
+test('Bomber mines rise and sway around their arming point while cooldown attempts never bank',()=>{
+  const s=state('Bomber');
+  const rack={x:s.x,y:s.y+34}, landing={x:rack.x,y:rack.y+100};
+  tick(s,{placing:true});
+  run(s,.15);
+  const mine=s.mines[0];
+  assert.ok(Math.abs(mine.y-landing.y)<1e-9);
+  run(s,.4);
+  assert.equal(mine.flight,undefined);
+  assert.ok(Math.abs(mine.x-landing.x-12)<1e-9);
+  assert.ok(Math.abs(mine.y-landing.y-28)<1e-9);
+  assert.ok(projectAftPoint(mine,rack).y<projectAftPoint(landing,rack).y);
+  run(s,.1,{placing:true});
+  run(s,.7);
+  assert.equal(s.minesPlaced,1);
+  assert.ok(Math.abs(mine.x-landing.x+12)<1e-9);
+  assert.ok(Math.abs(mine.y-landing.y-84)<1e-9);
+});
+test('a drifting mine reaches the carrier beyond its initial arming point',()=>{
+  const s=state('Bomber');
+  const landingY=s.y+34+100;
+  tick(s,{placing:true});
+  run(s,.15);
+  assert.equal(s.carrierDamage,0);
+  assert.ok(s.carrier.y-landingY>100);
+  run(s,2.5);
+  assert.equal(s.carrierDamage,1);
+  assert.equal(s.carrier.hp,4);
+  assert.equal(s.hull,3);
+  assert.equal(s.mines.length,0);
+});
+test('the post-arming segment can intercept in the same step as launch travel',()=>{
+  const s=state('Bomber');
+  s.pods=[pod(1,240,205.5,0)];
+  tick(s,{placing:true,launch:{x:240,y:184}});
+  assert.equal(s.intercepted,1);
+  assert.equal(s.breaches,0);
+  assert.equal(s.hull,3);
+  assert.ok(s.explosions[0].y>185 && s.explosions[0].y<186);
 });
 test('aft launcher rejects forward releases, supports immediate rack arming, and expires mines',()=>{
   const s=state('Bomber');tick(s,{placing:true,launch:{x:240,y:100}});assert.equal(s.mines.length,0);

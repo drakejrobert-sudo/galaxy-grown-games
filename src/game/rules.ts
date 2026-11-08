@@ -1561,6 +1561,10 @@ export function boardingTurretBreachSoon(pod: Pick<BoardingPod, 'y' | 'radius' |
 }
 export const BOARDING_MINE_COOLDOWN = .85;
 export const BOARDING_MINE_LIFETIME = 4.5;
+// Provisional playtest values. Greater world y projects farther up the aft window.
+const BOARDING_MINE_DRIFT_SPEED = 70;
+const BOARDING_MINE_SWAY = 12;
+const BOARDING_MINE_SWAY_RATE = 2 * Math.PI / 1.6;
 export const BOARDING_BLAST_RADIUS = 58;
 export function boardingBlastRadius(config: FlightConfig) {
   return BOARDING_BLAST_RADIUS * (config.naturalOne ? BOMBER_IMPAIRMENT_SCALE : 1);
@@ -1632,6 +1636,9 @@ export interface BoardingAirlock {
   warning: number | null;
 }
 export interface BoardingInput extends SpaceGunnerInput, Partial<SpaceBattleBomberInput> {}
+interface BoardingMine extends SpaceBomberMine {
+  driftAge?: number;
+}
 export interface BoardingState {
   role: Exclude<Role, 'Pilot'>;
   x: number;
@@ -1645,7 +1652,7 @@ export interface BoardingState {
   crosshairY: number;
   carrier: BoardingCarrier;
   pods: BoardingPod[];
-  mines: SpaceBomberMine[];
+  mines: BoardingMine[];
   explosions: Explosion[];
   boarders: BoardingBoarder[];
   lasers: BoardingLaser[];
@@ -2062,10 +2069,28 @@ export function stepBoarding(s: BoardingState, config: FlightConfig, input: Boar
   }
   for (const mine of s.mines) {
     const start = { x: mine.x, y: mine.y }, flight = mine.flight, life = mine.expiresIn;
-    const land = flight ? flight.remaining : 0;
-    const mineAt = (t: number) => flight ? { x: start.x + (flight.targetX - start.x) * Math.min(1, t / land), y: start.y + (flight.targetY - start.y) * Math.min(1, t / land) } : start;
+    const armedAt = flight ? flight.remaining : Math.max(0, mine.armIn);
+    const driftOrigin = flight ? { x: flight.targetX, y: flight.targetY } : start;
+    const driftAge = mine.driftAge ?? 0;
+    const sway = (age: number) => BOARDING_MINE_SWAY * Math.sin(age * BOARDING_MINE_SWAY_RATE);
+    const mineAt = (t: number) => {
+      if (flight && t < armedAt) {
+        const progress = t / armedAt;
+        return {
+          x: start.x + (flight.targetX - start.x) * progress,
+          y: start.y + (flight.targetY - start.y) * progress,
+        };
+      }
+      const driftTime = Math.max(0, t - armedAt);
+      return {
+        x: driftOrigin.x + sway(driftAge + driftTime) - sway(driftAge),
+        y: driftOrigin.y + BOARDING_MINE_DRIFT_SPEED * driftTime,
+      };
+    };
+    // Sweep separately on each side of arming so a step cannot cut across the turn.
+    const mineSpans = flight ? [[0, Math.min(dt, armedAt)], [armedAt, dt]] : [[armedAt, dt]];
     for (const path of paths)
-      for (const [a, b] of (flight ? [[0, Math.min(dt, land)], [land, dt]] : [[Math.max(0, mine.armIn), dt]])) {
+      for (const [a, b] of mineSpans) {
         const end = Math.min(b, path.end, life);
         if (a > end || a >= life)
           continue;
@@ -2075,20 +2100,22 @@ export function stepBoarding(s: BoardingState, config: FlightConfig, input: Boar
           if (t !== null) {
             const time = begin + t * (finish - begin);
             if (time < life)
-              events.push({ time, kind: 'mine', path, mine, ...mineAt(time) });
+              events.push({ time, kind: 'mine', path, mine,
+                x: m0.x + (m1.x - m0.x) * t, y: m0.y + (m1.y - m0.y) * t });
           }
         }
       }
     Object.assign(mine, mineAt(dt));
+    mine.driftAge = driftAge + Math.max(0, dt - armedAt);
     mine.expiresIn -= dt;
+    mine.armIn = Math.max(0, armedAt - dt);
     if (flight) {
-      flight.remaining = Math.max(0, land - dt);
-      mine.armIn = flight.remaining;
-      if (flight.remaining <= 1e-9)
+      flight.remaining = mine.armIn;
+      if (flight.remaining <= 1e-9) {
+        mine.armIn = 0;
         delete mine.flight;
+      }
     }
-    else
-      mine.armIn = Math.max(0, mine.armIn - dt);
   }
   events.sort((a, b) => a.time - b.time || Number(a.kind !== 'mine') - Number(b.kind !== 'mine') || (a.mine?.id ?? 0) - (b.mine?.id ?? 0) || a.path.id - b.path.id);
   const removed = new Set<number>(), spent = new Set<number>();
