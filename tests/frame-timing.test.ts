@@ -4,6 +4,7 @@ import { readFileSync } from 'node:fs';
 import { runInNewContext } from 'node:vm';
 import ts from 'typescript';
 import * as rules from '../src/game/rules.ts';
+import * as aftView from '../src/game/boarding-aft-view.ts';
 
 const modes = [
   ['Asteroid Field', 'Pilot', 'flight', 'createFlight', 'stepFlight', 'onFlightStep'],
@@ -29,7 +30,7 @@ function harness(mode: (typeof modes)[number] = modes[0], config = { total: 10, 
   const js = ts.transpileModule(readFileSync(new URL('../src/game/scene.ts', import.meta.url), 'utf8'), {
     compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, esModuleInterop: true },
   }).outputText;
-  runInNewContext(js, { exports, require: (name: string) => name === 'phaser' ? { Scene: class {} } : instrumented });
+  runInNewContext(js, { exports, require: (name: string) => name === 'phaser' ? { Scene: class {} } : name === './boarding-aft-view' ? aftView : instrumented });
   const scene = new exports.FlightScene();
   scene.game = { loop: { rawDelta: 0 } };
   scene.add = { graphics: () => new Proxy({}, { get: () => () => {} }) };
@@ -240,4 +241,48 @@ test('Boarding Gunner screen arrows keep their direction and diagonal speed acro
   h.tick(125);
   assert.ok(s.crosshairX > x && s.crosshairY < y, 'right and up on the turret screen');
   assert.ok(Math.abs(Math.hypot(s.crosshairX - x, s.crosshairY - y) - 225 * .125) < 1e-9);
+});
+
+test('Boarding Bomber launches at the visible mark using the pre-weave rack once per frame', () => {
+  for (const [dx, dy] of [[0, 0], [-100, 0], [48, 64], [0, 200]]) {
+    const h = harness(), config = { total: 10, naturalOne: true };
+    h.scene.begin(config, 'Boarding Party', 'Bomber');
+    const state: rules.BoardingState = h.scene.boarding;
+    state.elapsed = 1;
+    state.x = rules.automaticShipX(state.elapsed);
+    state.spawnIn = 100;
+    const rack = rules.mineDropPosition(state);
+    const world = { x: rack.x + dx, y: rack.y + dy };
+    const point = aftView.projectAftPoint(world, rack);
+    const neutral = { x: 0, y: 0, firing: false, placing: false };
+    h.scene.readBoardingFrame = () => ({
+      first: { ...neutral, aim: point, launch: point, placing: true }, continued: neutral,
+    });
+    h.tick(16); h.tick(250);
+    assert.notEqual(state.x, rack.x);
+    assert.equal(state.minesPlaced, 1);
+    assert.equal(state.mines.length, 1);
+    const mine = state.mines[0], length = Math.hypot(dx, dy), clamp = length > 100 ? 100 / length : 1;
+    assert.ok(Math.abs(mine.x - (rack.x + dx * clamp)) < 1e-9);
+    assert.ok(Math.abs(mine.y - (rack.y + dy * clamp)) < 1e-9);
+    assert.equal(mine.blastRadius, rules.boardingBlastRadius(config));
+    assert.equal(mine.flight, undefined);
+  }
+});
+
+test('Boarding Bomber discards below-rack and outside-window releases without firing at retained aim', () => {
+  const h = harness();
+  h.scene.begin({ total: 10, naturalOne: false }, 'Boarding Party', 'Bomber');
+  const neutral = { x: 0, y: 0, firing: false, placing: false };
+  const { x, y } = aftView.AFT_RACK_VIEW;
+  h.tick(16);
+  for (const launch of [{ x, y: y + .01 }, { x: -1, y }, { x: 481, y }, { x, y: -1 }]) {
+    h.scene.readBoardingFrame = () => ({ first: { ...neutral, placing: true, aim: launch, launch }, continued: neutral });
+    h.tick(50);
+    assert.equal(h.scene.boarding.minesPlaced, 0);
+    assert.equal(h.scene.boarding.aimAngle, Math.PI / 2);
+  }
+  h.scene.readBoardingFrame = () => ({ first: { ...neutral, placing: true }, continued: neutral });
+  h.tick(50);
+  assert.equal(h.scene.boarding.minesPlaced, 1, 'button or keyboard can still launch using retained aim');
 });

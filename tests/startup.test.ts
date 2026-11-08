@@ -4,6 +4,7 @@ import { readFileSync } from 'node:fs';
 import { runInNewContext } from 'node:vm';
 import ts from 'typescript';
 import * as rules from '../src/game/rules.ts';
+import * as aftView from '../src/game/boarding-aft-view.ts';
 
 function tick(scene: any, milliseconds: number) {
   scene.game.loop.rawDelta = milliseconds;
@@ -68,7 +69,7 @@ test('deferred first launch recovers from load failure, starts once, and retry r
     }, console, ...globals });
     return exports as any;
   }
-  const scenes = load('../src/game/scene.ts', { phaser, './rules': rules });
+  const scenes = load('../src/game/scene.ts', { phaser, './rules': rules, './boarding-aft-view': aftView });
   let spaceGunnerInputEnabled = false;
   let inputEnabled = false, gunnerInputEnabled = false, bomberInputEnabled = false;
   let spaceBomberInputEnabled = false, lifeSupportInputEnabled = false, spaceLifeInputEnabled = false;
@@ -417,7 +418,7 @@ test('a deferred launch stays paused after switching away until explicit resume'
       }, console: { error() {} }, ...globals });
       return exports;
     }
-    const sceneExports = load('../src/game/scene.ts', { phaser, './rules': rules });
+    const sceneExports = load('../src/game/scene.ts', { phaser, './rules': rules, './boarding-aft-view': aftView });
     const idleInput = () => ({ read: () => ({}), enable() {}, reset() {} });
     load('../src/main.ts', { './style.css': {}, './bomber.css': {}, './game/rules': rules,
       get './game/runtime'() {
