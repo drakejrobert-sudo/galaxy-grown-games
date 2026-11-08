@@ -263,8 +263,10 @@ test('Boarding Bomber launches at the visible mark using the pre-weave rack once
     assert.equal(state.minesPlaced, 1);
     assert.equal(state.mines.length, 1);
     const mine = state.mines[0], length = Math.hypot(dx, dy), clamp = length > 100 ? 100 / length : 1;
-    assert.ok(Math.abs(mine.x - (rack.x + dx * clamp)) < 1e-9);
-    assert.ok(Math.abs(mine.y - (rack.y + dy * clamp)) < 1e-9);
+    const driftTime = state.elapsed - 1 - length * clamp / 500;
+    const driftX = 12 * Math.sin(2 * Math.PI * driftTime / 1.6);
+    assert.ok(Math.abs(mine.x - driftX - (rack.x + dx * clamp)) < 1e-9);
+    assert.ok(Math.abs(mine.y - 70 * driftTime - (rack.y + dy * clamp)) < 1e-9);
     assert.equal(mine.blastRadius, rules.boardingBlastRadius(config));
     assert.equal(mine.flight, undefined);
   }

@@ -603,7 +603,7 @@ test('Boarding Gunner renders projected targets and shot cues with frozen state,
     crosshairX: 130, crosshairY: 300, cooldown: .7, grace: .8, impactFlash: .2, breaches: 1 });
   s.pods = [
     { id: 1, kind: 'probe', x: 23, y: 470, vx: 8, vy: -100, radius: 12, hp: 1, maxHp: 1, warningRemaining: .4, hitFlash: 0 },
-    { id: 2, kind: 'shuttle', x: 457, y: 185, vx: -8, vy: -100, radius: 18, hp: 1, maxHp: 2, warningRemaining: 0, hitFlash: .1 },
+    { id: 2, kind: 'shuttle', x: 457, y: 185, vx: -8, vy: -100, radius: 18, hp: 1, maxHp: 2, warningRemaining: 0, hitFlash: 0 },
   ];
   const before = JSON.stringify(s);
   freeze(s);
@@ -620,7 +620,12 @@ test('Boarding Gunner renders projected targets and shot cues with frozen state,
   assert.ok(h.commands.some(c => c[0] === 'lineBetween' && c[1] === 240 && c[2] === 449 && c[3] === 130 && c[4] === 300));
   assert.ok(h.commands.some(c => c[0] === 'lineBetween' && c[1] === 124 && c[2] === 294 && c[3] === 118 && c[4] === 288));
   assert.ok(h.commands.some(c => c[0] === 'lineStyle' && c[2] === 0xff6862));
-  for (const label of ['BREACH', 'LAUNCH', 'COOLING', 'BREACHES 1', 'CARRIER 36/36']) assert.ok(labels.includes(label));
+  for (const [pose, color] of [[poses[1], 0xffc080], [poses[2], 0xff786e]] as const) {
+    assert.ok(h.commands.some((c, i) => c[0] === 'strokeCircle' && c[1] === pose.x && c[2] === pose.y &&
+      h.commands[i - 1]?.[0] === 'lineStyle' && h.commands[i - 1]?.[2] === color));
+  }
+  for (const label of ['COOLING', 'BREACHES 1', 'CARRIER 36/36']) assert.ok(labels.includes(label));
+  assert.ok(!labels.includes('LAUNCH') && !labels.includes('BREACH'));
   assert.equal(JSON.stringify(s), before);
 
   h.scene.boarding = freeze({ ...s, carrier: { ...s.carrier, hp: 0 }, cooldown: 0, disabled: true });
@@ -631,7 +636,8 @@ test('Boarding Gunner renders projected targets and shot cues with frozen state,
 });
 
 test('Boarding Bomber projects the real landing, live mine and blast footprints with either Natural 1 setting', () => {
-  const h = harness();
+  const h = harness(), labels: string[] = [];
+  h.scene.drawLabel = (text: string) => labels.push(text);
   for (const naturalOne of [false, true]) {
     const config = { total: 10, naturalOne };
     h.scene.begin(config, 'Boarding Party', 'Bomber');
@@ -651,6 +657,11 @@ test('Boarding Bomber projects the real landing, live mine and blast footprints 
     for (const reduced of [false, true]) {
       h.setReduced(reduced);
       h.paint();
+      const pod = aftView.projectAftPoint(state.pods[0], rack);
+      assert.ok(h.commands.some((c, i) => c[0] === 'strokeCircle' && c[1] === pod.x && c[2] === pod.y &&
+        h.commands[i - 1]?.[0] === 'lineStyle' && h.commands[i - 1]?.[2] === 0xffa6af));
+      assert.ok(labels.includes('BREACH LINE'));
+      assert.ok(!labels.includes('LAUNCH') && !labels.includes('BREACH'));
       const outlines = h.commands.filter(([name]) => name === 'strokePoints').map(c => c[1] as { x: number; y: number }[]);
       for (const center of [landing, live, impact]) {
         assert.ok(outlines.some(outline => outline.length === 48 && outline.every(point => {

@@ -555,9 +555,6 @@ export class FlightScene extends Phaser.Scene {
       const hit = (pod?.hitFlash ?? 0) > 0;
       hud.lineStyle(warning || imminent || hit ? 2.5 : 1.25, hit ? 0xffffff : color, warning || imminent ? .95 : .58);
       hud.strokeCircle(x, y, r);
-      if (warning || imminent)
-        this.drawLabel(warning ? 'LAUNCH' : 'BREACH', Math.max(30, Math.min(WIDTH - 30, x)), y + r + 10,
-          12, warning ? '#ffcc90' : '#ff9a90');
       if (shuttle && pod) for (let i = 0; i < pod.maxHp; i++) {
         hud.fillStyle(i < pod.hp ? 0xffbcaa : 0x413039);
         hud.fillRect(x - 9 + i * 10, y - r - 6, 8, 3);
@@ -641,8 +638,6 @@ export class FlightScene extends Phaser.Scene {
         g.lineStyle(2, pod.hitFlash > 0 ? 0xffffff : color, .9);
         g.strokeCircle(p.x, p.y, Math.max(7, r + 4));
       }
-      if (pod.warningRemaining > 0)
-        this.drawLabel('LAUNCH', Math.max(28, Math.min(WIDTH - 28, p.x)), p.y + r + 12, 11, '#ffca83');
       if (shuttle) for (let i = 0; i < pod.maxHp; i++) {
         g.fillStyle(i < pod.hp ? 0xffb6a0 : 0x45344e);
         g.fillRect(p.x - 8 + i * 9, p.y - r - 8, 7, 3);
