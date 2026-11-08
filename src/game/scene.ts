@@ -2,7 +2,7 @@ import Phaser from 'phaser';
 import type { InputFrame } from './input';
 import { AFT_RACK_VIEW, boardingAftInput, projectAftPoint, projectAftRing } from './boarding-aft-view';
 import {
-  createBoardingPilot, stepBoardingPilot, boardingPilotAttackPosition, BOARDING_PILOT_FORWARD_SPEED, type BoardingPilotState,
+  createBoardingPilot, stepBoardingPilot, boardingPilotAttackPosition, BOARDING_PILOT_FORWARD_SPEED, PILOT_RADIUS, type BoardingPilotState,
   createBoarding, stepBoarding, BOARDING_INTERIOR_SLOTS, BOARDING_DEPTHS, boardingCover, boardingBoarderPose, boardingAirlockTargetActive, BOARDING_AIRLOCK_TARGETS, BOARDING_EJECTION_TIME, BOARDING_VENT_WARNING, BOARDING_VENT_RECHARGE, difficultyFor, BOARDING_LINE, BOARDING_CYCLE, BOARDING_WARNING, BOARDING_CARRIER_RADIUS, boardingTurretPose, boardingTurretBreachSoon, BOARDING_MINE_LIFETIME, BOARDING_MINE_COOLDOWN, boardingBlastRadius, type BoardingState, type BoardingInput,
   createSpaceGunner, stepSpaceGunner, SPACE_GUNNER_DEFENSE_LINE, type SpaceGunnerInput, type SpaceGunnerState, type SpaceGunnerAttacker,
   gunnerTargetAt, gunnerFireEvery, GUNNER_SHOT_FEEDBACK_SECONDS, type GunnerShotFeedback,
@@ -308,6 +308,64 @@ export class FlightScene extends Phaser.Scene {
     for (let i = this.labelsUsed; i < this.labelPool.length; i++) this.labelPool[i].setVisible(false);
   }
 
+  private paintCockpitDebris(g: Phaser.GameObjects.Graphics, rock: BoardingPilotState['debris'][number],
+    x: number, y: number, r: number) {
+    const phase = rock.time + rock.x * .071 + rock.y * .037;
+    const elapsed = this.decorativeTime(this.boardingPilot.elapsed);
+    const angle = phase + elapsed * (.21 + .16 * Math.sin(phase));
+    const cosine = Math.cos(angle), sine = Math.sin(angle);
+    const point = (dx: number, dy: number) => ({
+      x: x + r * (dx * cosine - dy * sine), y: y + r * (dx * sine + dy * cosine),
+    });
+    if (rock.kind === 'asteroid') {
+      const rim = Array.from({ length: 9 }, (_, i) => {
+        const a = i * Math.PI * 2 / 9;
+        const size = .84 + .13 * Math.sin(phase + i * 2.49);
+        return point(size * Math.cos(a), size * Math.sin(a));
+      });
+      g.fillStyle(0x312d37); g.fillPoints(rim, true);
+      const ridge = point(-.14, -.18);
+      for (let i = 0; i < rim.length; i++) {
+        const a = rim[i], b = rim[(i + 1) % rim.length];
+        const light = (x - (a.x + b.x) / 2 + y - (a.y + b.y) / 2) / r;
+        g.fillStyle(light > .65 ? 0xa59688 : light > .05 ? 0x78695f : light > -.65 ? 0x504650 : 0x332e3a);
+        g.fillTriangle(ridge.x, ridge.y, a.x, a.y, b.x, b.y);
+      }
+      for (const [dx, dy, size] of [[-.35, .14, .21], [.32, -.24, .14], [.28, .34, .1]]) {
+        const crater = point(dx, dy);
+        g.fillStyle(0xa49586, .75); g.fillEllipse(crater.x + r * .035, crater.y + r * .05, r * size * 2, r * size * 1.48);
+        g.fillStyle(0x342f38, .85); g.fillEllipse(crater.x, crater.y, r * size * 2, r * size * 1.48);
+      }
+      if (r > 10) {
+        for (let i = 0; i < 8; i++) {
+          const a = phase + i * 2.4, distance = .35 + .24 * Math.sin(i * 4.2 + phase);
+          const chip = point(Math.cos(a) * distance, Math.sin(a) * distance);
+          g.fillStyle(i % 2 ? 0xc3b3a0 : 0x221f2a, .46);
+          g.fillCircle(chip.x, chip.y, r * (.024 + i % 3 * .013));
+        }
+      }
+      return;
+    }
+    const plating = rock.shape === 'rib'
+      ? [point(-.85, -.32), point(.72, -.59), point(.52, -.1), point(-.13, .02), point(-.39, .72), point(-.73, .44)]
+      : rock.shape === 'antenna'
+        ? [point(-.82, -.21), point(-.28, -.26), point(.05, -.85), point(.24, -.76), point(.17, -.16), point(.85, .16), point(.63, .43), point(-.79, .16)]
+        : [point(-.73, -.53), point(.48, -.71), point(.83, -.18), point(.31, .13), point(.59, .52), point(-.43, .71)];
+    g.fillStyle(0x354450); g.fillPoints(plating, true);
+    g.fillStyle(0x738590); g.fillPoints([plating[0], plating[1], plating[2], plating.at(-1)!], true);
+    g.lineStyle(Math.max(.7, r * .035), 0xafb7b8, .85); g.strokePoints(plating, true);
+    for (let i = 2; i < plating.length - 1; i++) {
+      const seam = point(-.48 + .13 * (i - 2), -.27);
+      g.lineStyle(Math.max(.7, r * .056), i % 2 ? 0x1e2b36 : 0x9f8f7b, .92);
+      g.lineBetween(seam.x, seam.y, plating[i].x, plating[i].y);
+    }
+    if (!this.reducedMotion?.matches && Math.sin(elapsed * 3 + phase) > .91) {
+      const tip = plating[2], spark = point(.88, -.29);
+      g.lineStyle(Math.max(.8, r * .03), 0xf2ac65, .52);
+      g.lineBetween(tip.x, tip.y, spark.x, spark.y);
+    }
+  }
+
   private paintBoardingPilot(g: Phaser.GameObjects.Graphics) {
     const s = this.boardingPilot;
     const cx = WIDTH / 2, cy = HEIGHT / 2;
@@ -325,31 +383,12 @@ export class FlightScene extends Phaser.Scene {
       .sort((a, b) => b.time - a.time);
     for (const obj of objects) {
       const { x, y, r, scale } = project(obj);
-      if (obj.kind === 'asteroid') {
-        const rotation = this.decorativeTime(s.elapsed) * .27 + obj.time;
-        if (!this.drawArt('asteroid', x, y, 2 * r, 2 * r, rotation)) {
-          const points = [.91, .8, .96, .78, .97, .9, .8].map((size, i) => ({
-            x: x + Math.cos(rotation + i * Math.PI * 2 / 7) * r * size,
-            y: y + Math.sin(rotation + i * Math.PI * 2 / 7) * r * size,
-          }));
-          g.fillStyle(0x4d3344); g.fillPoints(points, true);
+      if (obj.kind === 'asteroid' || obj.kind === 'junk') {
+        this.paintCockpitDebris(g, obj, x, y, r);
+        if (obj.time - s.elapsed <= 1.6 && Math.hypot(obj.x - s.x, obj.y - s.y) <= obj.radius + PILOT_RADIUS) {
+          g.lineStyle(Math.max(1.5, 2.2 * scale), 0xffbb66, .95);
+          g.strokeCircle(x, y, r + 2 * scale);
         }
-        g.lineStyle(Math.max(1, 1.4 * scale), 0xffaa87, .8); g.strokeCircle(x, y, r);
-      } else if (obj.kind === 'junk') {
-        const angle = obj.time + this.decorativeTime(s.elapsed) * (obj.shape === 'antenna' ? .7 : .18);
-        const wreckage = obj.shape === 'rib'
-          ? [[-.82, -.43], [.78, -.65], [.48, -.08], [-.1, -.1], [-.46, .76], [-.78, .52]]
-          : obj.shape === 'antenna'
-            ? [[-.92, -.12], [-.23, -.13], [.05, -.8], [.22, -.74], [.14, -.1], [.8, .2], [.6, .53], [-.89, .12]]
-            : [[-.72, -.52], [.49, -.72], [.84, -.15], [.32, .14], [.58, .53], [-.45, .7]];
-        const panels = wreckage.map(([dx, dy]) => ({
-          x: x + r * (dx * Math.cos(angle) - dy * Math.sin(angle)),
-          y: y + r * (dx * Math.sin(angle) + dy * Math.cos(angle)),
-        }));
-        g.fillStyle(0x4f5963); g.fillPoints(panels, true);
-        g.lineStyle(Math.max(1, 1.6 * scale), 0xc6a48e); g.strokePoints(panels, true);
-        g.lineBetween(panels[0].x, panels[0].y, panels[3].x, panels[3].y);
-        g.lineStyle(Math.max(1, 1.4 * scale), 0xffaa87, .8); g.strokeCircle(x, y, r);
       } else {
         const color = obj.kind === 'required' ? 0x85f7e0 : obj.kind === 'bonus' ? 0xffcd78 : 0xa3bdff;
         const alpha = obj.kind === 'required' && obj !== next ? .52 : 1;

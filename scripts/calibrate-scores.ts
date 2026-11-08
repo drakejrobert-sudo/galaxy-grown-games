@@ -45,7 +45,7 @@ function pilotDirection(s: { x: number; y: number }, hazards: { x: number; y: nu
 function run(mode: ScoreMode, config: FlightConfig, profile: Profile, seed: number, onBoardingResult?: (s: BoardingState) => void): number {
   const random = seeded(seed);
   if (mode === 'boarding-pilot') {
-    const s = createBoardingPilot(config);
+    const s = createBoardingPilot(config, random);
     while (!s.endReason) {
       const next = s.rings.find(r => r.kind === 'required' || profile === 'engaged');
       const drift = profile === 'routine' ? 50 * Math.sin(s.elapsed + seed) : 0;
