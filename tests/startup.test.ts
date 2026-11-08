@@ -493,10 +493,3 @@ test('a deferred launch stays paused after switching away until explicit resume'
   assert.equal(afterFailure.scene.activeFlight, true);
   assert.equal(afterFailure.element('pause-overlay').hidden, true);
 });
-
-test('space battle bomber cooldown dial shares the simulation constant', () => {
-  const scene = readFileSync(new URL('../src/game/scene.ts', import.meta.url), 'utf8');
-
-  assert.match(scene, /mineCooldown \/ SPACE_BOMBER_MINE_COOLDOWN/);
-  assert.doesNotMatch(scene, /missileCooldown/);
-});

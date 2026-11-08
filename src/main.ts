@@ -388,6 +388,7 @@ scene.onBoardingPilotStep = s => {
   get('copy-status').textContent = ''; get('copy').focus();
 };
 scene.onBoardingStep = s => {
+  if (s.role === 'Bomber') action.textContent = s.cooldown <= 0 ? 'Launch mine · Ready' : 'Mine cooling';
   get('time').textContent = `${Math.ceil(DURATION-s.elapsed)}s`;
   get('hull').textContent = `${s.hull} / ${s.role === 'Life Support' ? 5 : 3}`;
   get('score').textContent = String(boardingScoreFor(s));
