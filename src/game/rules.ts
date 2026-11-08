@@ -1548,6 +1548,9 @@ export const BOARDING_GUNNER_AIM_PADDING = 7;
 export const BOARDING_MINE_COOLDOWN = .85;
 export const BOARDING_MINE_LIFETIME = 4.5;
 export const BOARDING_BLAST_RADIUS = 58;
+export function boardingBlastRadius(config: FlightConfig) {
+  return BOARDING_BLAST_RADIUS * (config.naturalOne ? BOMBER_IMPAIRMENT_SCALE : 1);
+}
 export const BOARDING_VENT_RECHARGE = 8;
 export const BOARDING_VENT_WARNING = .6;
 export const BOARDING_COVER_WARNING = .65;
@@ -1968,7 +1971,7 @@ export function stepBoarding(s: BoardingState, config: FlightConfig, input: Boar
     }
   }
   if (s.role === 'Bomber') {
-    const mine = prepareAftMine(s, { ...input, placing: !!input.placing }, dt, s.cooldown <= 0, BOARDING_BLAST_RADIUS * (config.naturalOne ? BOMBER_IMPAIRMENT_SCALE : 1), BOARDING_MINE_LIFETIME);
+    const mine = prepareAftMine(s, { ...input, placing: !!input.placing }, dt, s.cooldown <= 0, boardingBlastRadius(config), BOARDING_MINE_LIFETIME);
     if (mine) {
       s.mines.push(mine);
       s.minesPlaced++;

@@ -4,6 +4,7 @@ import { readFileSync } from 'node:fs';
 import { runInNewContext } from 'node:vm';
 import ts from 'typescript';
 import * as rules from '../src/game/rules.ts';
+import * as aftView from '../src/game/boarding-aft-view.ts';
 
 function harness() {
   let reduced = false;
@@ -13,6 +14,7 @@ function harness() {
   }).outputText;
   runInNewContext(js, { exports, require: (name: string) => {
     if (name === 'phaser') return { Scene: class {} };
+    if (name === './boarding-aft-view') return aftView;
     assert.equal(name, './rules'); return rules;
   }, window: { matchMedia: () => ({ get matches() { return reduced; } }) } });
   const scene = new exports.FlightScene('test');
@@ -595,4 +597,30 @@ test('Boarding Gunner renders reflected target and shot cues with frozen state, 
   assert.ok(labels.includes('CARRIER DISABLED') && labels.includes('READY'));
   assert.ok(h.commands.some(c => c[0] === 'strokeCircle' && c[1] === 457 && c[2] === 375 && c[3] === 25));
   assert.ok(!h.commands.some(c => c[0] === 'strokeCircle' && c[1] === 240 && c[2] === 60 && c[3] === 43));
+});
+
+test('Boarding Bomber preview round trips to the same world footprint as a real mine', () => {
+  const h = harness();
+  for (const naturalOne of [false, true]) {
+    const config = { total: 10, naturalOne };
+    h.scene.begin(config, 'Boarding Party', 'Bomber');
+    const state: rules.BoardingState = h.scene.boarding;
+    state.x = 325;
+    state.elapsed = 1;
+    const rack = rules.mineDropPosition(state), landing = rules.spaceBomberLanding(state);
+    const expected = structuredClone(state);
+    rules.stepBoarding(expected, config, { x: 0, y: 0, firing: false, placing: true }, .05, () => .5);
+    state.pods = [{ id: 20, kind: 'shuttle', x: 290, y: 230, vx: 0, vy: -100, radius: 18, hp: 1, maxHp: 2, warningRemaining: .4, hitFlash: 0 }];
+    freeze(state);
+    h.paint();
+    const footprint = h.commands.findLast(([name]) => name === 'strokePoints')?.[1] as { x: number; y: number }[];
+    assert.ok(footprint.length > 24);
+    for (const point of footprint) {
+      const world = aftView.unprojectAftAim(point, rack)!;
+      assert.ok(Math.abs(Math.hypot(world.x - landing.x, world.y - landing.y) - expected.mines[0].blastRadius) < 1e-9);
+    }
+    const near = aftView.projectAftPoint({ x: rack.x, y: rack.y + 15 }, rack);
+    const far = aftView.projectAftPoint({ x: rack.x, y: rack.y + 240 }, rack);
+    assert.ok(near.y > far.y && near.scale > far.scale, 'a closing craft grows as it moves toward the rack');
+  }
 });

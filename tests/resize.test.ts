@@ -4,6 +4,7 @@ import { readFileSync } from 'node:fs';
 import { runInNewContext } from 'node:vm';
 import ts from 'typescript';
 import * as rules from '../src/game/rules.ts';
+import * as aftView from '../src/game/boarding-aft-view.ts';
 
 function startup() {
   const elements = new Map<string, any>();
@@ -68,7 +69,7 @@ function startup() {
     return exports;
   }
   const Phaser = { Scene, Game, CANVAS: 1, Scale: { FIT: 1, CENTER_BOTH: 1 } };
-  const scenes = load('../src/game/scene.ts', { phaser: Phaser, './rules': rules });
+  const scenes = load('../src/game/scene.ts', { phaser: Phaser, './rules': rules, './boarding-aft-view': aftView });
   const idleInput = () => ({ read: () => ({}), enable: (enabled: boolean) => inputCalls.push(enabled), reset() {} });
   load('../src/main.ts', {
     './style.css': {}, './bomber.css': {}, './game/runtime': { Phaser, FlightScene: scenes.FlightScene },
