@@ -40,3 +40,16 @@ For the approved cleaner-corridor pass in PR #75, `public/art/boarding-corridor.
 The final 1122×1402 source PNG (`exec-19f2c876-cc7b-499c-b95a-a2120339e766.png`) stays outside the repository under the session's generated-images directory. Browser-canvas resizing and WebP encoding at quality 0.88 produce the shipped **640×800 / 92,534-byte** background (formerly 95,268 bytes). The fourteen assets now total **332,694 bytes**, and the lazy runtime requests **286,022 bytes**. Setup still loads no game art.
 
 Door leaves reuse rectangular crops from the same corridor texture at its full scene scale. Two reusable GeometryMasks clip the four moving leaf images to the recessed openings; pooled images clear crops and masks before being reused in other roles/modes. Perspective shaded polygons remain the missing-texture fallback. These door outlines and visual ejection destinations are presentation geometry only: target centers/radii, bay ejection zones, timing, hit ordering and scoring remain rule-owned.
+
+## Boarding Party Gunner cockpit — 2026-11-07
+
+Four original illustrations were generated with OpenAI's built-in image generation. The cockpit brief specified a seated gunner's eye line, a transparent viewing aperture, worn graphite framing, gloved hands on turret grips, and subdued amber and teal lights. The nose-on craft briefs specified a broad graphite/coral carrier with recessed bays, an unmanned probe with docking claws and a warm center sensor, and a broad armored shuttle with twin nacelles and a dark cockpit slit. The briefs excluded scenery, HUD, text, and logos. No stock or campaign material was used.
+
+| Asset | Dimensions | Bytes |
+| --- | --- | ---: |
+| `boarding-turret-canopy.webp` | 720×840 | 54,380 |
+| `boarding-turret-carrier.webp` | 224×89 | 8,594 |
+| `boarding-turret-probe.webp` | 128×133 | 8,468 |
+| `boarding-turret-shuttle.webp` | 160×72 | 6,114 |
+
+The canopy is fitted below the live target area, and craft sprites are cropped to their silhouettes. Browser-canvas WebP encoding preserves alpha. The four assets add 77,556 bytes to game-runtime preload and no setup requests. The top-down sprites remain in use elsewhere. Screen-space hit geometry is owned by the rules; canopy reflections and the viewport frame do not intercept aim. Full-resolution generations stay outside the repository.

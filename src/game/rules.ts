@@ -1544,7 +1544,21 @@ export const BOARDING_WARNING = 1.2;
 export const BOARDING_LINE = 160;
 export const BOARDING_CARRIER_RADIUS = 36;
 export const BOARDING_AIM_SPEED = 225;
-export const BOARDING_GUNNER_AIM_PADDING = 7;
+const BOARDING_GUNNER_AIM_PADDING = 7;
+const BOARDING_GUNNER_IMPACT_FLASH = .25;
+
+/** Fixed turret camera. Shared by aim, feedback, art and calibration. */
+export function boardingTurretPose(target: { x: number; y: number }, radius = 0) {
+  const scale = 220 / (Math.max(BOARDING_LINE, target.y) + 20);
+  return { x: WIDTH / 2 + (target.x - WIDTH / 2) * scale,
+    y: 114 + (500 - target.y) * .72 * scale, scale,
+    aimRadius: radius * scale + BOARDING_GUNNER_AIM_PADDING };
+}
+
+export function boardingTurretBreachSoon(pod: Pick<BoardingPod, 'y' | 'radius' | 'vy' | 'warningRemaining'>) {
+  return pod.warningRemaining <= 0 && pod.vy < 0 &&
+    pod.y - pod.radius - BOARDING_LINE <= -pod.vy * .5 + 1e-9;
+}
 export const BOARDING_MINE_COOLDOWN = .85;
 export const BOARDING_MINE_LIFETIME = 4.5;
 export const BOARDING_BLAST_RADIUS = 58;
@@ -1663,11 +1677,11 @@ export interface BoardingState {
 export function createBoarding(role: BoardingState['role']): BoardingState {
   const hp = role === 'Bomber' ? 5 : 36;
   return { role, x: 240, y: 140, elapsed: 0, hull: role === 'Life Support' ? 5 : 3, grace: 0,
-    aimAngle: Math.PI / 2, aimDistance: 100, crosshairX: 240, crosshairY: 300,
+    aimAngle: Math.PI / 2, aimDistance: 100, crosshairX: 240, crosshairY: role === 'Gunner' ? 260 : 300,
     carrier: { startX: 240, x: 240, y: 500, targetX: 240, cycle: -1, hp, maxHp: hp },
     pods: [], mines: [], explosions: [], boarders: [], lasers: [], impactFlash: 0, impactSide: 0, hitFlash: 0, hitX: 0, hitY: 0, launchedCraft: 0, probesIntercepted: 0, shuttlesIntercepted: 0, ejections: [], airlocks: [{ openRemaining: 0, cooldown: 0, warning: null }, { openRemaining: 0, cooldown: 0, warning: null }],
     spawnIn: 2, nextId: 1, cooldown: 0, shots: 0, minesPlaced: 0, intercepted: 0, carrierDamage: 0,
-    disabled: false, hits: 0, breaches: 0, shotBoarders: 0, ejected: 0, beamTime: 0, beamX: 240, beamY: 300,
+    disabled: false, hits: 0, breaches: 0, shotBoarders: 0, ejected: 0, beamTime: 0, beamX: 240, beamY: role === 'Gunner' ? 260 : 300,
     finished: false, endReason: null };
 }
 export function boardingScoreMode(role: BoardingState['role']): ScoreMode {
@@ -1704,8 +1718,9 @@ function damageCarrier(s: BoardingState) {
   s.carrier.hp--;
   s.carrierDamage++;
   s.hitFlash = .15;
-  s.hitX = s.carrier.x;
-  s.hitY = s.carrier.y;
+  const hit = s.role === 'Gunner' ? boardingTurretPose(s.carrier) : s.carrier;
+  s.hitX = hit.x;
+  s.hitY = hit.y;
   if (s.carrier.hp === 0)
     s.disabled = true;
 }
@@ -1948,8 +1963,12 @@ export function stepBoarding(s: BoardingState, config: FlightConfig, input: Boar
       s.beamX = s.crosshairX;
       s.beamY = s.crosshairY;
       const targets = [...s.pods.map(p => ({ ...p, carrier: false })), ...(s.carrier.hp > 0 ? [{ ...s.carrier, id: 0, radius: BOARDING_CARRIER_RADIUS, carrier: true }] : [])]
-        .map(p => ({ ...p, distance: Math.hypot(p.x - s.crosshairX, p.y - s.crosshairY) }))
-        .filter(p => p.distance <= p.radius + BOARDING_GUNNER_AIM_PADDING).sort((a, b) => a.distance - b.distance || Number(a.carrier) - Number(b.carrier) || a.id - b.id);
+        .map(p => {
+          const pose = boardingTurretPose(p, p.radius);
+          return { id: p.id, carrier: p.carrier, pose, distance: Math.hypot(pose.x - s.crosshairX, pose.y - s.crosshairY) };
+        })
+        .filter(p => p.distance <= p.pose.aimRadius + 1e-9)
+        .sort((a, b) => a.distance - b.distance || Number(a.carrier) - Number(b.carrier) || a.id - b.id);
       const target = targets[0];
       if (target?.carrier)
         damageCarrier(s);
@@ -1958,8 +1977,8 @@ export function stepBoarding(s: BoardingState, config: FlightConfig, input: Boar
         pod.hp--;
         pod.hitFlash = .15;
         s.hitFlash = .15;
-        s.hitX = pod.x;
-        s.hitY = pod.y;
+        s.hitX = target.pose.x;
+        s.hitY = target.pose.y;
         if (pod.hp <= 0) {
           recordBoardingInterception(s, pod.id);
           s.pods = s.pods.filter(p => p.id !== pod.id);
@@ -2100,7 +2119,10 @@ export function stepBoarding(s: BoardingState, config: FlightConfig, input: Boar
       if (!e.path.carrier)
         removed.add(e.path.id);
       s.breaches++;
+      const hullBefore = s.hull;
       boardingDamage(s, e.time, grace, dt);
+      if (s.role === 'Gunner' && s.hull < hullBefore)
+        s.impactFlash = BOARDING_GUNNER_IMPACT_FLASH - (dt - e.time);
       if (e.time >= grace)
         grace = e.time + 1.25;
     }
