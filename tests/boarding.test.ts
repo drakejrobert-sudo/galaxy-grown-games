@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  createBoarding, stepBoarding, boardingResultText, boardingScoreFor, boardingInAirlock,
+  createBoarding, stepBoarding, boardingTurretPose, boardingTurretBreachSoon, boardingResultText, boardingScoreFor, boardingInAirlock,
   BOARDING_TUNING, BOARDING_AIM_SPEED, BOARDING_BLAST_RADIUS, BOARDING_VENT_RECHARGE, BOARDING_AIRLOCK_TARGETS, BOARDING_EJECTION_TIME, BOARDING_RELOCATION_TIME, boardingAirlockTargetActive,
   BOARDING_LINE, BOARDING_DEPTHS, boardingCover, BOARDING_DEFENSE_TUNING, BOARDING_LAUNCH_WARNING, BOARDING_MIN_FLIGHT, type BoardingInput, type BoardingState, type BoardingBoarder,
 } from '../src/game/rules.ts';
@@ -13,19 +13,25 @@ function run(s: BoardingState, seconds: number, input: Partial<BoardingInput> = 
   for(let t=0;t<seconds-1e-8;t+=.05)tick(s,input,Math.min(.05,seconds-t),cfg);
 }
 function pod(id=1,x=240,y=300,vy=-100) {return {id,x,y,vx:0,vy,radius:12,kind:'probe' as const,hp:1,maxHp:1,warningRemaining:0,hitFlash:0};}
+function aimTurret(target: {x:number;y:number}) {
+  const { x, y } = boardingTurretPose(target);
+  return { aimX: x, aimY: y };
+}
 function boarder(id=1,phase:BoardingBoarder['phase']='exposed',remaining=1,x=145,y=180):BoardingBoarder {
   return {id,phase,remaining,x,y,slot:0,depth:0};
 }
 test('Gunner chooses one closest target, pod before carrier on a tie; miss consumes cooldown',()=>{
-  const s=state('Gunner');s.pods=[pod(1,240,500,0)];tick(s,{aimX:240,aimY:500,firing:true});
+  const s=state('Gunner');s.pods=[pod(2,240,500,0),pod(1,240,500,0)];
+  tick(s,{...aimTurret(s.carrier),firing:true});
+  assert.deepEqual(s.pods.map(p=>p.id),[2]);
   assert.equal(s.intercepted,1);assert.equal(s.carrierDamage,0);assert.equal(s.shots,1);
   const miss=state('Gunner');tick(miss,{aimX:20,aimY:20,firing:true});assert.ok(miss.cooldown>0);assert.equal(miss.carrierDamage,0);
 });
 test('carrier disable stops launches, retains existing pods, scores once, and does not end the round',()=>{
   const s=state('Gunner');s.carrier.hp=1;s.spawnIn=0;s.pods=[pod(9,40,400)];
-  tick(s,{aimX:240,aimY:500,firing:true});assert.equal(s.disabled,true);assert.equal(s.carrierDamage,1);
+  tick(s,{...aimTurret(s.carrier),firing:true});assert.equal(s.disabled,true);assert.equal(s.carrierDamage,1);
   assert.equal(s.pods.length,1);assert.equal(s.finished,false);const score=boardingScoreFor(s);
-  s.cooldown=0;tick(s,{aimX:240,aimY:500,firing:true});assert.equal(s.carrierDamage,1);
+  s.cooldown=0;tick(s,{...aimTurret(s.carrier),firing:true});assert.equal(s.carrierDamage,1);
   assert.ok(boardingScoreFor(s)-score<10);
 });
 test('Gunner Natural 1 doubles only cooldown; aim clamps and keyboard diagonals use approved cap',()=>{
@@ -33,7 +39,7 @@ test('Gunner Natural 1 doubles only cooldown; aim clamps and keyboard diagonals 
     const normal=state('Gunner'), impaired=state('Gunner');
     tick(normal,{x:1,y:1,firing:true},.05,{total,naturalOne:false});tick(impaired,{x:1,y:1,firing:true},.05,{total,naturalOne:true});
     assert.equal(impaired.cooldown,2*normal.cooldown);assert.equal(impaired.crosshairX,normal.crosshairX);
-    assert.ok(Math.abs(Math.hypot(normal.crosshairX-240,normal.crosshairY-300)-BOARDING_AIM_SPEED*.05)<1e-8);
+    assert.ok(Math.abs(Math.hypot(normal.crosshairX-240,normal.crosshairY-260)-BOARDING_AIM_SPEED*.05)<1e-8);
     normal.cooldown=0;tick(normal,{aimX:999,aimY:999});assert.deepEqual([normal.crosshairX,normal.crosshairY],[468,542]);
   }
 });
@@ -42,6 +48,30 @@ test('weapon breaches remove every crossing pod, but grace limits simultaneous d
     const s=state(role);s.pods=[pod(1,20,BOARDING_LINE+13),pod(2,460,BOARDING_LINE+13)];tick(s);
     assert.equal(s.pods.length,0);assert.equal(s.breaches,2);assert.equal(s.hull,2);assert.equal(s.intercepted,0);
   }
+});
+test('the turret breach marker begins a half-second out, and only damaging breaches flash the canopy',()=>{
+  const s=state('Gunner');
+  const p=pod(1,240,BOARDING_LINE+62.01);
+  s.pods=[p];
+  assert.equal(boardingTurretBreachSoon(p),false);
+  p.y-=.01;
+  assert.equal(boardingTurretBreachSoon(p),true);
+  p.warningRemaining=.1;
+  assert.equal(boardingTurretBreachSoon(p),false);
+  p.warningRemaining=0;
+  run(s,.45);
+  assert.equal(s.impactFlash,0);
+  assert.equal(s.hull,3);
+  tick(s);
+  assert.ok(s.impactFlash>.2);
+  assert.equal(s.hull,2);
+  run(s,.3);
+  assert.equal(s.impactFlash,0);
+  s.pods=[pod(2,240,BOARDING_LINE+13)];
+  tick(s);
+  assert.equal(s.breaches,2);
+  assert.equal(s.hull,2);
+  assert.equal(s.impactFlash,0);
 });
 test('Bomber mines retain fixed landing positions and input attempts during cooldown never bank',()=>{
   const s=state('Bomber');tick(s,{placing:true});assert.equal(s.minesPlaced,1);
@@ -182,8 +212,8 @@ test('probe/shuttle selection has exact 80/20 boundary and alternating launch po
 test('shuttle is slower, takes two turret hits, and awards one unchanged interception reward',()=>{
   const s=state('Gunner');s.spawnIn=0;stepBoarding(s,config,idle,.05,()=>.9);
   const shuttle=s.pods[0];assert.ok(Math.hypot(shuttle.vx,shuttle.vy)<=BOARDING_DEFENSE_TUNING.Medium.podSpeed*.75+1e-8);
-  s.spawnIn=100;tick(s,{firing:true,aimX:shuttle.x,aimY:shuttle.y});assert.equal(shuttle.hp,1);assert.equal(s.intercepted,0);assert.ok(shuttle.hitFlash>0);
-  s.cooldown=0;tick(s,{firing:true,aimX:shuttle.x,aimY:shuttle.y});assert.equal(s.pods.length,0);assert.equal(s.intercepted,1);assert.equal(s.shuttlesIntercepted,1);assert.equal(s.probesIntercepted,0);
+  s.spawnIn=100;tick(s,{firing:true,...aimTurret(shuttle)});assert.equal(shuttle.hp,1);assert.equal(s.intercepted,0);assert.ok(shuttle.hitFlash>0);
+  s.cooldown=0;tick(s,{firing:true,...aimTurret(shuttle)});assert.equal(s.pods.length,0);assert.equal(s.intercepted,1);assert.equal(s.shuttlesIntercepted,1);assert.equal(s.probesIntercepted,0);
 });
 test('a single mine destroys a full-health shuttle and reports each craft type once',()=>{
   const s=state('Bomber');s.pods=[{...pod(1,240,300,0),kind:'shuttle',hp:2,maxHp:2,radius:18},pod(2,250,300,0)];
