@@ -1,6 +1,6 @@
 /** Repeatable, deliberately synthetic score samples. Run: node --import tsx scripts/calibrate-scores.ts */
 import {
-  createBoarding, stepBoarding, boardingScoreFor, boardingAirlockTargetActive, BOARDING_AIRLOCK_TARGETS, createBoardingPilot, stepBoardingPilot, boardingPilotScore,
+  createBoarding, stepBoarding, boardingTurretPose, boardingScoreFor, boardingAirlockTargetActive, BOARDING_AIRLOCK_TARGETS, createBoardingPilot, stepBoardingPilot, boardingPilotScore,
   createSpaceGunner, stepSpaceGunner, spaceGunnerScoreFor, SPACE_GUNNER_DEFENSE_LINE,
   DURATION, HEIGHT, WIDTH, createFlight, stepFlight, scoreFor,
   createGunner, stepGunner, gunnerScoreFor,
@@ -64,13 +64,14 @@ function run(mode: ScoreMode, config: FlightConfig, profile: Profile, seed: numb
       const control = role === 'Life Support' && profile === 'engaged' ? BOARDING_AIRLOCK_TARGETS.find((_, side) => boardingAirlockTargetActive(s, side)) : undefined;
       const target = control ?? (role === 'Life Support' ? s.boarders.filter(b=>b.phase==='exposed').sort((a,b)=>a.remaining-b.remaining || a.id-b.id)[0]
         : profile === 'engaged' && urgent && urgent.y < 300 ? urgent : s.carrier.hp > 0 ? s.carrier : urgent);
+      const aim = target && role === 'Gunner' ? boardingTurretPose(target) : target;
       const rack = mineDropPosition(s);
       const mineTarget = profile === 'engaged' ? [...s.pods, ...(s.carrier.hp>0?[s.carrier]:[])]
         .filter(p=>p.y>=rack.y && Math.hypot(p.x-rack.x,p.y-rack.y)<=100)
         .sort((a,b)=>a.y-b.y)[0] : undefined;
       stepBoarding(s,config,{
         x:0, y:0, firing:active && !!target && (profile==='engaged'||Math.floor(s.elapsed)%2===0),
-        aimX:active?target?.x:undefined, aimY:active?target?.y:undefined,
+        aimX:active?aim?.x:undefined, aimY:active?aim?.y:undefined,
         placing:active && s.cooldown<=0 && (profile==='routine'||!!mineTarget),
         ...(mineTarget?{launch:{x:mineTarget.x,y:mineTarget.y}}:{}),
       },step,random);

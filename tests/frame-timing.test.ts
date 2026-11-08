@@ -199,19 +199,19 @@ test('cockpit flight shares bounded scene stepping, explicit interruption and re
   assert.deepEqual(scene.boardingPilot, rules.createBoardingPilot(config));
 });
 
-test('Boarding Gunner maps visible aim to the same hit boundary for all three targets', () => {
-  for (const kind of ['probe', 'shuttle', 'carrier'] as const) {
+test('Boarding Gunner honors projected hit boundaries at far, middle and near ranges', () => {
+  for (const [kind, y] of [['carrier', 500], ['shuttle', 300], ['probe', 174]] as const) {
     for (const extra of [0, .25]) {
       const h = harness();
       h.scene.begin({ total: 10, naturalOne: false }, 'Boarding Party', 'Gunner');
       const s: rules.BoardingState = h.scene.boarding;
       const radius = kind === 'carrier' ? rules.BOARDING_CARRIER_RADIUS : kind === 'probe' ? 12 : 18;
-      const y = kind === 'carrier' ? s.carrier.y : 310;
       const hp = kind === 'probe' ? 1 : 2;
       if (kind !== 'carrier') {
         s.pods = [{ id: 1, kind, x: 240, y, vx: 0, vy: -100, radius, hp, maxHp: hp, warningRemaining: .6, hitFlash: 0 }];
       }
-      const aimY = rules.HEIGHT - (y - radius - rules.BOARDING_GUNNER_AIM_PADDING - extra);
+      const pose = rules.boardingTurretPose({x: 240, y}, radius);
+      const aimY = pose.y + pose.aimRadius + extra;
       let reads = 0;
       const aim = { x: 0, y: 0, aimX: 240, aimY, firing: true };
       h.scene.readBoardingFrame = () => {
@@ -222,8 +222,9 @@ test('Boarding Gunner maps visible aim to the same hit boundary for all three ta
       h.tick(150);
       assert.equal(reads, 1);
       assert.equal(s.shots, 1);
-      assert.equal(s.beamY, rules.HEIGHT - aimY);
-      assert.equal(s.crosshairY, rules.HEIGHT - aimY);
+      assert.equal(s.beamY, aimY);
+      assert.equal(s.crosshairY, aimY);
+      if (!extra) assert.deepEqual([s.hitX, s.hitY], [pose.x, pose.y]);
       assert.equal(kind === 'carrier' ? s.carrierDamage : hp - (s.pods[0]?.hp ?? 0), extra === 0 ? 1 : 0);
     }
   }
@@ -238,7 +239,7 @@ test('Boarding Gunner screen arrows keep their direction and diagonal speed acro
   h.scene.readBoardingFrame = () => ({ first: diagonal, continued: diagonal });
   h.tick(16);
   h.tick(125);
-  assert.ok(s.crosshairX > x && s.crosshairY > y, 'right and up on the reflected screen');
+  assert.ok(s.crosshairX > x && s.crosshairY < y, 'right and up on the turret screen');
   assert.ok(Math.abs(Math.hypot(s.crosshairX - x, s.crosshairY - y) - 225 * .125) < 1e-9);
 });
 

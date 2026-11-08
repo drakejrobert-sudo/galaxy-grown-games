@@ -563,7 +563,7 @@ test('cockpit attack warnings remain visible in reduced motion before the hazard
   assert.ok(trail());
 });
 
-test('Boarding Gunner renders reflected target and shot cues with frozen state, reduced motion, and missing art', () => {
+test('Boarding Gunner renders projected targets and shot cues with frozen state, reduced motion, and missing art', () => {
   const h = harness(), labels: string[] = [];
   h.scene.add.text = () => {
     const label: any = new Proxy({}, { get: (_, name) => (...args: any[]) => {
@@ -575,7 +575,7 @@ test('Boarding Gunner renders reflected target and shot cues with frozen state, 
   h.scene.begin({ total: 5, naturalOne: true }, 'Boarding Party', 'Gunner');
   const s: rules.BoardingState = h.scene.boarding;
   Object.assign(s, { beamTime: .06, beamX: 130, beamY: 300, hitFlash: .1, hitX: 130, hitY: 300,
-    crosshairX: 130, crosshairY: 300, cooldown: .7, grace: .8, breaches: 1 });
+    crosshairX: 130, crosshairY: 300, cooldown: .7, grace: .8, impactFlash: .2, breaches: 1 });
   s.pods = [
     { id: 1, kind: 'probe', x: 23, y: 470, vx: 8, vy: -100, radius: 12, hp: 1, maxHp: 1, warningRemaining: .4, hitFlash: 0 },
     { id: 2, kind: 'shuttle', x: 457, y: 185, vx: -8, vy: -100, radius: 18, hp: 1, maxHp: 2, warningRemaining: 0, hitFlash: .1 },
@@ -584,19 +584,25 @@ test('Boarding Gunner renders reflected target and shot cues with frozen state, 
   freeze(s);
   h.setReduced(true);
   h.paint();
-  for (const [x, y, radius] of [[240, 60, 43], [23, 90, 19], [457, 375, 25], [130, 260, 14]]) {
+  const poses = [rules.boardingTurretPose(s.carrier, rules.BOARDING_CARRIER_RADIUS),
+    ...s.pods.map(p => rules.boardingTurretPose(p, p.radius))];
+  assert.ok(poses[2].scale > poses[1].scale * 2);
+  assert.ok(poses[2].y > poses[1].y);
+  const rings = [...poses.map(p => [p.x, p.y, p.aimRadius]), [130, 300, 14]];
+  for (const [x, y, radius] of rings) {
     assert.ok(h.commands.some(c => c[0] === 'strokeCircle' && c[1] === x && c[2] === y && c[3] === radius));
   }
-  assert.ok(h.commands.some(c => c[0] === 'lineBetween' && c[1] === 240 && c[2] === 463 && c[3] === 130 && c[4] === 260));
-  assert.ok(h.commands.some(c => c[0] === 'lineBetween' && c[1] === 124 && c[2] === 254 && c[3] === 118 && c[4] === 248));
-  for (const label of ['BREACH LINE', 'LAUNCH', 'COOLING', 'BREACHES 1', 'CARRIER 36/36']) assert.ok(labels.includes(label));
+  assert.ok(h.commands.some(c => c[0] === 'lineBetween' && c[1] === 240 && c[2] === 449 && c[3] === 130 && c[4] === 300));
+  assert.ok(h.commands.some(c => c[0] === 'lineBetween' && c[1] === 124 && c[2] === 294 && c[3] === 118 && c[4] === 288));
+  assert.ok(h.commands.some(c => c[0] === 'lineStyle' && c[2] === 0xff6862));
+  for (const label of ['BREACH', 'LAUNCH', 'COOLING', 'BREACHES 1', 'CARRIER 36/36']) assert.ok(labels.includes(label));
   assert.equal(JSON.stringify(s), before);
 
   h.scene.boarding = freeze({ ...s, carrier: { ...s.carrier, hp: 0 }, cooldown: 0, disabled: true });
   h.paint();
   assert.ok(labels.includes('CARRIER DISABLED') && labels.includes('READY'));
-  assert.ok(h.commands.some(c => c[0] === 'strokeCircle' && c[1] === 457 && c[2] === 375 && c[3] === 25));
-  assert.ok(!h.commands.some(c => c[0] === 'strokeCircle' && c[1] === 240 && c[2] === 60 && c[3] === 43));
+  assert.ok(h.commands.some(c => c[0] === 'strokeCircle' && c[1] === poses[2].x && c[2] === poses[2].y && c[3] === poses[2].aimRadius));
+  assert.ok(!h.commands.some(c => c[0] === 'strokeCircle' && c[1] === poses[0].x && c[2] === poses[0].y && c[3] === poses[0].aimRadius));
 });
 
 test('Boarding Bomber preview round trips to the same world footprint as a real mine', () => {

@@ -3,7 +3,7 @@ import type { InputFrame } from './input';
 import { AFT_RACK_VIEW, boardingAftInput, projectAftPoint, projectAftRing } from './boarding-aft-view';
 import {
   createBoardingPilot, stepBoardingPilot, boardingPilotAttackPosition, BOARDING_PILOT_FORWARD_SPEED, type BoardingPilotState,
-  createBoarding, stepBoarding, BOARDING_INTERIOR_SLOTS, BOARDING_DEPTHS, boardingCover, boardingBoarderPose, boardingAirlockTargetActive, BOARDING_AIRLOCK_TARGETS, BOARDING_EJECTION_TIME, BOARDING_VENT_WARNING, BOARDING_VENT_RECHARGE, difficultyFor, BOARDING_LINE, BOARDING_CYCLE, BOARDING_WARNING, BOARDING_CARRIER_RADIUS, BOARDING_GUNNER_AIM_PADDING, BOARDING_MINE_LIFETIME, BOARDING_MINE_COOLDOWN, boardingBlastRadius, type BoardingState, type BoardingInput,
+  createBoarding, stepBoarding, BOARDING_INTERIOR_SLOTS, BOARDING_DEPTHS, boardingCover, boardingBoarderPose, boardingAirlockTargetActive, BOARDING_AIRLOCK_TARGETS, BOARDING_EJECTION_TIME, BOARDING_VENT_WARNING, BOARDING_VENT_RECHARGE, difficultyFor, BOARDING_LINE, BOARDING_CYCLE, BOARDING_WARNING, BOARDING_CARRIER_RADIUS, boardingTurretPose, boardingTurretBreachSoon, BOARDING_MINE_LIFETIME, BOARDING_MINE_COOLDOWN, boardingBlastRadius, type BoardingState, type BoardingInput,
   createSpaceGunner, stepSpaceGunner, SPACE_GUNNER_DEFENSE_LINE, type SpaceGunnerInput, type SpaceGunnerState, type SpaceGunnerAttacker,
   gunnerTargetAt, gunnerFireEvery, GUNNER_SHOT_FEEDBACK_SECONDS, type GunnerShotFeedback,
   createBomber, createFlight, createGunner, createLifeSupport, createSpaceBattleBomber, createSpaceBattlePilot, stepBomber,
@@ -17,13 +17,6 @@ import {
   createSpaceLifeSupport, stepSpaceLifeSupport, SPACE_LIFE_PLATFORMS, SPACE_LIFE_SPARK_WARNING, SPACE_LIFE_REPAIR_SECONDS,
   type SpaceLifeInput, type SpaceLifeState, type Mine, type Explosion,
 } from './rules';
-
-// Reflect the old plan view without scaling its aim distances or keyboard speed.
-const turretY = (y: number) => HEIGHT - y;
-
-function boardingTurretInput(input: BoardingInput): BoardingInput {
-  return { ...input, y: -input.y, aimY: input.aimY === undefined ? undefined : turretY(input.aimY) };
-}
 
 export class FlightScene extends Phaser.Scene {
   boarding = createBoarding('Gunner');
@@ -109,7 +102,8 @@ export class FlightScene extends Phaser.Scene {
 
   preload() {
     // Only the game runtime requests these assets; setup remains lightweight.
-    for (const name of ['space', 'interior', 'player', 'enemy', 'asteroid', 'boarding-carrier', 'boarding-probe', 'boarding-shuttle', 'boarding-corridor', 'boarding-boarder', 'boarding-rifle']) {
+    for (const name of ['space', 'interior', 'player', 'enemy', 'asteroid', 'boarding-carrier', 'boarding-probe', 'boarding-shuttle', 'boarding-corridor', 'boarding-boarder', 'boarding-rifle',
+      'boarding-turret-canopy', 'boarding-turret-carrier', 'boarding-turret-probe', 'boarding-turret-shuttle']) {
       this.load.image(`illustrated-${name}`, new URL(`art/${name}.webp`, document.baseURI).href);
     }
   }
@@ -233,7 +227,7 @@ export class FlightScene extends Phaser.Scene {
       const first = this.role === 'Bomber' ? boardingAftInput(frame.first, mineDropPosition(this.boarding)) : frame.first;
       for (let i = 0; i < Math.ceil(milliseconds / 50); i++) {
         const input = i === 0 ? first : frame.continued;
-        stepBoarding(this.boarding, this.config, this.role === 'Gunner' ? boardingTurretInput(input) : input,
+        stepBoarding(this.boarding, this.config, input,
           Math.min(50, milliseconds - i * 50) / 1000);
         if (this.boarding.finished) { this.activeFlight = false; break; }
       }
@@ -291,9 +285,9 @@ export class FlightScene extends Phaser.Scene {
       : this.role === 'Pilot' ? this.flight.elapsed
         : this.role === 'Gunner' ? this.gunner.elapsed
           : this.role === 'Bomber' ? this.bomber.elapsed : this.lifeSupport.elapsed;
-    this.paintBackground(this.backgroundGraphics, this.role === 'Pilot' || this.role === 'Bomber' || (this.situation === 'Asteroid Field' && (this.role === 'Gunner' || this.role === 'Life Support')) ? this.decorativeTime(elapsed) : elapsed);
+    this.paintBackground(this.backgroundGraphics, this.role === 'Pilot' || this.role === 'Bomber' || (this.situation === 'Boarding Party' && this.role === 'Gunner') || (this.situation === 'Asteroid Field' && (this.role === 'Gunner' || this.role === 'Life Support')) ? this.decorativeTime(elapsed) : elapsed);
     if (cockpit) this.paintBoardingPilot(g);
-    else if (this.situation === 'Boarding Party' && this.role === 'Gunner') this.paintBoardingTurret(g);
+    else if (this.situation === 'Boarding Party' && this.role === 'Gunner') this.paintBoardingTurret();
     else if (this.situation === 'Boarding Party' && this.role === 'Bomber') this.paintBoardingAft(g);
     else if (this.situation === 'Boarding Party') this.paintBoardingMode(g);
     else if (this.situation === 'Space Battle') {
@@ -476,123 +470,132 @@ export class FlightScene extends Phaser.Scene {
     }
   }
 
-  private paintBoardingTurret(g: Phaser.GameObjects.Graphics) {
+  private paintBoardingTurret() {
     const s = this.boarding;
-    const cx = WIDTH / 2, breach = turretY(BOARDING_LINE);
-    const muzzle = { x: cx, y: 463 };
+    const cx = WIDTH / 2;
     const ready = s.cooldown <= 0;
-    const lamp = ready ? 0x85f7e0 : 0xffca83;
+    const lamp = ready ? 0x9cebdc : 0xffc080;
+    const glass = this.graphicsLayer(1.1);
+    const hud = this.graphicsLayer(1.5);
 
-    // A fixed canopy leaves the entire approach clear, including targets near the sides.
-    g.fillStyle(0x0e192c);
-    g.fillPoints([{x: 0, y: 0}, {x: 85, y: 0}, {x: 18, y: 30}, {x: 0, y: 84}], true);
-    g.fillPoints([{x: WIDTH, y: 0}, {x: WIDTH - 85, y: 0}, {x: WIDTH - 18, y: 30}, {x: WIDTH, y: 84}], true);
-    g.fillPoints([{x: 0, y: 478}, {x: 100, y: 506}, {x: 380, y: 506}, {x: WIDTH, y: 478},
-      {x: WIDTH, y: HEIGHT}, {x: 0, y: HEIGHT}], true);
-    g.lineStyle(3, 0x507b93);
-    for (const side of [0, WIDTH]) {
-      const inward = side === 0 ? 1 : -1;
-      g.lineBetween(side + inward * 85, 0, side + inward * 18, 30);
-      g.lineBetween(side + inward * 18, 30, side, 84);
-      g.lineBetween(side, 478, side + inward * 100, 506);
+    const canopy = this.drawArt('boarding-turret-canopy', cx, HEIGHT / 2, WIDTH, HEIGHT, 0, 1, false, 1);
+    const muzzleY = canopy ? 428 : 449;
+    if (!canopy) {
+      const frame = this.graphicsLayer(1);
+      frame.fillStyle(0x101822);
+      frame.fillPoints([{x: 0, y: 0}, {x: WIDTH, y: 0}, {x: WIDTH, y: 58},
+        {x: 423, y: 41}, {x: 57, y: 41}, {x: 0, y: 58}], true);
+      frame.fillRect(0, 0, 9, HEIGHT);
+      frame.fillRect(WIDTH - 9, 0, 9, HEIGHT);
+      frame.fillPoints([{x: 0, y: 440}, {x: 78, y: 462}, {x: 402, y: 462}, {x: WIDTH, y: 440},
+        {x: WIDTH, y: HEIGHT}, {x: 0, y: HEIGHT}], true);
+      frame.lineStyle(3, 0x66747f);
+      frame.lineBetween(57, 41, 423, 41);
+      frame.lineBetween(0, 440, 78, 462);
+      frame.lineBetween(402, 462, WIDTH, 440);
+      frame.fillStyle(0x27343c);
+      frame.fillRoundedRect(67, 481, 346, 62, 12);
+      for (const x of [139, 341]) {
+        frame.fillStyle(0x0c1119);
+        frame.fillRoundedRect(x - 14, 470, 28, 54, 8);
+        frame.fillStyle(0x48515a);
+        frame.fillRoundedRect(x - 21, 480, 42, 30, 10);
+      }
     }
 
-    // The gun is foreground scenery. The reticle still moves across the whole window.
-    g.fillStyle(0x172638);
-    g.fillPoints([{x: 174, y: 520}, {x: 198, y: 486}, {x: 220, y: 478}, {x: 260, y: 478},
-      {x: 282, y: 486}, {x: 306, y: 520}], true);
-    g.lineStyle(2, 0x507b93);
-    g.lineBetween(174, 520, 198, 486); g.lineBetween(306, 520, 282, 486);
-    g.fillStyle(0x32485b);
-    g.fillPoints([{x: 214, y: 499}, {x: 226, y: muzzle.y}, {x: 254, y: muzzle.y}, {x: 266, y: 499}], true);
-    g.fillStyle(0x071321);
-    g.fillRect(226, muzzle.y, 28, 6);
-    g.lineStyle(2, 0x6b8797);
-    g.lineBetween(226, muzzle.y + 6, 215, 499);
-    g.lineBetween(254, muzzle.y + 6, 265, 499);
-    g.fillStyle(0x1f3246);
-    g.fillRoundedRect(209, 496, 62, 16, 4);
-    g.fillStyle(lamp);
-    g.fillRect(230, muzzle.y + 9, 20, 3);
-    g.fillStyle(0x708f9e);
-    for (const x of [217, 263]) g.fillCircle(x, 503, 2);
-
-    const danger = s.grace > 0;
-    const thresholdColor = danger ? 0xff827b : 0xffbd6b;
-    g.lineStyle(danger ? 3 : 2, thresholdColor, danger ? .95 : .65);
-    for (let x = 16; x < WIDTH - 16; x += 24)
-      g.lineBetween(x, breach, x + 12, breach);
-    this.drawLabel('BREACH LINE', cx, breach + 12, 13, '#ffca83');
-
-    const c = s.carrier;
-    if (c.hp > 0) {
-      const y = turretY(c.y);
-      const scale = .67 + .33 * Math.max(0, Math.min(1, (y - 60) / 250));
-      const r = BOARDING_CARRIER_RADIUS + BOARDING_GUNNER_AIM_PADDING;
-      if (!this.drawArt('boarding-carrier', c.x, y, 70 * scale, 70 * scale, Math.PI)) {
-        g.fillStyle(0x68485f);
-        g.fillRoundedRect(c.x - 33 * scale, y - 23 * scale, 66 * scale, 46 * scale, 8);
-        g.fillStyle(0xff9781);
-        g.fillRect(c.x - 20 * scale, y + 4 * scale, 40 * scale, 6 * scale);
-      }
-      g.lineStyle(2, 0xff9781, .75);
-      g.strokeCircle(c.x, y, r);
-      g.fillStyle(0x20283e);
-      g.fillRect(c.x - 30, y - r - 8, 60, 4);
-      g.fillStyle(0xff9781);
-      g.fillRect(c.x - 30, y - r - 8, 60 * c.hp / c.maxHp, 4);
+    // Reflected light stays in the corners, outside the useful part of the window.
+    glass.fillStyle(0xa1c5db, .08);
+    for (const x of [0, WIDTH]) {
+      const inward = x === 0 ? 1 : -1;
+      glass.fillPoints([{x, y: 51}, {x: x + 91 * inward, y: 51},
+        {x: x + 55 * inward, y: 68}, {x, y: 105}], true);
+      glass.lineStyle(2, 0xd0e1e7, .19);
+      glass.lineBetween(x + 14 * inward, 68, x + 48 * inward, 56);
+      glass.lineBetween(x + 10 * inward, 361, x + 10 * inward, 421);
+    }
+    if (s.impactFlash > 0) {
+      glass.lineStyle(8, 0xff6862, Math.min(.75, s.impactFlash * 3));
+      glass.strokeRect(12, 55, WIDTH - 24, 374);
     }
 
-    for (const p of s.pods) {
-      const y = turretY(p.y), r = p.radius + BOARDING_GUNNER_AIM_PADDING;
-      const shuttle = p.kind === 'shuttle', warning = p.warningRemaining > 0;
-      const color = warning ? 0xffca83 : shuttle ? 0xffa9bc : 0xffd593;
-      const scale = .68 + .32 * Math.max(0, Math.min(1, y / breach));
-      const rotation = Math.atan2(-p.vy, p.vx) + Math.PI / 2;
-      if (!warning) {
-        g.lineStyle(2, color, .45);
-        g.lineBetween(p.x, y, p.x - p.vx * .16, y + p.vy * .16);
+    const carrier = s.carrier;
+    const targets = [
+      ...s.pods.map(pod => ({ world: pod, pod })),
+      ...(carrier.hp > 0 ? [{ world: carrier, pod: null }] : []),
+    ].sort((a, b) => b.world.y - a.world.y);
+    for (const { world, pod } of targets) {
+      const { x, y, scale, aimRadius: r } = boardingTurretPose(world, pod?.radius ?? BOARDING_CARRIER_RADIUS);
+      const kind = pod?.kind ?? 'carrier';
+      const shuttle = kind === 'shuttle';
+      const warning = !!pod && pod.warningRemaining > 0;
+      const imminent = !!pod && boardingTurretBreachSoon(pod);
+      const color = imminent ? 0xff786e : warning ? 0xffc080 : shuttle ? 0xffb6b2 : pod ? 0xffd5a0 : 0xf8aa92;
+      const width = (pod ? shuttle ? 37 : 25 : 81) * scale;
+      const height = (pod ? (shuttle ? 17 : 26) : 32) * scale;
+      // A nearer sprite covers a distant one, including when either uses its procedural fallback.
+      const depth = -1 - world.y / 1000;
+      if (!this.drawArt('boarding-turret-' + kind, x, y, width, height, 0, 1, false, depth)) {
+        const craft = this.graphicsLayer(depth);
+        const w = width / 2, h = height / 2;
+        craft.fillStyle(0x66727b);
+        craft.fillPoints([{x: x - w, y: y + h * .48}, {x: x - w * .75, y: y - h * .62},
+          {x: x - w * .24, y: y - h}, {x: x + w * .24, y: y - h},
+          {x: x + w * .75, y: y - h * .62}, {x: x + w, y: y + h * .48},
+          {x: x + w * .55, y: y + h}, {x: x - w * .55, y: y + h}], true);
+        craft.fillStyle(0x2a3848);
+        craft.fillRoundedRect(x - w * .68, y - h * .31, w * 1.36, h * .63, 2);
+        craft.fillStyle(color);
+        if (pod && !shuttle) craft.fillCircle(x, y, 3 * scale);
+        else for (const side of [-1, 1]) craft.fillCircle(x + side * w * .55, y + h * .16, 2.5 * scale);
       }
-      if (!this.drawArt(shuttle ? 'boarding-shuttle' : 'boarding-probe', p.x, y,
-        (shuttle ? 38 : 24) * scale, (shuttle ? 38 : 26) * scale, rotation)) {
-        const d = p.radius * scale;
-        g.fillStyle(shuttle ? 0xa5688b : 0xc58a53);
-        if (shuttle) g.fillRoundedRect(p.x - d, y - d * .68, 2 * d, 1.36 * d, 5);
-        else g.fillPoints([{x: p.x, y: y - d}, {x: p.x + d, y}, {x: p.x, y: y + d}, {x: p.x - d, y}], true);
+
+      const hit = (pod?.hitFlash ?? 0) > 0;
+      hud.lineStyle(warning || imminent || hit ? 2.5 : 1.25, hit ? 0xffffff : color, warning || imminent ? .95 : .58);
+      hud.strokeCircle(x, y, r);
+      if (warning || imminent)
+        this.drawLabel(warning ? 'LAUNCH' : 'BREACH', Math.max(30, Math.min(WIDTH - 30, x)), y + r + 10,
+          12, warning ? '#ffcc90' : '#ff9a90');
+      if (shuttle && pod) for (let i = 0; i < pod.maxHp; i++) {
+        hud.fillStyle(i < pod.hp ? 0xffbcaa : 0x413039);
+        hud.fillRect(x - 9 + i * 10, y - r - 6, 8, 3);
       }
-      g.lineStyle(warning || p.hitFlash > 0 ? 3 : 1.5, p.hitFlash > 0 ? 0xffffff : color, warning ? 1 : .8);
-      g.strokeCircle(p.x, y, r);
-      if (warning) this.drawLabel('LAUNCH', Math.max(30, Math.min(WIDTH - 30, p.x)), y + r + 11, 13, '#ffca83');
-      if (shuttle) for (let i = 0; i < p.maxHp; i++) {
-        g.fillStyle(i < p.hp ? 0xffb6a0 : 0x45344e);
-        g.fillRect(p.x - 9 + i * 10, y - r - 7, 8, 4);
-      }
+    }
+
+    // A small physical sight anchors the laser to the turret below the window.
+    if (!canopy) {
+      hud.fillStyle(0x152029);
+      hud.fillPoints([{x: cx - 24, y: 487}, {x: cx - 11, y: muzzleY}, {x: cx + 11, y: muzzleY},
+        {x: cx + 24, y: 487}], true);
+      hud.lineStyle(2, 0x687b82);
+      hud.lineBetween(cx - 24, 487, cx - 11, muzzleY);
+      hud.lineBetween(cx + 24, 487, cx + 11, muzzleY);
+      hud.fillStyle(lamp);
+      hud.fillRect(cx - 7, muzzleY + 8, 14, 3);
     }
 
     if (s.beamTime > 0) {
-      const y = turretY(s.beamY);
       if (!this.reducedMotion?.matches) {
-        g.lineStyle(8, 0x79e1ce, .23);
-        g.lineBetween(muzzle.x, muzzle.y, s.beamX, y);
+        hud.lineStyle(7, 0x81decf, .25);
+        hud.lineBetween(cx, muzzleY, s.beamX, s.beamY);
       }
-      g.lineStyle(2, 0xadffee, .9);
-      g.lineBetween(muzzle.x, muzzle.y, s.beamX, y);
+      hud.lineStyle(2, 0xbdfff2, .9);
+      hud.lineBetween(cx, muzzleY, s.beamX, s.beamY);
     }
     if (s.hitFlash > 0) {
-      const x = s.hitX, y = turretY(s.hitY);
-      g.lineStyle(2, 0xffffff);
+      const { hitX: x, hitY: y } = s;
+      hud.lineStyle(2, 0xffffff);
       for (const side of [-1, 1]) {
-        g.lineBetween(x + side * 6, y - 6, x + side * 12, y - 12);
-        g.lineBetween(x + side * 6, y + 6, x + side * 12, y + 12);
+        hud.lineBetween(x + side * 6, y - 6, x + side * 12, y - 12);
+        hud.lineBetween(x + side * 6, y + 6, x + side * 12, y + 12);
       }
     }
 
-    g.fillStyle(0x071321);
-    g.fillRoundedRect(16, 518, WIDTH - 32, 27, 5);
-    this.drawLabel(c.hp > 0 ? 'CARRIER ' + c.hp + '/' + c.maxHp : 'CARRIER DISABLED', 94, 531, 14, '#ffb39f');
-    this.drawLabel(ready ? 'READY' : 'COOLING', cx, 531, 14, ready ? '#a6f7e5' : '#ffca83');
-    this.drawLabel('BREACHES ' + s.breaches, WIDTH - 89, 531, 14, danger ? '#ffb39f' : '#c3e3ec');
-    this.paintWeaponTarget(this.graphicsLayer(3), s.crosshairX, turretY(s.crosshairY), 14, lamp, true);
+    hud.fillStyle(0x071119, .95);
+    hud.fillRoundedRect(16, 520, WIDTH - 32, 25, 5);
+    this.drawLabel(carrier.hp > 0 ? 'CARRIER ' + carrier.hp + '/' + carrier.maxHp : 'CARRIER DISABLED', 94, 532, 14, '#ffb39f');
+    this.drawLabel(ready ? 'READY' : 'COOLING', cx, 532, 14, ready ? '#a6f7e5' : '#ffca83');
+    this.drawLabel('BREACHES ' + s.breaches, WIDTH - 89, 532, 14, s.impactFlash > 0 ? '#ffb39f' : '#c3e3ec');
+    this.paintWeaponTarget(this.graphicsLayer(3), s.crosshairX, s.crosshairY, 14, lamp, true);
   }
 
   private paintBoardingAft(g: Phaser.GameObjects.Graphics) {

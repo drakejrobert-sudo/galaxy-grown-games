@@ -74,7 +74,7 @@ const input = createInput(canvas);
 const gunnerInput = createGunnerInput(canvas);
 const boardingHelp: Record<Role, string> = {
   Pilot: 'Follow the teal rings and dodge missiles or probes after a miss. Steer with arrows / WASD or hold and drag from where you touch. Diamond rings mark salvage bonuses. Plus rings repair hull.',
-  Gunner: 'Aim from the turret. Shoot probes once and armored shuttles twice before they cross the breach line. Target the carrier between launches. Touch to aim and hold Fire; mouse click or Space/Enter also fires. Aim with mouse or arrows/WASD. Flight is automatic.',
+  Gunner: 'Aim through the canopy. Shoot probes once and armored shuttles twice. LAUNCH marks a target you can shoot; BREACH marks one about to hit. Target the carrier between launches. Touch to aim and hold Fire; mouse click or Space/Enter also fires. Aim with mouse or arrows/WASD. Flight is automatic.',
   Bomber: 'Look out the rear window during automatic flight. Tap or drag and release above the rack to place a mine. Mouse hover previews; primary release launches. Left/Right or A/D rotates aim; Down/S aims straight aft. Space/Enter or Launch mine fires once using the preview. Intercept incoming craft before the breach line and mine the carrier when it closes.',
   'Life Support': 'Shoot boarders when they raise rifles. Red lasers hurt on arrival and keep coming after a kill; surviving enemies advance. Shoot the glowing target beside a side door while boarders cross its bay to vent them. Late shots can miss the crossing. Aim with touch/mouse or arrows/WASD; Fire, mouse click or Space/Enter shoots.',
 };
