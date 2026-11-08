@@ -10,7 +10,7 @@ import {
   createSpaceBattleBomber, stepSpaceBattleBomber, spaceBattleBomberScoreFor,
   SPACE_BOMBER_LAUNCH_DISTANCE, mineDropPosition,
   createSpaceLifeSupport, stepSpaceLifeSupport, spaceLifeScoreFor,
-  type FlightConfig, type ScoreMode, type LifeSupportRoute,
+  difficultyFor, rateScore, type BoardingState, type FlightConfig, type ScoreMode, type LifeSupportRoute,
 } from '../src/game/rules.ts';
 
 type Profile = 'passive' | 'routine' | 'engaged';
@@ -42,7 +42,7 @@ function pilotDirection(s: { x: number; y: number }, hazards: { x: number; y: nu
   const targetX = nearby ? Math.max(22, Math.min(WIDTH - 22, s.x + (s.x < nearby.x ? -100 : 100))) : WIDTH / 2;
   return direction(s, { x: targetX, y: HEIGHT - 85 });
 }
-function run(mode: ScoreMode, config: FlightConfig, profile: Profile, seed: number): number {
+function run(mode: ScoreMode, config: FlightConfig, profile: Profile, seed: number, onBoardingResult?: (s: BoardingState) => void): number {
   const random = seeded(seed);
   if (mode === 'boarding-pilot') {
     const s = createBoardingPilot(config);
@@ -76,6 +76,7 @@ function run(mode: ScoreMode, config: FlightConfig, profile: Profile, seed: numb
         ...(mineTarget?{launch:{x:mineTarget.x,y:mineTarget.y}}:{}),
       },step,random);
     }
+    onBoardingResult?.(s);
     return boardingScoreFor(s);
   }
 
@@ -166,12 +167,33 @@ function run(mode: ScoreMode, config: FlightConfig, profile: Profile, seed: numb
 function percentile(sorted: number[], fraction: number): number {
   return sorted[Math.floor((sorted.length - 1) * fraction)];
 }
+function ratingSummary(ratings: number[]) {
+  if (!ratings.length) return '0 runs';
+  ratings.sort((a, b) => a - b);
+  const atCeiling = ratings.filter(rating => rating === 100).length;
+  return `${ratings.length} runs, median ${percentile(ratings, .5)}, ${atCeiling} at 100`;
+}
+
+const reportVictory = process.argv.includes('--carrier-victory');
+if (reportVictory) process.stdout.write('Mode\tDifficulty\tNatural 1\tVictory\tOther endings\n');
 for (const mode of modes) {
+  if (reportVictory && mode !== 'boarding-gunner' && mode !== 'boarding-bomber') continue;
   const scores: number[] = [];
-  for (const total of totals) for (const naturalOne of [false, true]) for (const profile of profiles)
-    for (let seed = 1; seed <= seedsPerCombination; seed++) {
-      scores.push(run(mode, { total, naturalOne }, profile, seed * 7919 + total * 101 + (naturalOne ? 1 : 0)));
+  for (const total of totals) for (const naturalOne of [false, true]) {
+    const victories: number[] = [], otherEndings: number[] = [];
+    const record = reportVictory ? (s: BoardingState) => {
+      const { rating } = rateScore(mode, boardingScoreFor(s), s.endReason === 'hull');
+      (s.endReason === 'victory' ? victories : otherEndings).push(rating);
+    } : undefined;
+    for (const profile of profiles) for (let seed = 1; seed <= seedsPerCombination; seed++) {
+      scores.push(run(mode, { total, naturalOne }, profile, seed * 7919 + total * 101 + (naturalOne ? 1 : 0), record));
     }
+    if (reportVictory) {
+      const row = [mode, difficultyFor(total), naturalOne ? 'Yes' : 'No', ratingSummary(victories), ratingSummary(otherEndings)];
+      process.stdout.write(row.join('\t') + '\n');
+    }
+  }
+  if (reportVictory) continue;
   scores.sort((a, b) => a - b);
   const low = percentile(scores, 0.1), high = percentile(scores, 0.9);
   if (high <= low) throw new Error(`${mode}: calibration anchors collapsed`);

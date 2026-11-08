@@ -35,7 +35,9 @@ export function rateScore(mode: ScoreMode, rawPoints: number, failed: boolean): 
 }
 export function ratingReportText(mode: ScoreMode, rawPoints: number, failed: boolean): string {
   const { rating, band, capped } = rateScore(mode, rawPoints, failed);
-  return `Rating: ${rating}/100 • Advisory band: ${band}${capped ? ` (capped at Success after ${mode === 'boarding-pilot' ? 'course failure' : 'system failure'})` : ''} • Provisional v${mode === 'boarding-pilot' ? '0.8' : SCORING_VERSION}`;
+  const version = mode === 'boarding-pilot' ? '0.8'
+    : mode === 'boarding-gunner' || mode === 'boarding-bomber' ? '0.9' : SCORING_VERSION;
+  return `Rating: ${rating}/100 • Advisory band: ${band}${capped ? ` (capped at Success after ${mode === 'boarding-pilot' ? 'course failure' : 'system failure'})` : ''} • Provisional v${version}`;
 }
 export const WIDTH = 480;
 export const HEIGHT = 560;
@@ -1682,7 +1684,7 @@ export interface BoardingState {
   beamX: number;
   beamY: number;
   finished: boolean;
-  endReason: 'time' | 'hull' | null;
+  endReason: 'time' | 'hull' | 'victory' | null;
 }
 export function createBoarding(role: BoardingState['role']): BoardingState {
   const hp = role === 'Bomber' ? 5 : 36;
@@ -1697,10 +1699,28 @@ export function createBoarding(role: BoardingState['role']): BoardingState {
 export function boardingScoreMode(role: BoardingState['role']): ScoreMode {
   return role === 'Life Support' ? 'boarding-life-support' : role === 'Gunner' ? 'boarding-gunner' : 'boarding-bomber';
 }
+const BOARDING_TIME_POINTS_PER_SECOND = 5;
+
+function boardingTimePoints(elapsed: number): number {
+  return Math.round(elapsed * BOARDING_TIME_POINTS_PER_SECOND);
+}
+
+export function boardingVictoryBonus(s: BoardingState): number {
+  if (s.endReason !== 'victory')
+    return 0;
+  return 500 + boardingTimePoints(DURATION) - boardingTimePoints(s.elapsed);
+}
+
+export function boardingOutcome(s: BoardingState): string {
+  if (s.endReason === 'victory')
+    return 'Victory — carrier destroyed';
+  return s.endReason === 'hull' ? 'Defense overwhelmed' : 'Defense complete';
+}
+
 export function boardingScoreFor(s: BoardingState): number {
-  return Math.round(s.elapsed * 5) + s.hull * 100 +
+  return boardingTimePoints(s.elapsed) + s.hull * 100 +
     s.intercepted * 100 + s.carrierDamage * (s.role === 'Bomber' ? 100 : 20) +
-    (s.disabled ? 500 : 0) + s.shotBoarders * 100 + s.ejected * 125;
+    boardingVictoryBonus(s) + s.shotBoarders * 100 + s.ejected * 125;
 }
 export function boardingResultText(config: FlightConfig, s: BoardingState): string {
   const impairment = s.role === 'Gunner' ? 'half firing rate'
@@ -1713,7 +1733,8 @@ export function boardingResultText(config: FlightConfig, s: BoardingState): stri
       : `Craft intercepted: ${s.intercepted} (probes ${s.probesIntercepted}, shuttles ${s.shuttlesIntercepted}) • Carrier damage: ${s.carrierDamage} • Carrier disabled: ${s.disabled ? 'Yes' : 'No'}`,
     `Damaging hits: ${s.hits} • Boarding breaches: ${s.breaches} • Shots: ${s.shots} • Mines: ${s.minesPlaced}`,
     ratingReportText(boardingScoreMode(s.role), boardingScoreFor(s), s.hull <= 0),
-    s.endReason === 'hull' ? 'Defense overwhelmed' : 'Defense complete', 'GM determines campaign outcome.'].join('\n');
+    ...(s.endReason === 'victory' ? [`Victory bonus: +${boardingVictoryBonus(s)} points (500 for the carrier plus unused time)`] : []),
+    boardingOutcome(s), 'GM determines campaign outcome.'].join('\n');
 }
 function boardingDamage(s: BoardingState, time: number, oldGrace: number, dt: number) {
   if (time < oldGrace || s.hull <= 0)
@@ -1722,7 +1743,7 @@ function boardingDamage(s: BoardingState, time: number, oldGrace: number, dt: nu
   s.hits++;
   s.grace = 1.25 - (dt - time);
 }
-function damageCarrier(s: BoardingState) {
+function damageCarrier(s: BoardingState, hitTime: number) {
   if (s.carrier.hp <= 0)
     return;
   s.carrier.hp--;
@@ -1731,8 +1752,12 @@ function damageCarrier(s: BoardingState) {
   const hit = s.role === 'Gunner' ? boardingTurretPose(s.carrier) : s.carrier;
   s.hitX = hit.x;
   s.hitY = hit.y;
-  if (s.carrier.hp === 0)
+  if (s.carrier.hp === 0) {
     s.disabled = true;
+    s.elapsed = hitTime;
+    s.finished = true;
+    s.endReason = 'victory';
+  }
 }
 function boardingAim(s: BoardingState, input: BoardingInput, dt: number) {
   if (input.aimX !== undefined && input.aimY !== undefined && Number.isFinite(input.aimX) && Number.isFinite(input.aimY)) {
@@ -1980,9 +2005,11 @@ export function stepBoarding(s: BoardingState, config: FlightConfig, input: Boar
         .filter(p => p.distance <= p.pose.aimRadius + 1e-9)
         .sort((a, b) => a.distance - b.distance || Number(a.carrier) - Number(b.carrier) || a.id - b.id);
       const target = targets[0];
-      if (target?.carrier)
-        damageCarrier(s);
-      else if (target) {
+      if (target?.carrier) {
+        damageCarrier(s, s.elapsed);
+        if (s.finished)
+          return;
+      } else if (target) {
         const pod = s.pods.find(p => p.id === target.id)!;
         pod.hp--;
         pod.hitFlash = .15;
@@ -2137,13 +2164,16 @@ export function stepBoarding(s: BoardingState, config: FlightConfig, input: Boar
         const point = at(p, e.time);
         if (p === e.path || Math.hypot(point.x - e.x!, point.y - e.y!) <= mine.blastRadius + 1e-9) {
           if (p.carrier)
-            damageCarrier(s);
+            damageCarrier(s, Math.min(DURATION, oldTime + e.time));
           else {
             removed.add(p.id);
             recordBoardingInterception(s, p.id);
           }
         }
       }
+      // Credit the whole winning blast before stopping the event queue.
+      if (s.finished)
+        break;
     }
     else {
       if (!e.path.carrier)
@@ -2159,6 +2189,8 @@ export function stepBoarding(s: BoardingState, config: FlightConfig, input: Boar
   }
   s.pods = s.pods.filter(p => !removed.has(p.id) && p.y > -40 && p.y < HEIGHT + 60 && p.x > -60 && p.x < WIDTH + 60);
   s.mines = s.mines.filter(m => !spent.has(m.id) && m.expiresIn > 0);
+  if (s.finished)
+    return;
   // Newly launched pods start moving on the following step, never teleport into contact.
   if (s.carrier.hp > 0 && s.hull > 0) {
     s.spawnIn -= dt;

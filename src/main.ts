@@ -4,7 +4,7 @@ import './bomber.css';
 import type { FlightScene } from './game/scene';
 import { createBomberInput, createGunnerInput, createInput, createLifeSupportInput, createSpaceBomberInput, createSpaceLifeInput, createSpaceGunnerInput } from './game/input';
 import {
-  boardingScoreFor, boardingScoreMode, boardingResultText,
+  boardingScoreFor, boardingScoreMode, boardingResultText, boardingOutcome, boardingVictoryBonus,
   boardingPilotScore, boardingPilotOutcome, boardingPilotResultText,
   spaceGunnerResultText, spaceGunnerScoreFor,
   bomberResultText, bomberScoreFor, difficultyFor, parseTotal, resultText, scoreFor,
@@ -141,11 +141,12 @@ function fillSummary(text: string) {
   get<HTMLTextAreaElement>('summary').value = text;
   sizeSummary();
 }
-function showRatedResult(mode: ScoreMode, points: number, failed: boolean) {
+function showRatedResult(mode: ScoreMode, points: number, failed: boolean, victoryBonus = 0) {
   const { rating, band, capped } = rateScore(mode, points, failed);
   get('final-score').textContent = String(rating);
   get('rating-band').textContent = `${band}${capped ? ` · capped after ${mode === 'boarding-pilot' ? 'course failure' : 'system failure'}` : ''}`;
-  get('raw-points').textContent = `${points} raw points · Provisional GM advisory`;
+  const bonus = victoryBonus ? ` · Victory bonus +${victoryBonus} points` : '';
+  get('raw-points').textContent = `${points} raw points${bonus} · Provisional GM advisory`;
 }
 window.addEventListener('resize', sizeSummary);
 function refreshSetup() {
@@ -397,8 +398,8 @@ scene.onBoardingStep = s => {
   if (!s.finished) return;
   inFlight = false; input.enable(false); gunnerInput.enable(false); spaceGunnerInput.enable(false);
   bomberInput.enable(false); spaceBomberInput.enable(false); lifeSupportInput.enable(false); spaceLifeInput.enable(false);
-  show('results'); get('outcome').textContent = s.hull <= 0 ? 'Defense overwhelmed.' : 'Defense complete.';
-  showRatedResult(boardingScoreMode(s.role), boardingScoreFor(s), s.hull <= 0);
+  show('results'); get('outcome').textContent = boardingOutcome(s);
+  showRatedResult(boardingScoreMode(s.role), boardingScoreFor(s), s.hull <= 0, boardingVictoryBonus(s));
   fillSummary(boardingResultText(config,s)); get('copy-status').textContent = ''; get('copy').focus();
 };
 scene.onSpaceGunnerStep = s => {

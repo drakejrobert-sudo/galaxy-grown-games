@@ -367,9 +367,41 @@ test('deferred first launch recovers from load failure, starts once, and retry r
     assert.equal(JSON.stringify(readyScene.boarding),before);
     assert.equal(spaceGunnerInputEnabled,false);assert.equal(spaceBomberInputEnabled,false);
     element('resume').listeners.get('click')();assert.equal(readyScene.boarding.crosshairX,aim);assert.equal(readyScene.boarding.aimDistance,range);
-    readyScene.boarding.finished=true;readyScene.boarding.endReason='time';readyScene.onBoardingStep(readyScene.boarding);
-    assert.match(element('summary').value,/Boarding Party/);assert.ok(element('summary').value.includes(role));
-    assert.equal(spaceGunnerInputEnabled,false);assert.equal(spaceBomberInputEnabled,false);
+    const boarding = readyScene.boarding;
+    if (role === 'Gunner') {
+      boarding.elapsed = 12;
+      boarding.carrier.hp = 1;
+      boarding.carrierDamage = 35;
+      boarding.cooldown = 0;
+      const aim = rules.boardingTurretPose(boarding.carrier);
+      rules.stepBoarding(boarding, { total: 17, naturalOne: true },
+        { x: 0, y: 0, firing: true, aimX: aim.x, aimY: aim.y }, .05);
+    } else {
+      boarding.finished = true;
+      boarding.endReason = 'time';
+    }
+    readyScene.onBoardingStep(boarding);
+    assert.match(element('summary').value, /Boarding Party/);
+    assert.ok(element('summary').value.includes(role));
+    assert.equal(spaceGunnerInputEnabled, false);
+    assert.equal(spaceBomberInputEnabled, false);
+    if (role === 'Gunner') {
+      assert.equal(element('outcome').textContent, 'Victory — carrier destroyed');
+      assert.match(element('raw-points').textContent, /1820 raw points · Victory bonus \+740 points/);
+      copyShouldFail = false;
+      await element('copy').listeners.get('click')();
+      assert.equal(copiedText, element('summary').value);
+      assert.match(copiedText, /Victory bonus: \+740 points/);
+      element('again').listeners.get('click')();
+      await submit();
+      assert.equal(readyScene.boarding.endReason, null);
+      assert.equal(readyScene.boarding.elapsed, 0);
+      assert.equal(readyScene.boarding.carrier.hp, 36);
+      assert.equal(rules.boardingVictoryBonus(readyScene.boarding), 0);
+      element('abandon').listeners.get('click')();
+    } else {
+      assert.doesNotMatch(element('raw-points').textContent, /Victory/);
+    }
   }
 
 });

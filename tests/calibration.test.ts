@@ -25,9 +25,12 @@ test('seeded calibration preserves unchanged references and records redesigned s
     if (mode === 'boarding-pilot') {
       assert.deepEqual(SCORE_ANCHORS[mode], { low: 0, high: 1650 });
       assert.deepEqual([min, low, median, high, max].map(Number), [100, 100, 1500, 1650, 1650]);
+    } else if (mode === 'boarding-gunner') {
+      assert.deepEqual(SCORE_ANCHORS[mode], { low: 46, high: 3220 });
+      assert.deepEqual([min, low, median, high, max].map(Number), [35, 46, 299, 3020, 4220]);
     } else if (mode === 'boarding-bomber') {
       assert.deepEqual(SCORE_ANCHORS[mode], { low: 46, high: 1454 });
-      // Drift changes the synthetic outcomes. Live rating anchors await owner playtest.
+      // Live rating anchors await owner playtest.
       assert.deepEqual([min, low, median, high, max].map(Number), [35, 46, 361, 1700, 3963]);
     } else if (mode.startsWith('boarding-')) {
       assert.deepEqual({ low: Number(low), high: Number(high) }, SCORE_ANCHORS[mode as ScoreMode]);

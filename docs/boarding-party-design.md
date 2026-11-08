@@ -18,7 +18,7 @@ A carrier starts at (240,500), radius 36. Every 12 seconds it locks a target col
 - **Gunner:** automatic ship flight at y=140. Aim at pods or carrier; each immediate shot deals one damage to the closest target within radius+7, then pod-before-carrier and entity ID break ties. Misses consume cooldown. The carrier has 36 HP. Pods crossing y=160 with their leading edge count as boarding breaches. Each damaging breach costs one of three hull; shared 1.25-second grace prevents simultaneous damage. Natural 1 doubles firing cooldown only.
 - **Bomber:** automatic flight, same y=140 and boarding line. Reuse the approved aft launcher contract: rear 180°, 0–100px, default straight aft/max range, 500px/s travel, immediate rack arming, 120°/s keyboard rotation, one attempt per press and no cooldown banking. Mines last 4.5 seconds with 0.85-second cooldown and 58px blast. Swept contact triggers an explosion at its actual location; nearby pods score once and the carrier loses one HP per blast. Its station-specific health is five HP. Natural 1 multiplies radius by sqrt(0.5). Chronological breach/mine ordering prevents already-breached pods from triggering later explosions; mines win exact contact ties.
 
-Disabling the carrier awards one bonus and stops further launches. Already launched pods stay active. The round continues to 60 seconds or hull failure. Carrier damage and disable status describe only that player's run.
+Destroying the carrier immediately wins the Gunner or Bomber round, even with craft still in flight. An earlier fatal breach ends the run in defeat. Carrier damage and the result describe only that player's run.
 
 ### Life Support
 
@@ -39,7 +39,7 @@ Gunner and Life Support use the approved direct touch/mouse aim exception: keybo
 
 ## Scores, map integration and saves
 
-Raw points: rounded survival seconds ×10 for Pilot or ×5 for other stations, +100 per health remaining, +100 per intercepted pod, +20 per carrier damage for Gunner or +100 for Bomber, +500 once for carrier disable, +100 per boarder shot and +125 per ejection. Misses, armor-only notions and duplicate removals award nothing. Use separate seeded 10th/90th-percentile anchors in scoring v0.6; old mode anchors stay fixed. Health failure caps Exceptional at Success. Numeric tuning and ratings remain provisional, requiring real playtesting.
+Raw points: rounded survival seconds ×10 for Pilot or ×5 for other stations, +100 per health remaining, +100 per intercepted pod, +20 per carrier damage for Gunner or +100 for Bomber, +500 once for carrier victory plus points for unused round time, +100 per boarder shot and +125 per ejection. Misses, armor-only notions and duplicate removals award nothing. Use separate seeded 10th/90th-percentile anchors in scoring v0.6; old mode anchors stay fixed. Health failure caps Exceptional at Success. Numeric tuning and ratings remain provisional, requiring real playtesting.
 
 New demos include **Boarding Party — repel boarders** at weight one alongside the four existing cards, including the rendezvous VTT card. Existing campaigns keep their libraries and tables. In GM preparation, create a minigame card with situation Boarding Party and assign a positive weight in route tables; end active journeys first to unlock library editing. Share links carry only `?situation=boarding-party`; players choose roles and checks themselves. The map pauses until explicit GM resolution.
 
