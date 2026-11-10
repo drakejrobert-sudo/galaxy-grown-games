@@ -28,3 +28,55 @@
 }
 
 .surface-nav{max-width:1160px;margin:auto;padding:15px 32px;display:flex;gap:24px}.surface-nav a{color:var(--muted);text-decoration:none;padding:8px 0}.surface-nav a:hover{color:var(--mint)}
+
+/* During a run the station bar replaces the site chrome. */
+#app[data-screen="play"] > :is(header, .surface-nav, footer) { display: none; }
+#app[data-screen="play"] > main {
+  max-width: none;
+  padding: max(8px, env(safe-area-inset-top)) max(12px, env(safe-area-inset-right))
+    max(8px, env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left));
+}
+#play {
+  position: relative;
+  display: grid;
+  grid-template-rows: auto auto auto minmax(0, 1fr) auto auto;
+  min-height: 0;
+  gap: 4px;
+}
+#play .play-heading h2 { margin: 0; font-size: 12px; }
+#play .hud { padding: 6px 10px; }
+#play .hud strong { margin-top: 2px; font-size: 18px; }
+#play .flight-status { margin: 0; line-height: 1.2; }
+#play :is(.route-controls, .platform-controls) {
+  grid-row: 5;
+  width: 100%;
+  margin: 0 auto;
+}
+#play .routing-info { grid-row: 6; width: 100%; margin: 0 auto; }
+.flight-stage { width: 100%; margin: 0 auto; }
+.flight-viewport { min-width: 0; }
+#pause-overlay { overflow: auto; justify-content: safe center; }
+#pause-overlay .help { max-width: 42ch; }
+
+@media (max-width: 700px), (max-height: 760px) {
+  #app[data-screen="play"] > main {
+    height: 100vh;
+    height: 100dvh;
+    min-height: 260px;
+  }
+  #play { height: 100%; }
+  #play .flight-stage { grid-template-rows: minmax(0, 1fr) auto; }
+  .flight-viewport { container-type: size; display: grid; place-items: center; }
+  .flight-wrap {
+    position: static;
+    width: min(100%, 480px, calc(100cqh * 6 / 7 + 2px));
+  }
+  #play .routing-info {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+  }
+  #pause-overlay { z-index: 2; border-radius: 14px; }
+}
