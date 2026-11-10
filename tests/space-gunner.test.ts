@@ -145,3 +145,20 @@ test('Natural 1 halves sustained firing for each band, with no banked cooldown a
   stepSpaceGunner(s, config, fire, 0.05); stepSpaceGunner(s, config, idle, 0.05);
   assert.equal(s.shots, 0);
 });
+
+test('space turret shot feedback identifies projectile interceptions and both armor outcomes', () => {
+  const state = createSpaceGunner();
+  const config = { total: 10, naturalOne: false };
+  const fire = { x: 0, y: 0, aimX: 240, aimY: 200, firing: true };
+  state.projectiles = [{ id: 1, x: 240, y: 200, radius: 10, speed: 0 }];
+  state.attackers = [{ id: 2, x: 240, y: 200, radius: 20, speed: 0, hp: 2, maxHp: 2, fired: true }];
+  for (const outcome of ['intercepted', 'armor-hit', 'destroyed']) {
+    state.cooldown = 0;
+    stepSpaceGunner(state, config, fire, .01);
+    assert.equal(state.shotFeedback?.outcome, outcome);
+    assert.equal(state.shotFeedback?.x, 240);
+    assert.equal(state.shotFeedback?.y, 200);
+  }
+  for (let i = 0; i < 4; i++) stepSpaceGunner(state, config, { ...fire, firing: false }, .05);
+  assert.equal(state.shotFeedback, null);
+});

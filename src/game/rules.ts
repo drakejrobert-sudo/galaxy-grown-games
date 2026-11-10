@@ -162,7 +162,7 @@ export interface GunnerInput {
 // Provisional cosmetic timing; does not participate in damage, targeting or scoring.
 export const GUNNER_SHOT_FEEDBACK_SECONDS = 0.18;
 export interface GunnerShotFeedback {
-  outcome: 'miss' | 'armor-hit' | 'destroyed';
+  outcome: 'miss' | 'armor-hit' | 'destroyed' | 'intercepted';
   x: number;
   y: number;
   radius: number;
@@ -749,6 +749,7 @@ export interface SpaceBattlePilotState {
   invulnerable: number;
   fuel: number;
   fuelCollected: number;
+  fuelPickupFlash: number;
   enemySpawnIn: number;
   fuelSpawnIn: number;
   enemies: EnemyShip[];
@@ -763,7 +764,7 @@ export interface SpaceBattlePilotState {
 export function createSpaceBattlePilot(): SpaceBattlePilotState {
   return {
     x: WIDTH / 2, y: HEIGHT - 85, elapsed: 0, hull: 3, hits: 0,
-    invulnerable: 0, fuel: SPACE_BATTLE_STARTING_FUEL, fuelCollected: 0,
+    invulnerable: 0, fuel: SPACE_BATTLE_STARTING_FUEL, fuelCollected: 0, fuelPickupFlash: 0,
     enemySpawnIn: 0.8, fuelSpawnIn: 2.2, enemies: [], shots: [], fuelCells: [],
     nextId: 1, finished: false, endReason: null, impactFlash: 0,
   };
@@ -785,6 +786,7 @@ export function stepSpaceBattlePilot(
   const tuning = SPACE_BATTLE_TUNING[difficultyFor(config.total)];
   s.elapsed += dt;
   s.fuel = Math.max(0, s.fuel - dt);
+  s.fuelPickupFlash = Math.max(0, s.fuelPickupFlash - dt);
   s.invulnerable = Math.max(0, s.invulnerable - dt);
   s.impactFlash = Math.max(0, s.impactFlash - dt);
 
@@ -836,6 +838,7 @@ export function stepSpaceBattlePilot(
   const collected = s.fuelCells.filter(cell => Math.hypot(cell.x - s.x, cell.y - s.y) < cell.radius + PILOT_RADIUS);
   if (collected.length) {
     s.fuelCollected += collected.length;
+    s.fuelPickupFlash = .6;
     s.fuel = Math.min(SPACE_BATTLE_MAX_FUEL, s.fuel + collected.reduce((sum, cell) => sum + cell.value, 0));
     const ids = new Set(collected.map(cell => cell.id));
     s.fuelCells = s.fuelCells.filter(cell => !ids.has(cell.id));
@@ -1424,13 +1427,14 @@ export interface SpaceGunnerState {
   cooldown: number; spawnIn: number; grace: number; nextId: number;
   attackers: SpaceGunnerAttacker[]; projectiles: SpaceGunnerProjectile[];
   beamTime: number; beamX: number; beamY: number; impactFlash: number;
+  shotFeedback: GunnerShotFeedback | null;
   finished: boolean; endReason: 'time' | 'hull' | null;
 }
 export function createSpaceGunner(): SpaceGunnerState {
   return { crosshairX: 240, crosshairY: 280, elapsed: 0, hull: 3,
     destroyed: 0, intercepted: 0, shots: 0, impacts: 0, breached: 0,
     cooldown: 0, spawnIn: 0.7, grace: 0, nextId: 1, attackers: [], projectiles: [],
-    beamTime: 0, beamX: 240, beamY: 280, impactFlash: 0, finished: false, endReason: null };
+    beamTime: 0, beamX: 240, beamY: 280, impactFlash: 0, shotFeedback: null, finished: false, endReason: null };
 }
 export function spaceGunnerFireEvery(config: FlightConfig): number {
   return SPACE_GUNNER_TUNING[difficultyFor(config.total)].fireEvery * (config.naturalOne ? OVERHEAT_MULTIPLIER : 1);
@@ -1444,6 +1448,10 @@ export function stepSpaceGunner(s: SpaceGunnerState, config: FlightConfig,
   s.cooldown = s.cooldown > 0 ? s.cooldown - dt : 0;
   s.grace = Math.max(0, s.grace - dt);
   s.beamTime = Math.max(0, s.beamTime - dt);
+  if (s.shotFeedback) {
+    s.shotFeedback.remaining -= dt;
+    if (s.shotFeedback.remaining <= 0) s.shotFeedback = null;
+  }
   s.impactFlash = Math.max(0, s.impactFlash - dt);
   if (input.aimX !== undefined && input.aimY !== undefined) {
     s.crosshairX = input.aimX; s.crosshairY = input.aimY;
@@ -1465,6 +1473,12 @@ export function stepSpaceGunner(s: SpaceGunnerState, config: FlightConfig,
     })).filter(candidate => candidate.distance <= candidate.entity.radius + 7)
       .sort((a, b) => a.distance - b.distance || Number(b.projectile) - Number(a.projectile) || a.entity.id - b.entity.id);
     const target = candidates[0];
+    if (target) {
+      const { x, y, radius } = target.entity;
+      const outcome = target.projectile ? 'intercepted'
+        : (target.entity as SpaceGunnerAttacker).hp > 1 ? 'armor-hit' : 'destroyed';
+      s.shotFeedback = { x, y, radius, outcome, remaining: GUNNER_SHOT_FEEDBACK_SECONDS };
+    }
     if (target?.projectile) {
       s.projectiles = s.projectiles.filter(p => p.id !== target.entity.id); s.intercepted++;
     } else if (target) {
