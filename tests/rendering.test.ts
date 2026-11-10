@@ -421,6 +421,38 @@ test('Boarding Party renderers keep frozen threats, cover, airlocks, warnings an
   }
 });
 
+test('Boarding turret noses grow toward the player and stay centered within the existing aim circles', () => {
+  const h = harness();
+  h.scene.begin({ total: 10, naturalOne: false }, 'Boarding Party', 'Gunner');
+  const images: Record<string, number[]> = {};
+  h.scene.drawArt = (name: string, x: number, y: number, width: number, height: number) => {
+    images[name] = [x, y, width, height];
+    return true;
+  };
+  const state = h.scene.boarding;
+  state.pods = [
+    { id: 1, kind: 'probe', x: 170, y: 450, radius: 12, hp: 1, maxHp: 1, vy: -100, warningRemaining: 0 },
+    { id: 2, kind: 'shuttle', x: 300, y: 450, radius: 18, hp: 2, maxHp: 2, vy: -100, warningRemaining: 0 },
+  ];
+  state.carrier.y = 475;
+  h.paint();
+  const far = structuredClone(images);
+  state.pods.forEach((pod: rules.BoardingPod) => { pod.y = 195; });
+  state.carrier.y = 250;
+  h.paint();
+  for (const [kind, world, radius] of [
+    ['probe', state.pods[0], 12], ['shuttle', state.pods[1], 18],
+    ['carrier', state.carrier, rules.BOARDING_CARRIER_RADIUS],
+  ] as const) {
+    const name = 'boarding-turret-' + kind;
+    const [x, y, width, height] = images[name];
+    const aim = rules.boardingTurretPose(world, radius);
+    assert.deepEqual([x, y], [aim.x, aim.y]);
+    assert.ok(Math.max(width, height) / 2 < aim.aimRadius);
+    assert.ok(width > far[name][2] * 1.5);
+  }
+});
+
 test('Boarding textures and labels are pooled, retire on mode switch, and retain partial-asset fallbacks',()=>{
   const h=harness(),images:any[]=[],labels:any[]=[];
   const object=(collection:any[],methods:string[])=>{const o:any={};for(const m of methods)o[m]=(...v:any[])=>{o[m.slice(3)]=v;return o;};collection.push(o);return o;};

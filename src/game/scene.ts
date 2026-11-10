@@ -572,28 +572,52 @@ export class FlightScene extends Phaser.Scene {
       const warning = !!pod && pod.warningRemaining > 0;
       const imminent = !!pod && boardingTurretBreachSoon(pod);
       const color = imminent ? 0xff786e : warning ? 0xffc080 : shuttle ? 0xffb6b2 : pod ? 0xffd5a0 : 0xf8aa92;
-      const width = (pod ? shuttle ? 37 : 25 : 81) * scale;
-      const height = (pod ? (shuttle ? 17 : 26) : 32) * scale;
+      // The nose-on silhouettes fill more of the existing aim circle at close range.
+      // Fit the art's native aspect ratio inside that circle, independent of hit testing.
+      const aspect = kind === 'carrier' ? 224 / 89 : shuttle ? 160 / 72 : 128 / 133;
+      const proximity = Math.max(0, Math.min(1, (scale - .42) / .50));
+      const diameter = r * 2 * (.72 + .27 * proximity);
+      const height = diameter / Math.max(aspect, 1);
+      const width = height * aspect;
       // A nearer sprite covers a distant one, including when either uses its procedural fallback.
       const depth = -1 - world.y / 1000;
       if (!this.drawArt('boarding-turret-' + kind, x, y, width, height, 0, 1, false, depth)) {
         const craft = this.graphicsLayer(depth);
         const w = width / 2, h = height / 2;
-        craft.fillStyle(0x66727b);
-        craft.fillPoints([{x: x - w, y: y + h * .48}, {x: x - w * .75, y: y - h * .62},
-          {x: x - w * .24, y: y - h}, {x: x + w * .24, y: y - h},
-          {x: x + w * .75, y: y - h * .62}, {x: x + w, y: y + h * .48},
-          {x: x + w * .55, y: y + h}, {x: x - w * .55, y: y + h}], true);
-        craft.fillStyle(0x2a3848);
-        craft.fillRoundedRect(x - w * .68, y - h * .31, w * 1.36, h * .63, 2);
-        craft.fillStyle(color);
-        if (pod && !shuttle) craft.fillCircle(x, y, 3 * scale);
-        else for (const side of [-1, 1]) craft.fillCircle(x + side * w * .55, y + h * .16, 2.5 * scale);
+        craft.fillStyle(shuttle ? 0x915150 : pod ? 0x6c7c89 : 0x4f5764);
+        if (pod && !shuttle) {
+          craft.fillCircle(x, y, Math.min(w, h));
+          craft.fillStyle(0x2a3848);
+          craft.fillCircle(x, y, w * .73);
+          craft.fillStyle(color);
+          craft.fillCircle(x, y, w * .31);
+        } else {
+          craft.fillPoints([{x: x - w, y: y + h * .48}, {x: x - w * .75, y: y - h * .62},
+            {x: x - w * .24, y: y - h}, {x: x + w * .24, y: y - h},
+            {x: x + w * .75, y: y - h * .62}, {x: x + w, y: y + h * .48},
+            {x: x + w * .55, y: y + h}, {x: x - w * .55, y: y + h}], true);
+          craft.fillStyle(0x2a3848);
+          craft.fillRoundedRect(x - w * .68, y - h * .31, w * 1.36, h * .63, 2);
+          craft.fillStyle(color);
+          for (const side of [-1, 1]) craft.fillCircle(x + side * w * .55, y + h * .16, 2.5 * scale);
+        }
       }
 
       const hit = (pod?.hitFlash ?? 0) > 0;
       hud.lineStyle(warning || imminent || hit ? 2.5 : 1.25, hit ? 0xffffff : color, warning || imminent ? .95 : .58);
       hud.strokeCircle(x, y, r);
+      if (warning || imminent) {
+        const bottom = y + r + 4;
+        hud.fillStyle(0x16141c, .94);
+        hud.fillRoundedRect(x - 12, bottom, 24, 15, 4);
+        hud.lineStyle(2, color);
+        if (imminent) {
+          hud.lineBetween(x - 6, bottom + 10, x, bottom + 4);
+          hud.lineBetween(x, bottom + 4, x + 6, bottom + 10);
+        } else {
+          hud.lineBetween(x - 5, bottom + 7, x + 5, bottom + 7);
+        }
+      }
       if (shuttle && pod) for (let i = 0; i < pod.maxHp; i++) {
         hud.fillStyle(i < pod.hp ? 0xffbcaa : 0x413039);
         hud.fillRect(x - 9 + i * 10, y - r - 6, 8, 3);
