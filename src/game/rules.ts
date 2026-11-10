@@ -1242,6 +1242,15 @@ function spaceLifeSparkContact(x0: number, y0: number, x1: number, y1: number): 
   return false;
 }
 
+export const SPACE_LIFE_REPAIR_RANGE = 35;
+
+export function spaceLifeRepairTarget(s: SpaceLifeState): SpaceLifeFire | undefined {
+  if (!s.grounded) return;
+  return s.fires.filter(fire => fire.kind === 'electrical' && fire.remaining > 0 &&
+    fire.y === s.y && Math.abs(fire.x - s.x) <= SPACE_LIFE_REPAIR_RANGE)
+    .sort((a, b) => Math.abs(a.x - s.x) - Math.abs(b.x - s.x) || a.id - b.id)[0];
+}
+
 export function stepSpaceLifeSupport(
   s: SpaceLifeState, config: FlightConfig, input: SpaceLifeInput, dt: number,
   random: () => number = Math.random,
@@ -1278,19 +1287,15 @@ export function stepSpaceLifeSupport(
       fire.remaining = 0; s.ordinaryCleared++;
     }
   }
-  if (s.grounded) {
-    const panel = s.fires.filter(fire => fire.kind === 'electrical' && fire.remaining > 0 &&
-      fire.y === s.y && Math.abs(fire.x - s.x) <= 35)
-      .sort((a, b) => Math.abs(a.x - s.x) - Math.abs(b.x - s.x) || a.id - b.id)[0];
-    if (panel) {
-      // Expiry keeps running; a repair must finish before (or exactly at) its deadline.
-      const progress = panel.repairProgress ?? 0;
-      const needed = SPACE_LIFE_REPAIR_SECONDS - progress;
-      panel.repairProgress = Math.min(SPACE_LIFE_REPAIR_SECONDS, progress + Math.min(dt, panel.remaining));
-      if (needed <= Math.min(dt, panel.remaining) + 1e-9) {
-        panel.remaining = 0; s.electricalRepaired++;
-        s.repairFlashes.push({ x: panel.x, y: panel.y, remaining: 0.4 });
-      }
+  const panel = spaceLifeRepairTarget(s);
+  if (panel) {
+    // Expiry keeps running; a repair must finish before (or exactly at) its deadline.
+    const progress = panel.repairProgress ?? 0;
+    const needed = SPACE_LIFE_REPAIR_SECONDS - progress;
+    panel.repairProgress = Math.min(SPACE_LIFE_REPAIR_SECONDS, progress + Math.min(dt, panel.remaining));
+    if (needed <= Math.min(dt, panel.remaining) + 1e-9) {
+      panel.remaining = 0; s.electricalRepaired++;
+      s.repairFlashes.push({ x: panel.x, y: panel.y, remaining: 0.4 });
     }
   }
   s.fires = s.fires.filter(fire => fire.remaining > 0);

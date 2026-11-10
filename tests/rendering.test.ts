@@ -231,13 +231,33 @@ test('Bomber rack status uses each simulation cooldown', () => {
   }
 });
 
+test('Space Life Support shows the repair range and labels only the selected panel as repairing', () => {
+  const h = harness();
+  h.scene.begin({ total: 10, naturalOne: false }, 'Space Battle', 'Life Support');
+  const labels: string[] = [];
+  h.scene.drawLabel = (text: string) => labels.push(text);
+  const y = rules.SPACE_LIFE_PLATFORMS[0].y;
+  Object.assign(h.scene.spaceLife, {
+    x: 220, y, grounded: true,
+    fires: [190, 215].map((x, id) => ({ id, x, y, kind: 'electrical', remaining: 3, repairProgress: .5 })),
+  });
+  h.paint();
+  assert.deepEqual(labels, ['SAVED', 'REPAIRING']);
+  assert.ok(h.commands.some(c => c[0] === 'lineBetween' &&
+    c[1] === 180 && c[2] === y + 1 && c[3] === 250 && c[4] === y + 1));
+  labels.length = 0;
+  h.scene.spaceLife.grounded = false;
+  h.paint();
+  assert.deepEqual(labels, ['SAVED', 'SAVED']);
+});
+
 test('repair progress and completion feedback render frozen without moving panel geometry', () => {
   const h = harness(); fixtures(h.scene);
   h.scene.situation = 'Space Battle'; h.scene.role = 'Life Support';
   h.scene.spaceLife.fires[1].repairProgress = .75;
   h.scene.spaceLife.repairFlashes = [{x:95,y:190,remaining:.2}];
   freeze(h.scene.spaceLife); h.paint();
-  assert.ok(h.commands.some(c => c[0] === 'fillRect' && c[1] === 186 && c[2] === 370 && c[3] === 19));
+  assert.ok(h.commands.some(c => c[0] === 'fillRect' && c[1] === 186 && c[2] === 368 && c[3] === 19));
   assert.ok(h.commands.some(c => c[0] === 'strokeCircle' && c[1] === 95 && c[2] === 176 && c[3] === 24));
 });
 

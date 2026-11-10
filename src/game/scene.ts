@@ -14,7 +14,7 @@ import {
   type LifeSupportState, type SpaceBattleBomberInput, type SpaceBattleBomberState,
   type SpaceBattlePilotState, type EnemyShip, type EnemyShot, type FuelCell, type SpaceBomberEnemy,
   SPACE_BOMBER_MINE_COOLDOWN, SPACE_BOMBER_MINE_LIFETIME,
-  createSpaceLifeSupport, stepSpaceLifeSupport, SPACE_LIFE_PLATFORMS, SPACE_LIFE_SPARK_WARNING, SPACE_LIFE_REPAIR_SECONDS,
+  createSpaceLifeSupport, stepSpaceLifeSupport, SPACE_LIFE_PLATFORMS, SPACE_LIFE_SPARK_WARNING, SPACE_LIFE_REPAIR_SECONDS, SPACE_LIFE_REPAIR_RANGE, spaceLifeRepairTarget,
   type SpaceLifeInput, type SpaceLifeState, type SpaceBomberMine, type Explosion,
 } from './rules';
 
@@ -774,8 +774,8 @@ export class FlightScene extends Phaser.Scene {
           for (let n = 0; n < 7; n++) {
             const t = ((phase * 2 + n / 7) % 1), startX = i ? 355 : 125, startY = 235 + n * 17;
             const x = startX + (endX - startX) * t, y = startY + (285 - startY) * t;
-            fx.lineStyle(1 + t, 0xb9d9d3, .15 + .4 * t);
-            fx.lineBetween(x, y, x + (i ? -15 : 15), y + (startY - 285) * .08);
+            fx.lineStyle(1.5 + t, 0xb9ffeb, .24 + .46 * t);
+            fx.lineBetween(x, y, x + (i ? -18 : 18), y + (startY - 285) * .08);
           }
         }
         const color = lock.warning !== null ? 0xffca83 : active ? 0x79ffe1 : 0x52606a;
@@ -787,6 +787,19 @@ export class FlightScene extends Phaser.Scene {
         g.strokeCircle(target.x, target.y, active ? target.radius : 18);
         g.lineBetween(target.x - 8, target.y, target.x + 8, target.y);
         g.lineBetween(target.x, target.y - 8, target.x, target.y + 8);
+        if (active) {
+          g.lineStyle(2.5, 0xd8fff4, .94);
+          for (const side of [-1, 1]) {
+            const x = target.x + side * 28;
+            g.lineBetween(x + side * 5, target.y - 7, x, target.y);
+            g.lineBetween(x, target.y, x + side * 5, target.y + 7);
+          }
+        }
+        if (lock.warning !== null) {
+          const progress = 1 - lock.warning / BOARDING_VENT_WARNING;
+          g.lineStyle(3, 0xffca83, .98);
+          g.beginPath(); g.arc(target.x, target.y, 27, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * progress); g.strokePath();
+        }
         const recharge = BOARDING_VENT_RECHARGE * (this.config.naturalOne ? 2 : 1);
         for (let segment = 0; segment < 8; segment++) {
           g.fillStyle(segment / 8 < 1 - lock.cooldown / recharge ? 0x7bada5 : 0x293638, .85);
@@ -817,8 +830,13 @@ export class FlightScene extends Phaser.Scene {
         }
         if (exposed) {
           const imminent = b.remaining < .5;
-          g.fillStyle(imminent ? 0xff596f : 0xffca83, .85);
-          g.fillCircle(b.x + 7 * scale, b.y - 5 * scale, imminent ? 5 : 3);
+          const muzzleX = b.x + 7 * scale, muzzleY = b.y - 5 * scale;
+          const muzzleColor = imminent ? 0xff596f : 0xffd390;
+          g.fillStyle(0x271222, .9); g.fillCircle(muzzleX, muzzleY, imminent ? 9 : 7);
+          g.lineStyle(2, muzzleColor);
+          g.strokePoints([{ x: muzzleX, y: muzzleY - 6 }, { x: muzzleX + 6, y: muzzleY },
+            { x: muzzleX, y: muzzleY + 6 }, { x: muzzleX - 6, y: muzzleY }], true);
+          g.fillStyle(0xffedce); g.fillCircle(muzzleX, muzzleY, imminent ? 3.5 : 2.5);
           if (imminent) {
             g.lineStyle(1, 0xff596f, .35);
             g.lineBetween(b.x + 7 * scale, b.y - 5 * scale, 240, 540);
@@ -1815,6 +1833,7 @@ export class FlightScene extends Phaser.Scene {
     const s = this.spaceLife;
     const time = this.decorativeTime(s.elapsed);
     this.paintSpaceLifeInterior(g);
+    const repairing = spaceLifeRepairTarget(s);
     for (const fire of s.fires) {
       const color = fire.kind === 'electrical' ? 0x89dfff : 0xffa35e;
       const pulse = 0.75 + Math.sin(time * 13 + fire.id) * 0.12;
@@ -1848,7 +1867,9 @@ export class FlightScene extends Phaser.Scene {
       }
       const warning = fire.kind === 'electrical' ? (fire.sparkIn ?? 1) <= SPACE_LIFE_SPARK_WARNING + 1e-9 : (fire.arming ?? 0) > 0;
       if (warning) {
-        g.lineStyle(2, 0xffdf91, 1);
+        g.lineStyle(5, 0x191c28, .95);
+        g.strokeRoundedRect(fire.x - 17, fire.y - 30, 34, 32, 4);
+        g.lineStyle(2.5, 0xffdf91, 1);
         g.strokeRoundedRect(fire.x - 17, fire.y - 30, 34, 32, 4);
         for (const side of fire.kind === 'electrical' ? [-1, 1] : []) {
           g.lineBetween(fire.x + side * 20, fire.y - 14, fire.x + side * 30, fire.y - 14);
@@ -1857,10 +1878,22 @@ export class FlightScene extends Phaser.Scene {
         }
       }
       if (fire.kind === 'electrical') {
+        const active = fire === repairing;
         const progress = Math.min(1, (fire.repairProgress ?? 0) / SPACE_LIFE_REPAIR_SECONDS);
-        g.fillStyle(0x101528); g.fillRoundedRect(fire.x - 21, fire.y - 42, 42, 8, 3);
-        g.fillStyle(0x79e1ce); g.fillRect(fire.x - 19, fire.y - 40, 38 * progress, 4);
-        g.lineStyle(1, 0x89dfff, .8); g.strokeRoundedRect(fire.x - 21, fire.y - 42, 42, 8, 3);
+        const platform = SPACE_LIFE_PLATFORMS.find(p => p.y === fire.y && p.x1 <= fire.x && p.x2 >= fire.x);
+        const left = Math.max(platform ? platform.x1 + 10 : 16, fire.x - SPACE_LIFE_REPAIR_RANGE);
+        const right = Math.min(platform ? platform.x2 - 10 : WIDTH - 16, fire.x + SPACE_LIFE_REPAIR_RANGE);
+        g.lineStyle(4, 0x0a1522, .96); g.lineBetween(left, fire.y + 1, right, fire.y + 1);
+        g.lineStyle(2, active ? 0xa4fff0 : 0x8db7c6, active ? 1 : .85);
+        g.lineBetween(left, fire.y + 1, right, fire.y + 1);
+        for (const x of [left, right]) g.lineBetween(x, fire.y - 6, x, fire.y + 2);
+        g.fillStyle(0x101528); g.fillRoundedRect(fire.x - 21, fire.y - 44, 42, 10, 3);
+        g.fillStyle(active ? 0x79e1ce : 0x9ab8c6); g.fillRect(fire.x - 19, fire.y - 42, 38 * progress, 6);
+        g.lineStyle(1.5, active ? 0xc1fff1 : 0x89dfff, .9);
+        g.strokeRoundedRect(fire.x - 21, fire.y - 44, 42, 10, 3);
+        if (progress > 0 || active) {
+          this.drawLabel(active ? 'REPAIRING' : 'SAVED', fire.x, fire.y - 53, 11, active ? '#a6f7e5' : '#c3d4e3');
+        }
       }
       g.lineStyle(2, color, Math.max(0.2, fire.remaining / SPACE_LIFE_PLATFORMS.length / 3));
       g.lineBetween(fire.x - 14, fire.y + 5, fire.x + 14, fire.y + 5);
@@ -2030,6 +2063,15 @@ export class FlightScene extends Phaser.Scene {
       }
     }
 
+    // Arrival line uses the same coordinate as packet routing.
+    for (const side of [-1, 1]) {
+      const x = WIDTH / 2 + side * 51, y = LIFE_SUPPORT_SWITCH_Y;
+      g.lineStyle(5, 0x0a1522, .95); g.lineBetween(x, y, x - side * 15, y);
+      g.lineStyle(2, 0xd8f1f2, .94); g.lineBetween(x, y, x - side * 15, y);
+      g.lineBetween(x - side * 15, y, x - side * 9, y - 5);
+      g.lineBetween(x - side * 15, y, x - side * 9, y + 5);
+    }
+
     // Rotary switch with three detents and a bright mechanical selector arm.
     g.fillStyle(0x0d1728, 0.95); g.lineStyle(2, 0x526a88, 0.8);
     g.fillCircle(WIDTH / 2, LIFE_SUPPORT_SWITCH_Y, 34); g.strokeCircle(WIDTH / 2, LIFE_SUPPORT_SWITCH_Y, 34);
@@ -2079,6 +2121,8 @@ export class FlightScene extends Phaser.Scene {
       g.lineStyle(3, feedbackColor, alpha);
       g.strokeCircle(WIDTH / 2, LIFE_SUPPORT_SWITCH_Y, 38);
       g.strokeRoundedRect(x - 52, 458, 104, 82, 14);
+      g.fillStyle(feedbackColor, .25 * alpha);
+      g.fillRoundedRect(x - 46, 464, 92, 70, 10);
       // Check/cross marks communicate the outcome without relying on color.
       g.lineStyle(3, feedbackColor, alpha);
       if (s.routingFeedback.correct) {
