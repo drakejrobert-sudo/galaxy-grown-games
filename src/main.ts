@@ -37,14 +37,13 @@ app.innerHTML = `
   </form>
 </section>
 <section id="play" hidden>
-  <div class="play-heading"><div><p id="mode-label" class="eyebrow">ASTEROID FIELD / PILOT</p><h2 id="mode-heading">Keep your hull intact.</h2></div><div class="play-actions"><button id="pause" type="button">Pause</button></div></div>
+  <div class="play-heading"><div><h2 id="mode-label" class="eyebrow">ASTEROID FIELD / PILOT</h2></div><div class="play-actions"><button id="pause" type="button">Pause</button></div></div>
   <div class="hud"><div><span>TIME LEFT</span><strong id="time">60s</strong></div><div><span id="health-label">HULL</span><strong id="hull">3 / 3</strong></div><div id="fuel-wrap" hidden><span>FUEL</span><strong id="fuel">18.0s</strong></div><div><span>SCORE</span><strong id="score">300</strong></div></div>
   <p id="flight-status" class="flight-status"></p>
-  <div class="flight-stage"><div class="flight-wrap"><div id="canvas" aria-label="Asteroid field. Steer with arrow keys, WASD, or touch." role="application" tabindex="0"></div><div id="pause-overlay" hidden><h2>Challenge paused</h2><p id="pause-reason">Your timer is stopped.</p><button id="resume" class="primary" type="button">Resume challenge</button><button id="abandon" type="button">Back to setup</button></div></div><div id="action-rail" class="action-rail" hidden><button id="fire-action" class="action action-fire" type="button" hidden>Fire</button><button id="action" class="action action-mine" type="button" hidden>Launch mine</button></div></div>
+  <div class="flight-stage"><div class="flight-viewport"><div class="flight-wrap"><div id="canvas" aria-label="Asteroid field. Steer with arrow keys, WASD, or touch." role="application" tabindex="0"></div><div id="pause-overlay" hidden><h2>Challenge paused</h2><p id="pause-reason">Your timer is stopped.</p><p id="play-help" class="help"></p><button id="resume" class="primary" type="button">Resume challenge</button><button id="abandon" type="button">Back to setup</button></div></div></div><div id="action-rail" class="action-rail" hidden><button id="fire-action" class="action action-fire" type="button" hidden>Fire</button><button id="action" class="action action-mine" type="button" hidden>Launch mine</button></div></div>
   <div id="route-controls" class="route-controls" aria-label="Life Support routing switch" hidden><button id="route-thrusters" type="button" aria-pressed="false"><span>▲</span>Thrusters<small>1</small></button><button id="route-shields" type="button" aria-pressed="true"><span>●</span>Shields<small>2</small></button><button id="route-guns" type="button" aria-pressed="false"><span>✛</span>Guns<small>3</small></button></div>
   <div id="platform-controls" class="platform-controls" aria-label="Platformer controls" hidden><button id="move-left" type="button">◀ Left</button><button id="move-right" type="button">Right ▶</button><button id="jump" type="button">Jump</button></div>
-  <div id="routing-info" class="routing-info" hidden><p class="help">Match power symbols to their bays. Hearts → Shields: restore up to 1 integrity. Overloads → Guns: a mistake costs 2 integrity; other mistakes cost 1. Packets route when they reach the switch.</p><p id="routing-status" class="routing-status" role="status" aria-live="polite" aria-atomic="true"></p></div>
-  <p id="play-help" class="help center">Avoid asteroids · Arrow keys / WASD · Hold and drag to steer</p>
+  <div id="routing-info" class="routing-info" hidden><p id="routing-status" class="routing-status" role="status" aria-live="polite" aria-atomic="true"></p></div>
 </section>
 <section id="results" class="panel results" hidden>
   <p class="eyebrow">FLIGHT REPORT</p><h1 id="outcome"></h1><div class="final-score"><strong id="final-score"></strong><span>RATING / 100</span></div>
@@ -127,6 +126,7 @@ if (typeof ResizeObserver !== 'undefined') {
   new ResizeObserver(schedulePlayfieldRefresh).observe(canvas);
 }
 function show(section: string) {
+  app.setAttribute('data-screen', section);
   if (section !== 'play') cancelPlayfieldRefresh();
   for (const id of ['setup', 'play', 'results']) get(id).hidden = id !== section;
 }
@@ -189,7 +189,7 @@ function refreshSetup() {
           : 'Ship flies automatically. Tap behind the aft rack or drag and release to launch up to 100px away. Mouse hover previews; primary release launches. Left/Right or A/D aims; Down/S selects straight aft. Space/Enter or Launch mine fires once per press. Mines explode on asteroids during travel. Only ship collisions cost hull; missed asteroids pass safely.'
         : selectedSituation === 'Space Battle'
           ? 'Move with Left/Right or A/D and jump with Up/W/Space. Stand beside a blue panel for 1.5 seconds to repair it automatically; progress is kept when you move away. Touch uses Left, Right, and Jump.'
-          : 'Use Left/Right or A/D to turn the routing switch. Use 1, 2, or 3 to choose a system directly. Touch players can tap a system button. Match power symbols to bays; hearts go to Shields and overloads to Guns. Packets route at the switch.';
+          : 'Use Left/Right or A/D to turn the routing switch. Use 1, 2, or 3 to choose a system directly. Touch players can tap a system button. Match power symbols to bays. Hearts routed to Shields restore up to 1 integrity. Send overloads to Guns; a mistake costs 2 integrity, other mistakes cost 1. Packets route at the switch.';
   if (selectedSituation === 'Boarding Party') {
     get('controls-help').textContent = boardingHelp[selectedRole];
     if (selectedRole === 'Life Support') get('impairment').textContent = natural.checked ? 'Sluggish airlocks · twice-normal recharge (playtest)' : 'Standard rifle and airlocks';
@@ -270,11 +270,6 @@ function launch() {
   get('hull').textContent = role === 'Life Support'
     ? situation === 'Space Battle' ? `${SPACE_LIFE_MAX_INTEGRITY} / ${SPACE_LIFE_MAX_INTEGRITY}` : `${LIFE_SUPPORT_MAX_INTEGRITY} / ${LIFE_SUPPORT_MAX_INTEGRITY}` : '3 / 3';
   get('mode-label').textContent = `${situation.toUpperCase()} / ${role.toUpperCase()}`;
-  get('mode-heading').textContent = situation === 'Space Battle'
-    ? role === 'Gunner' ? 'Defend the line. Intercept enemy fire.' : role === 'Bomber' ? 'Break the enemy formation.' : role === 'Life Support' ? 'Contain the damage below deck.' : 'Collect fuel. Evade enemy fire.'
-    : role === 'Pilot' ? 'Keep your hull intact.'
-      : role === 'Gunner' ? 'Clear the path ahead.'
-        : role === 'Bomber' ? 'Launch mines into their path.' : 'Route power to the right system.';
   get('play-help').textContent = role === 'Pilot'
     ? situation === 'Space Battle'
       ? 'Collect fuel cells · Evade ships and fire · Arrow keys / WASD or hold and drag'
@@ -287,7 +282,7 @@ function launch() {
           : 'Automatic flight · Tap/drag-release aft: choose range · Mines hit in flight · ←/→ or A/D aim · ↓/S straight aft · Space/Enter or Launch mine fires once'
         : situation === 'Space Battle'
           ? 'Stomp orange fires; side contact hurts · Blue panels warn then shoot sparks: jump/dodge, stand nearby for 1.5s to repair · Progress is kept · Hearts heal · Avoid overloads'
-          : 'Match packet symbols · Left/Right or A/D · 1/2/3 · Tap a system';
+          : 'Match packet symbols at the switch · Left/Right or A/D · 1/2/3 · Tap a system · Hearts → Shields (+1 integrity) · Overloads → Guns (a mistake costs 2 integrity)';
   canvas.setAttribute('aria-label', situation === 'Space Battle'
     ? role === 'Gunner' ? `Space battle gunner station. ${spaceGunnerHelp}` : role === 'Bomber'
       ? 'Space battle bomber station. Automatic weaving. Tap behind the aft rack or drag and release to choose a landing point up to 100 logical pixels away; mines explode on ships during travel. Mouse hover previews and primary release launches. Left/Right or A/D rotates aim, Down/S selects straight aft. Space/Enter or Launch mine launches once when ready using the previewed direction and distance. Clean passes are harmless.'
@@ -306,8 +301,6 @@ function launch() {
       : role === 'Bomber' ? 'Standard mine blast target' : situation === 'Space Battle' ? 'Standard icon mix' : 'Standard packet mix';
   get('flight-status').textContent = `${difficultyFor(config.total)} · Check ${config.total} · ${config.naturalOne ? `Natural 1: ${impairment}` : standard}`;
   if (situation === 'Boarding Party') {
-    get('mode-heading').textContent = role === 'Life Support' ? 'Hold the corridor. Repel boarders.' : role === 'Pilot' ? 'Fly the rings. Escape the pursuit.'
-      : role === 'Gunner' ? 'Defend the ship from the turret.' : 'Break the boarding pursuit.';
     get('play-help').textContent = boardingHelp[role];
     canvas.setAttribute('aria-label', `Boarding Party / ${role}. ${boardingHelp[role]}`);
     get('flight-status').textContent = `${difficultyFor(config.total)} · Check ${config.total} · ${config.naturalOne ? 'Natural 1: ' + (role === 'Life Support' ? 'double airlock recharge' : impairment) : 'Standard station systems'}`;

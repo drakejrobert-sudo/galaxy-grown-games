@@ -199,8 +199,7 @@ test('deferred first launch recovers from load failure, starts once, and retry r
   assert.equal(scaleRefreshRailStates.at(-1), false);
   element('abandon').listeners.get('click')();
   element('role').value = 'Life Support'; element('role').listeners.get('change')();
-  assert.match(element('controls-help').textContent, /hearts go to Shields and overloads to Guns/);
-  assert.match(element('app').innerHTML, /Packets route when they reach the switch/);
+  assert.match(element('controls-help').textContent, /Hearts routed to Shields.*overloads to Guns.*Packets route at the switch/);
   await submit();
   assert.equal(gameCount, 1); assert.equal(lifeSupportInputEnabled, true);
   assert.equal(element('routing-info').hidden, false);

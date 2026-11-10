@@ -175,3 +175,26 @@
   #play[data-situation="Boarding Party"] .action-rail { flex-direction: row; justify-content: flex-end; padding-bottom: env(safe-area-inset-bottom, 0px); }
   #play[data-situation="Boarding Party"] .action { position: static; width: 140px; min-height: 56px; border-radius: 14px; box-shadow: none; }
 }
+
+@media (max-width: 632px) {
+  #play .action-rail { padding-bottom: 0; }
+  #play .action { padding-block: 6px; }
+}
+#play .platform-controls { padding-bottom: 0; }
+
+/* Put the controls beside the window in short landscape sessions. */
+@media (orientation: landscape) and (max-height: 540px) {
+  #app[data-screen="play"] #play {
+    max-width: 740px;
+    grid-template-columns: minmax(0, 1fr) minmax(175px, 36%);
+    grid-template-rows: auto auto auto minmax(0, 1fr) auto;
+    column-gap: 12px;
+  }
+  #play .flight-stage { display: contents; }
+  #play .flight-viewport { grid-area: 1 / 1 / -1; }
+  #play :is(.play-heading, .hud, .flight-status, .action-rail, .route-controls, .platform-controls) {
+    grid-column: 2;
+  }
+  #play .action-rail { grid-row: 5; align-items: flex-end; padding-bottom: 0; }
+  #play .action { position: static; width: 140px; min-height: 56px; border-radius: 14px; }
+}
