@@ -162,7 +162,8 @@ test('mine preview, deployed radius and explosion boundary use exact Natural 1 g
     const state = situation === 'Space Battle' ? h.scene.spaceBomber : h.scene.bomber;
     const radius = situation === 'Space Battle' ? rules.spaceBomberBlastRadius(h.scene.config) : rules.bomberBlastRadius(h.scene.config);
     const drop = rules.spaceBomberLanding(state);
-    for (const [x, y] of [[drop.x, drop.y], [100, 280], [260, 390], [350, 250]]) {
+    assert.ok(h.commands.some(c => c[0] === 'arc' && c[1] === drop.x && c[2] === drop.y && c[3] === radius));
+    for (const [x, y] of [[100, 280], [260, 390], [350, 250]]) {
       assert.ok(h.commands.some(c => c[0] === 'strokeCircle' && c[1] === x && c[2] === y && c[3] === radius));
     }
   }
@@ -204,7 +205,7 @@ test('fuel remains centered and mine readiness changes artwork without relocatin
   h.scene.spaceBomber.mineCooldown = 0;
   h.paint(); assert.notDeepEqual(h.commands, cooling);
   const drop = rules.spaceBomberLanding(h.scene.spaceBomber);
-  assert.ok(h.commands.some(c => c[0] === 'strokeCircle' && c[1] === drop.x && c[2] === drop.y));
+  assert.ok(h.commands.some(c => c[0] === 'arc' && c[1] === drop.x && c[2] === drop.y));
   const enemies = h.scene.spaceBomber.enemies;
   for (const enemy of enemies) {
 
@@ -246,7 +247,7 @@ test('short-launch previews show the actual selected landing point and travellin
     h.scene.config.naturalOne=naturalOne;h.scene.spaceBomber.aimDistance=distance;h.scene.spaceBomber.aimAngle=.4;
     h.paint();const rack=rules.mineDropPosition(h.scene.spaceBomber),landing=rules.spaceBomberLanding(h.scene.spaceBomber);
     assert.ok(h.commands.some(c=>c[0]==='lineBetween'&&c[1]===rack.x&&c[2]===rack.y&&c[3]===landing.x&&c[4]===landing.y));
-    assert.ok(h.commands.some(c=>c[0]==='strokeCircle'&&c[1]===landing.x&&c[2]===landing.y&&c[3]===rules.spaceBomberBlastRadius(h.scene.config)));
+    assert.ok(h.commands.some(c=>c[0]==='arc'&&c[1]===landing.x&&c[2]===landing.y&&c[3]===rules.spaceBomberBlastRadius(h.scene.config)));
   }
   const mine = { id: 1, x: 50, y: 200, blastRadius: 58, armIn: .1, expiresIn: 4.5,
     flight: { x: 20, y: 160, targetX: 80, targetY: 240, duration: .2, remaining: .1 } };
@@ -715,7 +716,12 @@ test('Boarding Bomber projects the real landing, live mine and blast footprints 
       assert.ok(labels.includes('BREACH LINE'));
       assert.ok(!labels.includes('LAUNCH') && !labels.includes('BREACH'));
       const outlines = h.commands.filter(([name]) => name === 'strokePoints').map(c => c[1] as { x: number; y: number }[]);
-      for (const center of [landing, live, impact]) {
+      const preview = aftView.projectAftRing(landing, blastRadius, rack);
+      assert.ok(preview.every((point, index) => index % 4 === 3 || h.commands.some(c =>
+        c[0] === 'lineBetween' && c[1] === point.x && c[2] === point.y &&
+        c[3] === preview[index + 1].x && c[4] === preview[index + 1].y)),
+      'dashes follow the exact projected preview radius');
+      for (const center of [live, impact]) {
         assert.ok(outlines.some(outline => outline.length === 48 && outline.every(point => {
           const world = aftView.unprojectAftAim(point, rack);
           return world && Math.abs(Math.hypot(world.x - center.x, world.y - center.y) - blastRadius) < 1e-9;
