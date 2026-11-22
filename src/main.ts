@@ -12,7 +12,7 @@ import {
   spaceBattleBomberResultText, spaceBattleBomberScoreFor,
   spaceLifeResultText, spaceLifeScoreFor, SPACE_LIFE_MAX_INTEGRITY,
   lifeSupportResultText, lifeSupportScoreFor, LIFE_SUPPORT_MAX_INTEGRITY,
-  rateScore, DURATION, WIDTH, HEIGHT, type FlightConfig, type Role, type Situation, type ScoreMode,
+  rateScore, DURATION, WIDTH, HEIGHT, SPACE_BATTLE_STARTING_FUEL, type FlightConfig, type Role, type Situation, type ScoreMode,
 } from './game/rules';
 
 const app = document.querySelector<HTMLDivElement>('#app')!;
@@ -38,7 +38,12 @@ app.innerHTML = `
 </section>
 <section id="play" hidden>
   <div class="play-heading"><div><h2 id="mode-label" class="eyebrow">ASTEROID FIELD / PILOT</h2></div><div class="play-actions"><button id="pause" type="button">Pause</button></div></div>
-  <div class="hud"><div><span>TIME LEFT</span><strong id="time">60s</strong></div><div><span id="health-label">HULL</span><strong id="hull">3 / 3</strong></div><div id="fuel-wrap" hidden><span>FUEL</span><strong id="fuel">18.0s</strong></div><div><span>SCORE</span><strong id="score">300</strong></div></div>
+  <div class="hud">
+    <div><span>TIME LEFT</span><strong id="time">60s</strong></div>
+    <div><span id="health-label">HULL</span><strong id="hull">3 / 3</strong></div>
+    <div id="fuel-wrap" hidden><span id="fuel-label" data-notice="normal" aria-live="polite">FUEL</span><strong id="fuel">${SPACE_BATTLE_STARTING_FUEL.toFixed(1)}s</strong></div>
+    <div><span>SCORE</span><strong id="score">300</strong></div>
+  </div>
   <p id="flight-status" class="flight-status"></p>
   <div class="flight-stage"><div class="flight-viewport"><div class="flight-wrap"><div id="canvas" aria-label="Asteroid field. Steer with arrow keys, WASD, or touch." role="application" tabindex="0"></div><div id="pause-overlay" hidden><h2>Challenge paused</h2><p id="pause-reason">Your timer is stopped.</p><p id="play-help" class="help"></p><button id="resume" class="primary" type="button">Resume challenge</button><button id="abandon" type="button">Back to setup</button></div></div></div><div id="action-rail" class="action-rail" hidden><button id="fire-action" class="action action-fire" type="button" hidden>Fire</button><button id="action" class="action action-mine" type="button" hidden>Launch mine</button></div></div>
   <div id="route-controls" class="route-controls" aria-label="Life Support routing switch" hidden><button id="route-thrusters" type="button" aria-pressed="false"><span>▲</span>Thrusters<small>1</small></button><button id="route-shields" type="button" aria-pressed="true"><span>●</span>Shields<small>2</small></button><button id="route-guns" type="button" aria-pressed="false"><span>✛</span>Guns<small>3</small></button></div>
@@ -63,6 +68,9 @@ if (typeof location !== 'undefined') {
 }
 let scene: FlightScene | null = null;
 const canvas = get('canvas');
+const fuelWrap = get('fuel-wrap');
+const fuelLabel = get('fuel-label');
+const fuelValue = get('fuel');
 const action = get<HTMLButtonElement>('action');
 const fireAction = get<HTMLButtonElement>('fire-action');
 const actionRail = get('action-rail');
@@ -243,6 +251,18 @@ function preparePlayLayout() {
   get('routing-info').hidden = routeControls.hidden;
   platformControls.hidden = role !== 'Life Support' || situation !== 'Space Battle';
 }
+const fuelNotices = { normal: 'FUEL', low: 'LOW FUEL', pickup: 'FUEL PICKUP' };
+function updateFuelHud(fuel: number, pickupFlash: number) {
+  const quantity = `${fuel.toFixed(1)}s`;
+  if (fuelValue.textContent !== quantity) fuelValue.textContent = quantity;
+
+  const notice = pickupFlash > 0 ? 'pickup' : fuel <= 5 ? 'low' : 'normal';
+  const label = fuelNotices[notice];
+  if (fuelLabel.textContent !== label) {
+    fuelLabel.setAttribute('data-notice', notice);
+    fuelLabel.textContent = label;
+  }
+}
 function launch() {
   cancelPlayfieldRefresh();
   refreshPlayfield();
@@ -263,7 +283,8 @@ function launch() {
   spaceLifeInput.enable(situation === 'Space Battle' && role === 'Life Support');
   inFlight = true; paused = false;
   get('pause').textContent = 'Pause'; get('pause-overlay').hidden = true;
-  get('fuel-wrap').hidden = situation !== 'Space Battle' || role !== 'Pilot';
+  fuelWrap.hidden = situation !== 'Space Battle' || role !== 'Pilot';
+  if (!fuelWrap.hidden) updateFuelHud(SPACE_BATTLE_STARTING_FUEL, 0);
   get('health-label').textContent = role === 'Life Support' ? 'INTEGRITY' : 'HULL';
   get('time').textContent = `${DURATION}s`;
   get('score').textContent = '0';
@@ -474,7 +495,7 @@ scene.onLifeSupportStep = s => {
 scene.onSpacePilotStep = s => {
   get('time').textContent = `${Math.ceil(DURATION - s.elapsed)}s`;
   get('hull').textContent = `${s.hull} / 3`;
-  get('fuel').textContent = `${s.fuel.toFixed(1)}s`;
+  updateFuelHud(s.fuel, s.fuelPickupFlash);
   get('score').textContent = String(spaceBattlePilotScoreFor(s));
   if (s.finished) {
     inFlight = false; input.enable(false); gunnerInput.enable(false); spaceGunnerInput.enable(false); bomberInput.enable(false); spaceBomberInput.enable(false); lifeSupportInput.enable(false); show('results');

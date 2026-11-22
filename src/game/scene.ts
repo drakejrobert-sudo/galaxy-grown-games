@@ -1100,14 +1100,6 @@ export class FlightScene extends Phaser.Scene {
     for (const shot of s.shots) this.paintEnemyShot(g, shot, s.elapsed);
     if (s.invulnerable) this.paintProtection(g, s.x, s.y, 26, s.elapsed);
     if (!s.invulnerable || this.reducedMotion?.matches || Math.floor(s.elapsed * 10) % 2 !== 0) this.paintPlayerShip(g, s.x, s.y, s.elapsed);
-    const pickup = s.fuelPickupFlash > 0;
-    if (pickup || s.fuel <= 5) {
-      const x = Math.max(51, Math.min(WIDTH - 51, s.x));
-      const y = s.y > HEIGHT - 60 ? s.y - 36 : s.y + 36;
-      g.fillStyle(0x0c1626, .92); g.fillRoundedRect(x - 46, y - 10, 92, 20, 4);
-      g.lineStyle(1.5, pickup ? 0x79e1ce : 0xffba77); g.strokeRoundedRect(x - 46, y - 10, 92, 20, 4);
-      this.drawLabel(pickup ? 'FUEL PICKUP' : 'LOW FUEL', x, y, 12, pickup ? '#a6f7e5' : '#ffcf9e');
-    }
   }
 
   private paintSpaceBattleBomberMode(g: Phaser.GameObjects.Graphics) {
