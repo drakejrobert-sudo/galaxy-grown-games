@@ -1,0 +1,39 @@
+.tanks {max-width: 1024px; padding-top: 16px;}
+.tanks h1 {margin: 0 0 18px; font-size: clamp(32px,5vw,52px);}
+.tanks h2 {margin: 0; font-size: clamp(19px,3vw,28px);}
+.tanks p {color: #d2ddd9; line-height: 1.5;}
+#tank-setup {max-width: 520px;}
+#tank-setup form, #station {background: #192735; border: 1px solid #405461; border-radius: 12px; padding: 16px;}
+#seats > div {display: grid; grid-template-columns: minmax(0,1fr) auto; align-items: end; gap: 16px; margin: 12px 0;}
+#seats input[type=text] {font-size: 16px;}
+#seats input[type=radio] {accent-color: #78e1af;}
+#seats label:has(input[type=radio]) {padding: 12px 0;}
+.tank-heading {display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;}
+#hills {background: #152c3e; width: 100%; aspect-ratio: 2; overflow: hidden; border-radius: 8px;}
+#hills canvas {display: block;}
+#report {min-height: 1.5em; margin: 8px 0;}
+#station {margin: 8px 0; min-width: 0;}
+#station legend, .tanks h3 {color: #aad6c7; font-size: 14px;}
+.tank-controls {display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); align-items: end; gap: 12px;}
+.tank-controls input, .tank-controls select {display: block; width: 100%; margin: 4px 0 0;}
+.tank-controls input {min-height: 44px; accent-color: #72e3b1;}
+.tank-controls button {padding: 8px 11px;}
+.tank-controls span {display: block; font-size: 13px; margin-bottom: 4px;}
+.tanks .primary {background: #98efba; color: #0f2b25; font-weight: 700;}
+#roster {display: flex; flex-wrap: wrap; gap: 6px; list-style: none; padding: 0;}
+#roster li {border-left: 4px solid var(--tank-color); padding: 5px 9px; background: #202e3d; overflow-wrap: anywhere;}
+#roster .current {outline: 1px solid #e2efde;}
+#roster .out {opacity: .65;}
+.tanks button:disabled, .tanks fieldset:disabled {opacity: .65;}
+@media(max-width: 620px) {
+  .tank-controls {grid-template-columns: repeat(2,minmax(0,1fr)); gap: 8px;}
+  .tank-controls > div:first-child {grid-column: 1 / -1;}
+  .tanks {padding: 12px;}
+}
+/* Keep the battlefield and shot controls together in a shared window. */
+#app:has(#tank-match:not([hidden])) > header,
+.tanks:has(#tank-match:not([hidden])) > h1 {display: none;}
+#app:has(#tank-match:not([hidden])) > nav {padding: 4px 12px; gap: 18px;}
+.tanks:has(#tank-match:not([hidden])) {padding-top: 4px;}
+#hills {max-width: max(540px,96vh); margin-inline: auto;}
+.tanks button, .tanks select {touch-action: manipulation;}

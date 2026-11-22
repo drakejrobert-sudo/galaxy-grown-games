@@ -18,7 +18,7 @@ import {
 const app = document.querySelector<HTMLDivElement>('#app')!;
 app.innerHTML = `
 <header><a href="./" class="brand">✦ <span>GALAXY GROWN</span></a><span class="tag">FLIGHT DECK · PROTOTYPE</span></header>
-<nav class="surface-nav" aria-label="App sections"><a href="./">Flight Deck</a><a href="#/map">Galaxy Map ↗</a></nav>
+<nav class="surface-nav" aria-label="App sections"><a href="./">Flight Deck</a><a href="#/map">Galaxy Map ↗</a><a href="#/tanks">Tanks</a></nav>
 <main>
 <section id="setup" class="setup">
   <div class="intro"><p class="eyebrow">CREW CHALLENGE 01</p><h1>A steady hand.<br>A galaxy of trouble.</h1><p class="lede">Choose your station, face the danger ahead, and bring your individual score back to the GM.</p><div class="details"><span>60-second challenge</span><span>Role-specific systems</span><span>Solo run</span></div></div>

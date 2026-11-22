@@ -7,6 +7,10 @@ Asteroid Field / Pilot, Gunner, Bomber, and Life Support, Space Battle / Pilot, 
 
 Player link: [play.drakesfood.com](https://play.drakesfood.com/). This HTTPS shortlink redirects to the current GitHub Pages deployment and remains the link to share if the underlying hosting URL changes.
 
+## Hillside Tanks
+
+Open **Tanks** for a shared-screen match with 2–8 named players. The DM shares the browser window and operates the controls as each player calls their drive, direction, elevation and power. Each turn allows up to two tank lengths of movement and one shot. The DM is a rival with two heavy shells and one starburst. The last surviving tank wins. The game runs locally in the browser on the same static site. Closing or refreshing the tab ends the match. Damage, movement and special ammo counts are provisional playtest values.
+
 ## Galaxy Map V1
 
 Open **Galaxy Map** beside Flight Deck to plot connected courses, advance travel under GM control, and pause for random or deliberate encounters. Encounter cards can provide Asteroid Field / Space Battle / Boarding Party player links or pause for your already-open Maps VTT. The fictional demo includes planets, a ship, a station and a point of interest.
