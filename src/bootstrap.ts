@@ -2,6 +2,8 @@
 window.addEventListener('hashchange', () => window.location.reload());
 if (window.location.hash === '#/map') {
   import('./galaxy/view').catch(showLoadError);
+} else if (window.location.hash === '#/tanks') {
+  import('./tanks/view').catch(showLoadError);
 } else {
   import('./main').catch(showLoadError);
 }
