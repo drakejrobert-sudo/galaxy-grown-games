@@ -11,6 +11,29 @@
 .hud { gap: 8px; }
 .hud > div { min-width: 0; }
 .hud strong { font-variant-numeric: tabular-nums; white-space: nowrap; }
+#fuel-wrap { min-inline-size: 5.25rem; }
+#fuel-label {
+  display: flex;
+  inline-size: max-content;
+  align-items: center;
+  gap: 4px;
+  letter-spacing: .06em;
+  white-space: nowrap;
+}
+#fuel-label[data-notice="low"] { color: #ffcf9e; }
+#fuel-label[data-notice="low"]::before {
+  content: "";
+  inline-size: 8px;
+  block-size: 7px;
+  background: currentColor;
+  clip-path: polygon(50% 0, 100% 100%, 0 100%);
+}
+#fuel-label[data-notice="pickup"] {
+  color: #a6f7e5;
+  padding-inline: 5px;
+  border-radius: 999px;
+  box-shadow: inset 0 0 0 1px currentColor;
+}
 .play-heading > div { min-width: 0; }
 .play-actions { flex-shrink: 0; }
 @media (max-width: 616px) {

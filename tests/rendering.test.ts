@@ -155,6 +155,27 @@ test('Pilot and Bomber representative states render frozen across both situation
   }
 });
 
+test('Space Battle Pilot fuel notices leave a shot through the former notice position visible', () => {
+  const h = harness();
+  h.setReduced(true);
+  h.scene.begin({ total: 10, naturalOne: false }, 'Space Battle', 'Pilot');
+  const state = h.scene.spacePilot;
+  Object.assign(state, {
+    x: 240, y: 420,
+    shots: [{ x: 240, y: 456, radius: 5, vx: 100, vy: 0 }],
+  });
+  h.paint();
+  const normal = structuredClone(h.commands);
+  assert.ok(normal.some(command => command[0] === 'fillCircle'
+    && command[1] === 242 && command[2] === 456 && command[3] === 1.8), 'shot core is painted');
+
+  for (const notice of [{ fuel: 5, fuelPickupFlash: 0 }, { fuel: 13, fuelPickupFlash: .6 }]) {
+    Object.assign(state, notice);
+    h.paint();
+    assert.deepEqual(structuredClone(h.commands), normal, 'fuel feedback does not paint over the shot');
+  }
+});
+
 test('mine preview, deployed radius and explosion boundary use exact Natural 1 geometry in both Bomber modes', () => {
   for (const situation of ['Asteroid Field', 'Space Battle']) for (const naturalOne of [false, true]) {
     const h = harness(); h.scene.config.naturalOne = naturalOne; pilotBomberFixtures(h.scene);
