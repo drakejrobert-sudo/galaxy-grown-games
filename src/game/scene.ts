@@ -175,7 +175,7 @@ export class FlightScene extends Phaser.Scene {
     this.onReady();
   }
 
-  begin(config: FlightConfig, situation: Situation = 'Asteroid Field', role: Role = 'Pilot') {
+  begin(config: FlightConfig, situation: Situation = 'Asteroid Field', role: Role = 'Pilot', practice = false) {
     this.config = config;
     this.situation = situation;
     this.role = role;
@@ -184,7 +184,7 @@ export class FlightScene extends Phaser.Scene {
     this.flight = createFlight();
     this.gunner = createGunner();
     this.spaceGunner = createSpaceGunner();
-    this.bomber = createBomber();
+    this.bomber = createBomber(practice);
     this.lifeSupport = createLifeSupport();
     this.spacePilot = createSpaceBattlePilot();
     this.spaceBomber = createSpaceBattleBomber();

@@ -352,6 +352,7 @@ export interface Explosion {
 /** Same one-attempt aft launcher contract in both Bomber modes. */
 export type BomberInput = SpaceBattleBomberInput;
 export interface BomberState {
+  practice: boolean;
   x: number;
   y: number;
   aimAngle: number;
@@ -388,8 +389,9 @@ export function bomberBlastRadius(config: FlightConfig): number {
   return BOMBER_BLAST_RADIUS * (config.naturalOne ? BOMBER_IMPAIRMENT_SCALE : 1);
 }
 
-export function createBomber(): BomberState {
+export function createBomber(practice = false): BomberState {
   return {
+    practice,
     x: WIDTH / 2, y: 105, aimAngle: Math.PI / 2, aimDistance: SPACE_BOMBER_LAUNCH_DISTANCE, elapsed: 0, hull: 3, impacts: 0, destroyed: 0,
     minesPlaced: 0, invulnerable: 0, cooldown: 0, spawnIn: 0.8, asteroids: [], mines: [],
     explosions: [], finished: false, nextId: 1, impactFlash: 0,
@@ -404,7 +406,7 @@ export function stepBomber(
   random: () => number = Math.random,
 ): void {
   if (s.finished) return;
-  dt = Math.min(Math.max(dt, 0), 0.05, DURATION - s.elapsed);
+  dt = Math.min(Math.max(dt, 0), 0.05, s.practice ? Infinity : DURATION - s.elapsed);
   if (dt <= 0) return;
   const oldShipX = s.x, oldGrace = s.invulnerable;
   const tuning = BOMBER_TUNING[difficultyFor(config.total)];
@@ -421,17 +423,33 @@ export function stepBomber(
   }
   s.x = automaticShipX(s.elapsed);
 
-  s.spawnIn -= dt;
-  while (s.spawnIn <= 0) {
-    const radius = 14 + random() * 12;
-    const x = radius + random() * (WIDTH - radius * 2);
-    const speed = tuning.speed * (0.85 + random() * 0.3);
-    const vx = (s.x - x) / WIDTH * speed * tuning.drift;
-    s.asteroids.push({
-      id: s.nextId++, x, y: HEIGHT + radius + 4, radius, speed, vx,
-      rotation: random() * Math.PI * 2, spin: (random() - 0.5) * 1.5,
-    });
-    s.spawnIn += tuning.spawnEvery;
+  if (s.practice) {
+    if (!s.asteroids.length) {
+      s.spawnIn -= dt;
+      if (s.spawnIn <= 0) {
+        const radius = 20;
+        const speed = BOMBER_TUNING.Easy.speed;
+        const y = HEIGHT + radius + 4;
+        const landingY = mineDropPosition(s).y + SPACE_BOMBER_LAUNCH_DISTANCE;
+        const interceptTime = s.elapsed - dt + (y - landingY) / speed;
+        s.asteroids.push({ id: s.nextId++, x: automaticShipX(interceptTime), y, radius, speed, spin: 0.5 });
+        s.spawnIn = 0.8;
+        s.hull = 3;
+      }
+    }
+  } else {
+    s.spawnIn -= dt;
+    while (s.spawnIn <= 0) {
+      const radius = 14 + random() * 12;
+      const x = radius + random() * (WIDTH - radius * 2);
+      const speed = tuning.speed * (0.85 + random() * 0.3);
+      const vx = (s.x - x) / WIDTH * speed * tuning.drift;
+      s.asteroids.push({
+        id: s.nextId++, x, y: HEIGHT + radius + 4, radius, speed, vx,
+        rotation: random() * Math.PI * 2, spin: (random() - 0.5) * 1.5,
+      });
+      s.spawnIn += tuning.spawnEvery;
+    }
   }
 
   const paths = new Map(s.asteroids.map(asteroid => [asteroid.id, { x: asteroid.x, y: asteroid.y }]));
@@ -525,7 +543,7 @@ export function stepBomber(
   s.asteroids = s.asteroids.filter(asteroid => !destroyed.has(asteroid.id) && !collided.has(asteroid.id));
   // Escaping asteroids are safe misses, not ship impacts or scoring events.
   s.asteroids = s.asteroids.filter(asteroid => asteroid.y + asteroid.radius >= -10);
-  s.finished = s.hull <= 0 || s.elapsed >= DURATION;
+  s.finished = s.practice ? detonated.size > 0 : s.hull <= 0 || s.elapsed >= DURATION;
 }
 
 export function bomberScoreFor(s: BomberState): number {

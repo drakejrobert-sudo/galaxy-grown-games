@@ -32,20 +32,28 @@ app.innerHTML = `
     <div class="readout" aria-live="polite"><span>CHALLENGE DIFFICULTY</span><strong id="difficulty">Awaiting check</strong><p id="impairment">Standard engine</p></div>
     <p id="error" class="error" role="alert"></p>
     <button id="start" class="primary" type="submit"><span id="start-label">Start challenge</span> <span>↗</span></button>
+    <button id="practice-launcher" type="button" hidden>Practice launcher</button>
     <p id="load-status" class="help" role="status" aria-live="polite"></p>
     <p id="controls-help" class="help">Arrow keys / WASD to steer. On touch screens, hold and drag in the flight area. The ship follows at its movement speed.</p>
   </form>
 </section>
 <section id="play" hidden>
-  <div class="play-heading"><div><h2 id="mode-label" class="eyebrow">ASTEROID FIELD / PILOT</h2></div><div class="play-actions"><button id="pause" type="button">Pause</button></div></div>
-  <div class="hud">
+  <div class="play-heading"><div><h2 id="mode-label" class="eyebrow">ASTEROID FIELD / PILOT</h2></div><div class="play-actions"><button id="practice-exit" type="button" hidden>Back to setup</button><button id="pause" type="button">Pause</button></div></div>
+  <div id="flight-hud" class="hud">
     <div><span>TIME LEFT</span><strong id="time">60s</strong></div>
     <div><span id="health-label">HULL</span><strong id="hull">3 / 3</strong></div>
     <div id="fuel-wrap" hidden><span id="fuel-label" data-notice="normal" aria-live="polite">FUEL</span><strong id="fuel">${SPACE_BATTLE_STARTING_FUEL.toFixed(1)}s</strong></div>
     <div><span>SCORE</span><strong id="score">300</strong></div>
   </div>
   <p id="flight-status" class="flight-status"></p>
-  <div class="flight-stage"><div class="flight-viewport"><div class="flight-wrap"><div id="canvas" aria-label="Asteroid field. Steer with arrow keys, WASD, or touch." role="application" tabindex="0"></div><div id="pause-overlay" hidden><h2>Challenge paused</h2><p id="pause-reason">Your timer is stopped.</p><p id="play-help" class="help"></p><button id="resume" class="primary" type="button">Resume challenge</button><button id="abandon" type="button">Back to setup</button></div></div></div><div id="action-rail" class="action-rail" hidden><button id="fire-action" class="action action-fire" type="button" hidden>Fire</button><button id="action" class="action action-mine" type="button" hidden>Launch mine</button></div></div>
+  <div class="flight-stage"><div class="flight-viewport"><div class="flight-wrap"><div id="canvas" aria-label="Asteroid field. Steer with arrow keys, WASD, or touch." role="application" tabindex="0"></div><div id="pause-overlay" hidden><h2 id="pause-title">Challenge paused</h2><p id="pause-reason">Your timer is stopped.</p><p id="play-help" class="help"></p><button id="resume" class="primary" type="button">Resume challenge</button><button id="abandon" type="button">Back to setup</button></div></div></div><div id="action-rail" class="action-rail" hidden><button id="fire-action" class="action action-fire" type="button" hidden>Fire</button><button id="action" class="action action-mine" type="button" hidden>Launch mine</button></div></div>
+  <div id="practice-result" hidden>
+    <h3 id="practice-outcome">Direct hit</h3>
+    <div class="practice-result-actions">
+      <button id="practice-start" class="primary" type="button" aria-describedby="practice-outcome">Start challenge</button>
+      <button id="practice-retry" type="button">Try again</button>
+    </div>
+  </div>
   <div id="route-controls" class="route-controls" aria-label="Life Support routing switch" hidden><button id="route-thrusters" type="button" aria-pressed="false"><span>▲</span>Thrusters<small>1</small></button><button id="route-shields" type="button" aria-pressed="true"><span>●</span>Shields<small>2</small></button><button id="route-guns" type="button" aria-pressed="false"><span>✛</span>Guns<small>3</small></button></div>
   <div id="platform-controls" class="platform-controls" aria-label="Platformer controls" hidden><button id="move-left" type="button">◀ Left</button><button id="move-right" type="button">Right ▶</button><button id="jump" type="button">Jump</button></div>
   <div id="routing-info" class="routing-info" hidden><p id="routing-status" class="routing-status" role="status" aria-live="polite" aria-atomic="true"></p></div>
@@ -72,6 +80,9 @@ const fuelWrap = get('fuel-wrap');
 const fuelLabel = get('fuel-label');
 const fuelValue = get('fuel');
 const action = get<HTMLButtonElement>('action');
+const practiceLauncher = get<HTMLButtonElement>('practice-launcher');
+const practiceExit = get('practice-exit');
+const practiceResult = get('practice-result');
 const fireAction = get<HTMLButtonElement>('fire-action');
 const actionRail = get('action-rail');
 const routeControls = get('route-controls');
@@ -98,6 +109,7 @@ let pauseOnReady = false;
 let config: FlightConfig = { total: 10, naturalOne: false };
 let role: Role = 'Pilot';
 let situation: Situation = 'Asteroid Field';
+let practice = false;
 function usesCockpitPilot() { return situation === 'Boarding Party' && role === 'Pilot'; }
 function usesRifleControls() {
   return (situation === 'Space Battle' && role === 'Gunner') ||
@@ -168,6 +180,7 @@ function refreshSetup() {
   bomberOption.disabled = false;
   lifeSupportOption.disabled = false;
   const selectedRole = roleSelect.value as Role;
+  practiceLauncher.hidden = selectedSituation !== 'Asteroid Field' || selectedRole !== 'Bomber';
   const asteroidRolls: Record<Role, string> = {
     Pilot: 'your Dexterity (Acrobatics) modifier',
     Gunner: 'your character’s Dexterity-based ranged attack modifier',
@@ -219,7 +232,7 @@ function setPaused(value: boolean, interrupted = false) {
   lifeSupportInput.enable(!value && situation === 'Asteroid Field' && role === 'Life Support');
   spaceLifeInput.enable(!value && situation === 'Space Battle' && role === 'Life Support');
   get('pause-reason').textContent = interrupted
-    ? 'Play paused after an interruption. Resume when ready.' : 'Your timer is stopped.';
+    ? 'Play paused after an interruption. Resume when ready.' : practice ? 'The drill is paused.' : 'Your timer is stopped.';
   get('pause-overlay').hidden = !value;
   get('pause').textContent = value ? 'Resume' : 'Pause';
   if (value) get('resume').focus(); else get('canvas').focus();
@@ -238,9 +251,21 @@ function resetSetup() {
   get('pause-overlay').hidden = true; show('setup'); total.focus();
 }
 get('abandon').addEventListener('click', resetSetup); get('again').addEventListener('click', resetSetup);
+practiceExit.addEventListener('click', resetSetup);
+for (const button of [practiceExit, get('pause'), get('resume'), get('abandon')]) {
+  button.addEventListener('keydown', event => {
+    // Preserve native button activation while the practice launcher listens on window.
+    if (practice && (event.code === 'Enter' || event.code === 'Space')) event.stopPropagation();
+  });
+}
 function preparePlayLayout() {
   get('play').setAttribute('data-role', role);
   get('play').setAttribute('data-situation', situation);
+  get('play').setAttribute('data-practice', String(practice));
+  get('flight-hud').hidden = practice;
+  practiceResult.hidden = true;
+  practiceExit.hidden = !practice;
+  get('pause').hidden = false;
   action.hidden = role !== 'Bomber';
   action.textContent = 'Launch mine';
   const rifle = usesRifleControls();
@@ -269,7 +294,7 @@ function launch() {
   const startPaused = pauseOnReady || document.hidden;
   launchPending = false;
   pauseOnReady = false;
-  scene!.begin(config, situation, role);
+  scene!.begin(config, situation, role, practice);
   lifeSupportInput.reset();
   get('routing-status').textContent = 'Waiting for a packet · Selected: Shields';
   get('routing-status').setAttribute('data-outcome', 'waiting');
@@ -283,6 +308,8 @@ function launch() {
   spaceLifeInput.enable(situation === 'Space Battle' && role === 'Life Support');
   inFlight = true; paused = false;
   get('pause').textContent = 'Pause'; get('pause-overlay').hidden = true;
+  get('pause-title').textContent = practice ? 'Practice paused' : 'Challenge paused';
+  get('resume').textContent = practice ? 'Resume practice' : 'Resume challenge';
   fuelWrap.hidden = situation !== 'Space Battle' || role !== 'Pilot';
   if (!fuelWrap.hidden) updateFuelHud(SPACE_BATTLE_STARTING_FUEL, 0);
   get('health-label').textContent = role === 'Life Support' ? 'INTEGRITY' : 'HULL';
@@ -326,23 +353,43 @@ function launch() {
     canvas.setAttribute('aria-label', `Boarding Party / ${role}. ${boardingHelp[role]}`);
     get('flight-status').textContent = `${difficultyFor(config.total)} · Check ${config.total} · ${config.naturalOne ? 'Natural 1: ' + (role === 'Life Support' ? 'double airlock recharge' : impairment) : 'Standard station systems'}`;
   }
-  if (startPaused) setPaused(true); else get('canvas').focus();
+  if (practice) {
+    get('mode-label').textContent = 'LAUNCHER PRACTICE';
+    get('flight-status').textContent = 'Place a mine in the approaching asteroid’s path.';
+  }
+  if (startPaused) setPaused(true); else canvas.focus();
 }
 function setLoading(value: boolean) {
   loading = value;
   get<HTMLButtonElement>('start').disabled = value;
+  practiceLauncher.disabled = value;
   total.disabled = value; natural.disabled = value; roleSelect.disabled = value; situationSelect.disabled = value;
-  get('start-label').textContent = value ? 'Loading flight…' : 'Start challenge';
-  get('load-status').textContent = value ? 'Preparing the game. Your challenge will start when it is ready.' : '';
+  get('start-label').textContent = value && !practice ? 'Loading flight…' : 'Start challenge';
+  get('load-status').textContent = value
+    ? practice ? 'Preparing launcher practice…' : 'Preparing the game. Your challenge will start when it is ready.'
+    : '';
 }
-get('flight-form').addEventListener('submit', async e => {
+get('flight-form').addEventListener('submit', e => {
   e.preventDefault();
-  if (loading) return;
-  const parsed = parseTotal(total.value);
-  if (parsed === null) { get('error').textContent = 'Enter a whole-number check total, including modifiers.'; total.focus(); return; }
-  config = { total: parsed, naturalOne: natural.checked };
+  return startFlight(false);
+});
+practiceLauncher.addEventListener('click', () => startFlight(true));
+get('practice-retry').addEventListener('click', () => startFlight(true));
+get('practice-start').addEventListener('click', () => startFlight(false));
+
+async function startFlight(drill: boolean) {
+  if (loading || launchPending) return;
+  const parsed = drill ? 15 : parseTotal(total.value);
+  if (parsed === null) {
+    if (practice) resetSetup();
+    get('error').textContent = 'Enter a whole-number check total, including modifiers.';
+    total.focus();
+    return;
+  }
+  config = { total: parsed, naturalOne: !drill && natural.checked };
   situation = situationSelect.value === 'Boarding Party' ? 'Boarding Party' : situationSelect.value === 'Space Battle' ? 'Space Battle' : 'Asteroid Field';
   role = roleSelect.value as Role;
+  practice = drill;
   launchPending = true;
   if (!game) {
     setLoading(true);
@@ -369,7 +416,7 @@ get('flight-form').addEventListener('submit', async e => {
       }
       preparePlayLayout();
       show('play');
-      get('flight-status').textContent = 'Starting challenge…';
+      get('flight-status').textContent = practice ? 'Starting practice…' : 'Starting challenge…';
       // Scene plugins (including events) do not exist until Phaser boots.
       scene.onReady = launch;
       game = new Phaser.Game({ type: Phaser.CANVAS, parent: 'canvas', width: WIDTH, height: HEIGHT,
@@ -387,7 +434,7 @@ get('flight-form').addEventListener('submit', async e => {
       setLoading(false);
     }
   } else { preparePlayLayout(); show('play'); launch(); }
-});
+}
 function attachSceneCallbacks(scene: FlightScene) {
 scene.onBoardingPilotStep = s => {
   const points = boardingPilotScore(s);
@@ -456,6 +503,18 @@ scene.onGunnerStep = s => {
 };
 scene.onBomberStep = s => {
   action.textContent = s.cooldown <= 0 ? 'Launch mine · Ready' : 'Mine cooling';
+  if (s.practice) {
+    if (s.finished) {
+      inFlight = false;
+      bomberInput.enable(false);
+      get('pause').hidden = true;
+      actionRail.hidden = true;
+      practiceResult.hidden = false;
+      get('flight-status').textContent = '';
+      get('practice-start').focus();
+    }
+    return;
+  }
   get('time').textContent = `${Math.ceil(DURATION - s.elapsed)}s`;
   get('hull').textContent = `${s.hull} / 3`;
   get('score').textContent = String(bomberScoreFor(s));
