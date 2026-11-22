@@ -198,3 +198,32 @@
   #play .action-rail { grid-row: 5; align-items: flex-end; padding-bottom: 0; }
   #play .action { position: static; width: 140px; min-height: 56px; border-radius: 14px; }
 }
+
+#practice-launcher { width: 100%; margin-top: 8px; }
+#practice-exit { padding-inline: 10px; }
+#play[data-practice="true"] .flight-stage { grid-row: 4; }
+#practice-result {
+  grid-row: 5;
+  text-align: center;
+  padding: 4px 0;
+}
+#practice-result h3 { margin: 0 0 4px; color: var(--mint); }
+.practice-result-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+}
+
+@media (orientation: landscape) and (max-height: 540px) {
+  #play[data-practice="true"] .play-heading { flex-wrap: wrap; }
+  #practice-result { grid-column: 2; }
+}
+
+@media (max-width: 390px) {
+  #play[data-practice="true"] .play-actions { gap: 6px; }
+  #play[data-practice="true"] .play-actions button {
+    font-size: 14px;
+    padding-inline: 10px;
+  }
+}

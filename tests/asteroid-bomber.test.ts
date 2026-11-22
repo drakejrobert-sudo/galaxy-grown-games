@@ -111,3 +111,51 @@ test('simultaneous mine and hull contacts retain mine defense priority', () => {
   stepBomber(s, config, idle, .05);
   assert.equal(s.hull, 3); assert.equal(s.destroyed, 1); assert.equal(s.mines.length, 0);
 });
+
+test('practice repeats one deterministic target after a pass or a ship collision', () => {
+  const practice = createBomber(true), repeat = createBomber(true);
+  advance(practice, 1);
+  advance(repeat, 1);
+  assert.deepEqual(practice.asteroids, repeat.asteroids);
+  const target = practice.asteroids[0];
+  assert.ok(target.y > practice.y && target.speed > 0);
+
+  Object.assign(target, { x: 20, y: 1, speed: 1000 });
+  advance(practice, .05);
+  assert.equal(practice.asteroids.length, 0);
+  assert.equal(practice.impacts, 0);
+  advance(practice, .85);
+  assert.equal(practice.asteroids.length, 1);
+  assert.notEqual(practice.asteroids[0].id, target.id);
+
+  practice.hull = 1;
+  Object.assign(practice.asteroids[0], { x: practice.x, y: practice.y + 36, speed: 1000 });
+  advance(practice, .05);
+  assert.equal(practice.impacts, 1);
+  assert.equal(practice.asteroids.length, 0);
+  advance(practice, .85);
+  assert.equal(practice.asteroids.length, 1);
+  assert.equal(practice.hull, 3);
+  advance(practice, 60);
+  assert.equal(practice.finished, false);
+  assert.ok(practice.elapsed > 60);
+  assert.ok(practice.asteroids.length <= 1);
+});
+
+test('the practice target can be intercepted with the default launcher and freezes on contact', () => {
+  const practice = createBomber(true);
+  advance(practice, 1);
+  const target = practice.asteroids[0];
+  const landingY = spaceBomberLanding(practice).y;
+  advance(practice, (target.y - landingY) / target.speed - .22);
+  stepBomber(practice, config, { placing: true }, .01);
+  assert.equal(practice.minesPlaced, 1);
+  advance(practice, .45);
+  assert.equal(practice.finished, true);
+  assert.equal(practice.destroyed, 1);
+  assert.equal(practice.asteroids.length, 0);
+  assert.equal(practice.explosions.length, 1);
+  const frozen = structuredClone(practice);
+  advance(practice, 1);
+  assert.deepEqual(practice, frozen);
+});
