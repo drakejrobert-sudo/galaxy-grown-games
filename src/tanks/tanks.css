@@ -1,14 +1,15 @@
 .tanks {max-width: 1024px; padding-top: 16px;}
 .tanks h1 {margin: 0 0 18px; font-size: clamp(32px,5vw,52px);}
-.tanks h2 {margin: 0; font-size: clamp(19px,3vw,28px);}
+.tanks h2 {margin: 0; font-size: clamp(19px,3vw,28px); overflow-wrap: anywhere; min-width: 0;}
 .tanks p {color: #d2ddd9; line-height: 1.5;}
 #tank-setup {max-width: 520px;}
 #tank-setup form, #station {background: #192735; border: 1px solid #405461; border-radius: 12px; padding: 16px;}
+#tank-setup form > label {display: block; margin-bottom: 12px;}
 #seats > div {display: grid; grid-template-columns: minmax(0,1fr) auto; align-items: end; gap: 16px; margin: 12px 0;}
 #seats input[type=text] {font-size: 16px;}
 #seats input[type=radio] {accent-color: #78e1af;}
 #seats label:has(input[type=radio]) {padding: 12px 0;}
-.tank-heading {display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;}
+.tank-heading {display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 8px;}
 #hills {background: #152c3e; width: 100%; aspect-ratio: 2; overflow: hidden; border-radius: 8px;}
 #hills canvas {display: block;}
 #report {min-height: 1.5em; margin: 8px 0;}
@@ -37,3 +38,12 @@
 .tanks:has(#tank-match:not([hidden])) {padding-top: 4px;}
 #hills {max-width: max(540px,96vh); margin-inline: auto;}
 .tanks button, .tanks select {touch-action: manipulation;}
+
+@media (max-width: 620px) {
+  #station {padding: 8px 12px 10px;}
+  .tank-controls > div:first-child {display: flex; align-items: center; justify-content: space-between; gap: 4px;}
+  .tank-controls > div:first-child > div {display: flex; flex-shrink: 0; gap: 4px;}
+  .tank-controls span {margin: 0;}
+  .tank-controls select {min-height: 44px; padding: 8px 20px 8px 8px; font-size: 16px;}
+  #app:has(#tank-match:not([hidden])) > nav a {padding-block: 5px;}
+}
