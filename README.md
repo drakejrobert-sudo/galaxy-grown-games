@@ -9,7 +9,7 @@ Player link: [play.drakesfood.com](https://play.drakesfood.com/). This HTTPS sho
 
 ## Hillside Tanks
 
-Open **Tanks** for a shared-screen match with 2–8 named players. The DM shares the browser window and operates the controls as each player calls their drive, direction, elevation and power. Each turn allows up to two tank lengths of movement and one shot. The DM is a rival with two heavy shells and one starburst. The last surviving tank wins. The game runs locally in the browser on the same static site. Closing or refreshing the tab ends the match. Damage, movement and special ammo counts are provisional playtest values.
+Open **Tanks** for a shared-screen match with 2–8 named players. The DM shares the browser window and operates the controls as each player calls their drive, direction, elevation and power. Each turn allows up to two tank lengths of movement and one shot. When the volley resolves, the next survivor takes over automatically. Each seat keeps its last fired elevation and power until rematch. The DM is a rival with two heavy energy shells and one starburst. The last surviving tank wins. The game runs locally in the browser on the same static site. Closing or refreshing the tab ends the match. Pick the original Hillside, low-gravity Moon Basin, or Planet Skirmish. On Planet Skirmish, drive clockwise or counterclockwise and aim away from the local surface while three gravity wells bend shots. Lower-power starbursts have time to split when they stop moving away from the launch planet. Damage, movement, gravity and special ammo counts are provisional playtest values.
 
 ## Galaxy Map V1
 
