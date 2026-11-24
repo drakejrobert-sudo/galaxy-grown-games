@@ -24,8 +24,16 @@ for (const path of urls) {
 assert.equal((await request('/art/asteroid.webp')).headers.get('content-type'), 'image/webp');
 assert.equal((await request('/assets/missing.js')).status, 404);
 assert.equal(await (await request('/', { method: 'HEAD' })).text(), '');
-assert.equal((await request('/api/rooms')).status, 401);
+const rooms = await worker.fetch(new Request('https://artifact.invalid/api/rooms'), {
+  DB: { prepare() { throw new Error('A new guest should not query D1'); } },
+});
+assert.equal(rooms.status, 200);
+assert.match(rooms.headers.get('set-cookie'), /^__Host-gg_room_guest=[a-f0-9]{64};/);
+assert.deepEqual(await rooms.json(), { canHost: false, hosted: [], joined: [] });
+assert.equal((await worker.fetch(new Request('https://artifact.invalid/api/rooms', {
+  method: 'POST', headers: { Origin: 'https://artifact.invalid' },
+}), { DB: {} })).status, 403);
 
 const size = gzipSync(readFileSync(new URL('../dist/server/index.js', import.meta.url))).length;
 assert.ok(size < 3_000_000, `Worker bundle is ${size} bytes compressed, near or above the 3 MB budget`);
-console.log(`Verified Worker entry assets, Rooms authentication and D1 migration. Compressed Worker: ${size} bytes.`);
+console.log(`Verified Worker entry assets, guest session setup and DM authorization and D1 migration. Compressed Worker: ${size} bytes.`);

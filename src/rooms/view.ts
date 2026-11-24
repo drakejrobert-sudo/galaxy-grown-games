@@ -12,7 +12,7 @@ ${surfaceNavigation('Rooms')}
   <div class="room-heading"><h1>Rooms</h1><button type="button" id="refresh-rooms">Refresh rooms</button></div>
   <p id="room-status" role="status">Loading rooms…</p>
   <p id="room-error" role="alert"></p>
-  <a id="room-sign-in" href="/signin-with-chatgpt?return_to=%2F%23%2Frooms" target="_top" hidden>Sign in with ChatGPT</a>
+  <a id="room-sign-in" href="/signin-with-chatgpt?return_to=%2F%23%2Frooms" target="_top" hidden>DM sign in</a>
   <div class="room-grid" id="room-content" hidden>
     <section class="panel" id="host-rooms" aria-labelledby="host-heading" hidden>
       <div class="room-heading"><h2 id="host-heading">DM rooms</h2><button type="button" id="create-room">Create room</button></div>
@@ -21,6 +21,7 @@ ${surfaceNavigation('Rooms')}
     <div class="room-stack" id="player-rooms">
       <form class="panel" id="join-room">
         <h2>Join a room</h2>
+        <p class="room-help">Your seat stays with this browser while the room is open.</p>
         <label>Room code <input name="code" type="text" placeholder="8 characters" autocapitalize="characters" spellcheck="false" autocomplete="off" maxlength="8" required></label>
         <label>Display name <input name="name" type="text" maxlength="32" autocomplete="nickname" required></label>
         <button class="primary">Join room</button>
@@ -62,11 +63,6 @@ async function api<Result>(path = '', method = 'GET', body?: object): Promise<Re
     headers: body ? { 'Content-Type': 'application/json' } : undefined,
     body: body ? JSON.stringify(body) : undefined,
   });
-  if (response.status === 401 || response.redirected) {
-    content.hidden = true;
-    signIn.hidden = false;
-    throw new Error('Sign in to create or join a room.');
-  }
   if (response.status === 204) return undefined as Result;
   if (!response.headers.get('Content-Type')?.includes('application/json')) throw new Error('Rooms could not be loaded. Try again.');
   const data = await response.json();
@@ -179,7 +175,7 @@ async function loadRooms(focusId?: string): Promise<void> {
   hostList.replaceChildren(...rooms.hosted.map(hostCard));
   if (!rooms.hosted.length) hostList.append(element('p', 'You have no active rooms.'));
   hosted.hidden = !rooms.canHost;
-  signIn.hidden = true;
+  signIn.hidden = rooms.canHost;
   content.hidden = false;
   if (focusId) document.getElementById(focusId)?.focus();
 }

@@ -17,8 +17,8 @@ function fixture(t: TestContext, codes = ['ABCDEF23', 'BCDEFG34']) {
   const { database, binding } = roomsDatabase();
   t.after(() => database.close());
   let now = start;
-  function call(endpoint: string, user: typeof dm | null, method = 'GET', data?: object, from = origin) {
-    const headers = new Headers({ Origin: from });
+  function call(endpoint: string, user: typeof dm | null, method = 'GET', data?: object, from = origin, extra: Record<string, string> = {}) {
+    const headers = new Headers({ Origin: from, ...extra });
     if (user) {
       headers.set('oai-authenticated-user-id', user.id);
       headers.set('oai-authenticated-user-email', user.email);
@@ -26,13 +26,14 @@ function fixture(t: TestContext, codes = ['ABCDEF23', 'BCDEFG34']) {
     if (data) headers.set('Content-Type', 'application/json');
     return roomApi(new Request(origin + path + endpoint, {
       method, headers, body: data ? JSON.stringify(data) : undefined,
-    }), { DB: binding, ROOM_DM_EMAIL: dm.email }, now, () => codes.shift() ?? 'ZZZZZZZZ');
+    }), { DB: binding, ROOM_DM_EMAIL: dm.email, ROOM_RATE_LIMIT_KEY: 'fictional-fixture-key' }, now, () => codes.shift() ?? 'ZZZZZZZZ');
   }
   return {
     call,
+    database,
     clock: (value: number) => { now = value; },
-    async list(user: typeof dm): Promise<RoomList> {
-      const result = await call('', user);
+    async list(user: typeof dm | null, cookie?: string): Promise<RoomList> {
+      const result = await call('', user, 'GET', undefined, origin, cookie ? { Cookie: cookie } : {});
       assert.equal(result.status, 200);
       assert.equal(result.headers.get('cache-control'), 'private, no-store');
       return result.json();
@@ -45,13 +46,10 @@ function fixture(t: TestContext, codes = ['ABCDEF23', 'BCDEFG34']) {
   };
 }
 
-test('only Drake can host, each room is scoped to the authenticated owner, and requests require Site identity', async (t) => {
+test('only Drake can host, each room is scoped to the authenticated owner, and management requires Site identity', async (t) => {
   const { call, create, list } = fixture(t);
-  assert.equal((await call('', null)).status, 401);
-  const missingId = await roomApi(new Request(origin + path, {
-    headers: { 'oai-authenticated-user-email': dm.email },
-  }), {});
-  assert.equal(missingId.status, 401);
+  assert.equal((await call('', null, 'POST')).status, 403);
+  assert.equal((await call('', { ...dm, id: '' }, 'POST')).status, 403);
   assert.equal((await call('', pilot, 'POST')).status, 403);
   assert.equal((await call('', dm, 'POST', undefined, 'https://elsewhere.test')).status, 403);
   const room = await create();
@@ -150,4 +148,71 @@ test('invalid forms and oversized input cannot create a seat', async (t) => {
     assert.equal((await call('/join', pilot, 'POST', data)).status, 400);
   }
   assert.equal((await list(dm)).hosted[0].seats.length, 0);
+});
+
+async function guestCookie(call: ReturnType<typeof fixture>['call']): Promise<string> {
+  const response = await call('', null);
+  assert.equal(response.status, 200);
+  assert.deepEqual(await response.json(), { canHost: false, hosted: [], joined: [] });
+  assert.equal(response.headers.get('cache-control'), 'private, no-store');
+  const cookie = response.headers.get('set-cookie') ?? '';
+  assert.match(cookie, /^__Host-gg_room_guest=[a-f0-9]{64}; Path=\/; Max-Age=43200; HttpOnly; Secure; SameSite=Lax$/);
+  return cookie.split(';')[0];
+}
+
+test('guests join by code, recover their assigned seat only with their browser cookie, and cannot manage rooms', async (t) => {
+  const { call, create, database, list } = fixture(t);
+  const room = await create();
+  const [first, second] = await Promise.all([guestCookie(call), guestCookie(call)]);
+  assert.notEqual(first, second);
+  const form = { code: room.code, name: 'Skye' };
+  assert.equal((await call('/join', null, 'POST', form)).status, 400);
+  const signedOut = (path: string, method: string, data?: object) => call(path, null, method, data, origin, { Cookie: first });
+  const joins = await Promise.all([signedOut('/join', 'POST', form), signedOut('/join', 'POST', form)]);
+  assert.deepEqual(joins.map((response) => response.status), [200, 200]);
+  const [{ seat }, retry] = await Promise.all(joins.map((response) => response.json()));
+  assert.equal(retry.seat.id, seat.id);
+  const path = '/' + room.id + '/seats/' + seat.id;
+  assert.equal((await signedOut(path, 'PUT', { station: 'Pilot' })).status, 403);
+  assert.equal((await signedOut('/' + room.id + '/close', 'POST')).status, 403);
+  assert.equal((await call(path, dm, 'PUT', { station: 'Pilot' })).status, 200);
+  assert.equal((await list(null, first)).joined[0].seat.station, 'Pilot');
+  assert.deepEqual((await list(null, second)).joined, []);
+  assert.equal((await list(pilot, first)).joined[0].seat.id, seat.id);
+  const loggedInRetry = await call('/join', pilot, 'POST', form, origin, { Cookie: first });
+  assert.equal((await loggedInRetry.json()).seat.id, seat.id);
+  const stored = database.prepare('SELECT user_id FROM room_members').get()?.user_id;
+  assert.match(String(stored), /^guest:[a-f0-9]{64}$/);
+  assert.ok(!first.includes(String(stored).slice(6)));
+  assert.equal((await call('/' + room.id + '/close', dm, 'POST')).status, 204);
+  assert.deepEqual((await list(null, first)).joined, []);
+});
+
+test('public guest requests are bounded across cookies on one network', async (t) => {
+  const { call, create } = fixture(t);
+  const room = await create();
+  const cookies = await Promise.all(Array.from({ length: 61 }, () => guestCookie(call)));
+  const form = { code: 'ZZZZZZZZ', name: 'Skye' };
+  const requests = await Promise.all(cookies.map((Cookie) => call('/join', null, 'POST', form, origin, {
+    Cookie, 'CF-Connecting-IP': '192.0.2.30',
+  })));
+  assert.equal(requests.filter((response) => response.status === 404).length, 60);
+  assert.equal(requests.filter((response) => response.status === 429).length, 1);
+  assert.equal((await call('/join', null, 'POST', { ...form, code: room.code }, origin, {
+    Cookie: cookies[60], 'CF-Connecting-IP': '192.0.2.31',
+  })).status, 200);
+});
+
+test('a full room still lets existing guests reclaim their seats', async (t) => {
+  const { call, create, list } = fixture(t);
+  const room = await create();
+  const cookies = await Promise.all(Array.from({ length: 17 }, () => guestCookie(call)));
+  const join = (Cookie: string) => call('/join', null, 'POST', { code: room.code, name: 'Crew' }, origin, { Cookie });
+  const results = await Promise.all(cookies.map(join));
+  assert.equal(results.filter((response) => response.status === 200).length, 16);
+  assert.equal(results.filter((response) => response.status === 409).length, 1);
+  const accepted = results.findIndex((response) => response.status === 200);
+  const { seat } = await results[accepted].json();
+  assert.equal((await (await join(cookies[accepted])).json()).seat.id, seat.id);
+  assert.equal((await list(dm)).hosted[0].seats.length, 16);
 });

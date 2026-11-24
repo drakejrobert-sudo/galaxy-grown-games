@@ -9,11 +9,16 @@ interface DatabaseStatement {
 export interface RoomEnvironment {
   DB?: { prepare(query: string): DatabaseStatement };
   ROOM_DM_EMAIL?: string;
+  ROOM_RATE_LIMIT_KEY?: string;
 }
 
 const roomLifetime = 12 * 60 * 60 * 1000;
 const joinWindow = 10 * 60 * 1000;
 const joinLimit = 10;
+const networkJoinLimit = 60;
+const maxRoomSeats = 16;
+const guestCookieName = '__Host-gg_room_guest';
+const guestTokenPattern = /^[a-f0-9]{64}$/;
 const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 const codePattern = /^[A-HJ-NP-Z2-9]{8}$/;
 const roomAction = /^\/api\/rooms\/([a-f0-9-]{36})\/(close|seats\/([a-f0-9-]{36}))$/;
@@ -24,8 +29,50 @@ function randomCode(): string {
   return Array.from(crypto.getRandomValues(new Uint8Array(8)), (byte) => alphabet[byte % alphabet.length]).join('');
 }
 
-function json(data: unknown, status = 200): Response {
-  return Response.json(data, { status, headers: noStore });
+function json(data: unknown, status = 200, guestToken?: string): Response {
+  const headers = new Headers(noStore);
+  if (guestToken) {
+    headers.set('Set-Cookie', `${guestCookieName}=${guestToken}; Path=/; Max-Age=${roomLifetime / 1000}; HttpOnly; Secure; SameSite=Lax`);
+  }
+  return Response.json(data, { status, headers });
+}
+
+const encoder = new TextEncoder();
+
+function hex(bytes: ArrayBuffer | Uint8Array): string {
+  return Array.from(new Uint8Array(bytes), (byte) => byte.toString(16).padStart(2, '0')).join('');
+}
+
+function readGuestToken(request: Request): string | undefined {
+  const cookie = request.headers.get('Cookie')?.split(';')
+    .map((item) => item.trim())
+    .find((item) => item.startsWith(guestCookieName + '='));
+  const token = cookie?.slice(guestCookieName.length + 1);
+  return token && guestTokenPattern.test(token) ? token : undefined;
+}
+
+async function guestMemberId(token: string): Promise<string> {
+  return 'guest:' + hex(await crypto.subtle.digest('SHA-256', encoder.encode(token)));
+}
+
+async function networkRateKey(request: Request, secret: string | undefined): Promise<string> {
+  // Cloudflare owns this header. Use a single conservative bucket if Sites omits it.
+  const ip = request.headers.get('CF-Connecting-IP')?.trim();
+  if (!ip || !secret) return 'network:shared';
+  const key = await crypto.subtle.importKey('raw', encoder.encode(secret), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
+  return 'network:' + hex(await crypto.subtle.sign('HMAC', key, encoder.encode(ip)));
+}
+
+async function reserveJoin(db: NonNullable<RoomEnvironment['DB']>, key: string, now: number, limit: number) {
+  return db.prepare(`
+    INSERT INTO room_join_attempts (user_id, window_start, attempts) VALUES (?, ?, 1)
+    ON CONFLICT (user_id) DO UPDATE SET
+      window_start = CASE WHEN window_start <= ? THEN excluded.window_start ELSE window_start END,
+      attempts = CASE WHEN window_start <= ? THEN 1 ELSE attempts + 1 END
+    WHERE window_start <= ? OR attempts < ?
+    RETURNING window_start
+  `).bind(key, now, now - joinWindow, now - joinWindow, now - joinWindow, limit)
+    .first<{ window_start: number }>();
 }
 
 function error(message: string, status: number): Response {
@@ -64,13 +111,13 @@ export async function roomApi(
   generateCode = randomCode,
 ): Promise<Response> {
   const url = new URL(request.url);
-  const userId = request.headers.get('oai-authenticated-user-id')?.trim();
   const email = request.headers.get('oai-authenticated-user-email')?.trim().toLowerCase();
-  if (!userId || !email) return error('Sign in with ChatGPT to open Rooms.', 401);
+  const accountId = email ? request.headers.get('oai-authenticated-user-id')?.trim() : undefined;
+  const guestToken = readGuestToken(request);
 
   const db = env.DB;
   if (!db) return error('Rooms are temporarily unavailable.', 503);
-  const canHost = email === env.ROOM_DM_EMAIL?.trim().toLowerCase();
+  const dmId = accountId && email === env.ROOM_DM_EMAIL?.trim().toLowerCase() ? accountId : undefined;
   const method = request.method;
   if (method !== 'GET' && request.headers.get('Origin') !== url.origin) {
     return error('Open Rooms from this Site to make changes.', 403);
@@ -78,21 +125,26 @@ export async function roomApi(
 
   try {
     if (url.pathname === '/api/rooms' && method === 'GET') {
+      const anonymousId = guestToken ? await guestMemberId(guestToken) : null;
+      if (!accountId && !anonymousId) {
+        const token = hex(crypto.getRandomValues(new Uint8Array(32)));
+        return json({ canHost: false, hosted: [], joined: [] } satisfies RoomList, 200, token);
+      }
       const [joinedRows, hostedRows] = await Promise.all([
         db.prepare(`
           SELECT r.id AS roomId, r.expires_at AS expiresAt, m.id, m.name, m.station
           FROM room_members m JOIN rooms r ON r.id = m.room_id
-          WHERE m.user_id = ? AND r.closed_at IS NULL AND r.expires_at > ?
+          WHERE m.user_id IN (?, ?) AND r.closed_at IS NULL AND r.expires_at > ?
           ORDER BY r.expires_at DESC
-        `).bind(userId, now).all<Seat & { roomId: string; expiresAt: number }>(),
-        canHost
+        `).bind(accountId ?? null, anonymousId, now).all<Seat & { roomId: string; expiresAt: number }>(),
+        dmId
           ? db.prepare(`
               SELECT r.id, r.code, r.expires_at AS expiresAt,
                 m.id AS seatId, m.name, m.station
               FROM rooms r LEFT JOIN room_members m ON m.room_id = r.id
               WHERE r.owner_id = ? AND r.closed_at IS NULL AND r.expires_at > ?
               ORDER BY r.expires_at DESC, m.name COLLATE NOCASE, m.id
-            `).bind(userId, now).all<Omit<HostedRoom, 'seats'> & { seatId: string | null; name: string; station: Seat['station'] }>()
+            `).bind(dmId, now).all<Omit<HostedRoom, 'seats'> & { seatId: string | null; name: string; station: Seat['station'] }>()
           : { results: [] },
       ]);
       const hosted = new Map<string, HostedRoom>();
@@ -107,11 +159,11 @@ export async function roomApi(
       const joined = joinedRows.results.map(({ roomId, expiresAt, id, name, station }) => ({
         id: roomId, expiresAt, seat: { id, name, station },
       }));
-      return json({ canHost, hosted: [...hosted.values()], joined } satisfies RoomList);
+      return json({ canHost: Boolean(dmId), hosted: [...hosted.values()], joined } satisfies RoomList);
     }
 
     if (url.pathname === '/api/rooms' && method === 'POST') {
-      if (!canHost) return error('Only the DM can create a room.', 403);
+      if (!dmId) return error('Only the signed-in DM can create a room.', 403);
       const id = crypto.randomUUID();
       const expiresAt = now + roomLifetime;
       for (let attempt = 0; attempt < 5; attempt++) {
@@ -119,7 +171,7 @@ export async function roomApi(
         const room = await db.prepare(`
           INSERT INTO rooms (id, owner_id, code, expires_at) VALUES (?, ?, ?, ?)
           ON CONFLICT (code) DO NOTHING RETURNING id
-        `).bind(id, userId, code, expiresAt).first();
+        `).bind(id, dmId, code, expiresAt).first();
         if (room) return json({ id, code, expiresAt, seats: [] } satisfies HostedRoom, 201);
       }
       return error('Could not create a room code. Try again.', 503);
@@ -134,46 +186,59 @@ export async function roomApi(
         return error('Enter a display name of 1 to 32 characters.', 400);
       }
 
-      const reservation = await db.prepare(`
-        INSERT INTO room_join_attempts (user_id, window_start, attempts) VALUES (?, ?, 1)
-        ON CONFLICT (user_id) DO UPDATE SET
-          window_start = CASE WHEN window_start <= ? THEN excluded.window_start ELSE window_start END,
-          attempts = CASE WHEN window_start <= ? THEN 1 ELSE attempts + 1 END
-        WHERE window_start <= ? OR attempts < ?
-        RETURNING window_start
-      `).bind(userId, now, now - joinWindow, now - joinWindow, now - joinWindow, joinLimit)
-        .first<{ window_start: number }>();
+      const anonymousId = guestToken ? await guestMemberId(guestToken) : null;
+      const memberId = accountId ?? anonymousId;
+      if (!memberId) return error('Allow cookies and refresh Rooms before joining.', 400);
+
+      if (!accountId) {
+        const network = await networkRateKey(request, env.ROOM_RATE_LIMIT_KEY);
+        if (!await reserveJoin(db, network, now, networkJoinLimit)) {
+          return error('Too many attempts. Try again in a few minutes.', 429);
+        }
+      }
+      const reservation = await reserveJoin(db, memberId, now, joinLimit);
       if (!reservation) return error('Too many attempts. Try again in a few minutes.', 429);
 
       await db.prepare(`
         INSERT INTO room_members (id, room_id, user_id, name)
-        SELECT ?, id, ?, ? FROM rooms WHERE code = ? AND closed_at IS NULL AND expires_at > ?
+        SELECT ?, r.id, ?, ? FROM rooms r WHERE r.code = ? AND r.closed_at IS NULL AND r.expires_at > ?
+          AND (SELECT COUNT(*) FROM room_members WHERE room_id = r.id) < ?
+          AND NOT EXISTS (
+            SELECT 1 FROM room_members WHERE room_id = r.id AND user_id IN (?, ?)
+          )
         ON CONFLICT (room_id, user_id) DO NOTHING RETURNING id
-      `).bind(crypto.randomUUID(), userId, name, code, now).first();
+      `).bind(crypto.randomUUID(), memberId, name, code, now, maxRoomSeats, memberId, anonymousId).first();
       const joined = await db.prepare(`
         SELECT r.id AS roomId, r.expires_at AS expiresAt, m.id, m.name, m.station
         FROM rooms r JOIN room_members m ON m.room_id = r.id
-        WHERE r.code = ? AND r.closed_at IS NULL AND r.expires_at > ? AND m.user_id = ?
-      `).bind(code, now, userId).first<Seat & { roomId: string; expiresAt: number }>();
-      if (!joined) return error(unavailable, 404);
+        WHERE r.code = ? AND r.closed_at IS NULL AND r.expires_at > ? AND m.user_id IN (?, ?)
+        ORDER BY (m.user_id = ?) DESC LIMIT 1
+      `).bind(code, now, memberId, anonymousId, memberId).first<Seat & { roomId: string; expiresAt: number }>();
+      if (!joined) {
+        const active = await db.prepare(`
+          SELECT id FROM rooms WHERE code = ? AND closed_at IS NULL AND expires_at > ?
+        `).bind(code, now).first();
+        if (!active) return error(unavailable, 404);
+      }
 
       await db.prepare(`
         UPDATE room_join_attempts SET attempts = attempts - 1
         WHERE user_id = ? AND window_start = ? AND attempts > 0 RETURNING user_id
-      `).bind(userId, reservation.window_start).first();
+      `).bind(memberId, reservation.window_start).first();
+      if (!joined) return error('This room is full.', 409);
       const { roomId, expiresAt, ...seat } = joined;
-      return json({ id: roomId, expiresAt, seat } satisfies JoinedRoom);
+      return json({ id: roomId, expiresAt, seat } satisfies JoinedRoom, 200, accountId ? undefined : guestToken);
     }
 
     const action = url.pathname.match(roomAction);
     if (action && ((action[2] === 'close' && method === 'POST') || (action[3] && method === 'PUT'))) {
-      if (!canHost) return error('Only the DM can manage this room.', 403);
+      if (!dmId) return error('Only the signed-in DM can manage this room.', 403);
       const roomId = action[1];
       if (action[2] === 'close') {
         const room = await db.prepare(`
           UPDATE rooms SET closed_at = COALESCE(closed_at, ?)
           WHERE id = ? AND owner_id = ? RETURNING id
-        `).bind(now, roomId, userId).first();
+        `).bind(now, roomId, dmId).first();
         if (!room) return error('Room not found.', 404);
         return new Response(null, { status: 204, headers: noStore });
       }
@@ -188,7 +253,7 @@ export async function roomApi(
           AND EXISTS (SELECT 1 FROM rooms WHERE id = ? AND owner_id = ?
             AND expires_at > ? AND closed_at IS NULL)
         RETURNING id, name, station
-      `).bind(station as Seat['station'], action[3], roomId, roomId, userId, now).first<Seat>();
+      `).bind(station as Seat['station'], action[3], roomId, roomId, dmId, now).first<Seat>();
       if (!seat) return error('Seat or active room not found.', 404);
       return json(seat);
     }

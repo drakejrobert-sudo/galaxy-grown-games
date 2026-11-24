@@ -109,7 +109,7 @@ Each finished run now shows a provisional **0–100 rating** and GM advisory ban
 
 ### ChatGPT Sites and GitHub Pages
 
-ChatGPT Sites is the primary development and release target. GitHub holds the reviewed source. Build the Sites Worker and root-mounted client with `npm run build:sites`. The private Site supports testing while the player link continues to serve Pages. The release guide covers publishing a checked PR to the private Site for playtesting, verifying the Pages deployment after merge, and recovering standalone play. [Sites release guide and roadmap](docs/chatgpt-sites-pilot.md)
+ChatGPT Sites is the primary development and release target. GitHub holds the reviewed source. Build the Sites Worker and root-mounted client with `npm run build:sites`. The public test Site supports testing while the player link continues to serve Pages. The release guide covers publishing a checked PR to the test Site for playtesting, verifying the Pages deployment after merge, and recovering standalone play. [Sites release guide and roadmap](docs/chatgpt-sites-pilot.md)
 
 #### GitHub Pages fallback
 

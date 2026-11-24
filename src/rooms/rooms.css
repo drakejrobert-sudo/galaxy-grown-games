@@ -12,7 +12,8 @@
 #room-status:empty, #room-error:empty { display: none; }
 #room-status { color: var(--mint); }
 #room-error { color: #ffb5aa; }
-#room-sign-in { color: var(--mint); }
+#room-sign-in { color: var(--mint); display: inline-block; margin-bottom: 16px; }
+.room-help { color: var(--muted); margin: -12px 0 16px; }
 #host-rooms { grid-area: 1 / 1; }
 #host-rooms:not([hidden]) + #player-rooms { grid-area: 1 / 2; }
 #hosted-rooms { margin-top: 16px; }
