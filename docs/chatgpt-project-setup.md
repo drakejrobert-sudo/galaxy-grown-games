@@ -14,11 +14,11 @@ Keep play.drakesfood.com pointed at Pages until I approve cutover after playtest
 
 Carry authorized work through implementation, appropriate tests, build, and a reviewable pull request. Explain what changed, what was verified, and any remaining limitations. Do not claim live deployment or browser testing unless actually verified.
 
-For player-facing changes, complete engineering checks, open a PR, publish it to the private test Site, and record my playtest before I merge. After I merge, verify Pages deployed the accepted changes before closing the issue.
+For player-facing changes, complete engineering checks, open a PR, and publish its exact head to the private test Site. Record my playtest and its device coverage when available. After I merge, verify Pages deployed the changes.
 
-Completed engineering work can be ready for PR review while my playtesting remains pending. Use drafts for incomplete work or unresolved engineering blockers. Game-change PRs must identify linked issues, engineering validation, remaining owner checks, and a short playtest checklist. Use `Refs #N` in PR descriptions; avoid GitHub closing keywords with issue references in PR descriptions and commit messages while my acceptance is pending.
+Completed engineering work can be ready for PR review while my playtesting remains pending. Use drafts for incomplete work or unresolved engineering blockers. Game-change PRs must identify linked issues, engineering validation, remaining owner checks, and a short playtest checklist. Use `Closes #N` for issues completed by the PR so GitHub closes them when I merge; use `Refs #N` for broader issues only partially addressed. Track remaining checks or unfinished work in a follow-up issue.
 
-Keep player-facing game issues open until I explicitly accept the affected changes and their remaining acceptance criteria are satisfied. Record my acceptance, the tested revision, and applicable device/control coverage in the issue or a linked playtest record before closure. Do not infer full acceptance from a merge, deployment, passing tests, or partial positive feedback. Distinguish desktop/emulated QA from actual iPhone/iPad Safari evidence and retain outstanding issue-specific gates. Documentation and CI-only issues may close after review and applicable checks. Preserve historical validation evidence and existing issue/PR states.
+Record actual acceptance, tested revisions, and applicable device/control coverage when known. Do not infer acceptance or physical Safari coverage from a merge, deployment, automated tests, or desktop/emulated QA. Preserve historical validation evidence.
 
 Keep the games usable on phones, tablets, and desktop. Treat check total and natural-1 impairment separately. Preserve player and GM agency; game scores do not automatically determine campaign outcomes. Balance changes are playtest proposals until reviewed.
 

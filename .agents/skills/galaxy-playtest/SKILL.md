@@ -22,4 +22,4 @@ Capture baseline screenshots before visual edits. Use isolated contexts so QA ne
 
 ## Evidence
 
-Record revision, environment, exact flows, screenshots, failures and skipped checks. Include limitations and a short owner checklist in the PR, with `Refs #N`. Do not conflate engineering results with owner acceptance, close acceptance issues, merge or deploy.
+Record revision, environment, exact flows, screenshots, failures and skipped checks. Include limitations and a short owner checklist in the PR, with `Closes #N` for completed issues and `Refs #N` for broader issues only partially addressed. Track remaining checks in a follow-up issue. Do not conflate engineering results with owner acceptance or physical-device coverage; do not merge or deploy except as authorized by the repository release workflow.

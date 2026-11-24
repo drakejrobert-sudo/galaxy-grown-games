@@ -19,7 +19,7 @@ Open **Galaxy Map** beside Flight Deck to plot connected courses, advance travel
 
 On Sites, GM preparation also offers optional [private cloud saves](docs/campaign-cloud-saves.md) for the configured signed-in DM account, explicit cross-device restore, and complete downloadable backups. Pages keeps browser-local saves and accepts those backups.
 
-See [Galaxy Map setup, saves, and playtest checklist](docs/galaxy-map-v1.md). Actual iPhone/iPad Safari and owner acceptance remain pending.
+See [Galaxy Map setup, saves, and playtest checklist](docs/galaxy-map-v1.md) for setup and device checks.
 
 ### Asteroid Field rolls
 
@@ -38,7 +38,7 @@ Use your character’s relevant modifier, including applicable proficiency only 
 
 [Issue #11](https://github.com/drakejrobert-sudo/galaxy-grown-games/issues/11) tracks the approved Space Battle Gunner and Boarding Party designs. [Boarding Party — repel boarders](docs/boarding-party-design.md) introduced Gunner carrier damage/interception, Bomber aft mines, and Life Support rifle/airlock defense. The [first-person Pilot course](docs/boarding-pilot-cockpit.md) sends the player through 15 required rings through a randomized field of asteroids and wreckage, with optional bonus and repair rings. A miss triggers a dodgeable missile or probe. Only hull loss ends the run early. The [first-person Gunner turret](docs/boarding-gunner-turret.md) shows probes and shuttles growing as they approach the canopy, with launch and imminent breach markers. The [first-person Bomber station](docs/boarding-bomber-aft.md) looks aft through a rear window and shows where mines will land and the area they cover. Natural 1 slows Pilot movement to 60%, halves Gunner fire rate, halves Bomber blast area, and doubles Life Support airlock recharge. All rounds remain independent. Destroying the carrier ends the Gunner or Bomber round immediately, with a 500-point victory bonus plus points for unused round time. The [clarity follow-up](docs/boarding-party-clarity.md) adds mostly probes and occasional armored shuttles, gentler Gunner/Bomber launch windows, diagonal pursuits, and first-person Life Support with advancing boarders and visible lasers. The [cargo and airlock follow-up](docs/boarding-cargo-airlocks.md) replaces vent buttons with shootable door targets and adds six layered cargo stacks, at most two boarders, recessed animated airlocks and nonverbal combat cues. See the follow-up records for engineering evidence and remaining owner checks.
 
-[Final owner validation #39](https://github.com/drakejrobert-sudo/galaxy-grown-games/issues/39) tracks all 12 situation/role combinations. Each requires Drake's explicit approval of gameplay, all difficulty bands and Natural 1, score/rating balance, real iPhone/iPad Safari, and applicable desktop controls before being marked final. Earlier prototype playtests support that review but do not automatically complete it. Issues #3 and #10 retain their outstanding acceptance work.
+[Final owner validation #39](https://github.com/drakejrobert-sudo/galaxy-grown-games/issues/39) tracks all 12 situation/role combinations. Each requires Drake's explicit approval of gameplay, all difficulty bands and Natural 1, score/rating balance, real iPhone/iPad Safari, and applicable desktop controls before being marked final. Earlier prototype playtests support that review but do not automatically complete it. Drake accepted and closed the related implementation issues; the tracker remains open for its separate final validation matrix.
 
 ### Run locally
 
@@ -126,7 +126,7 @@ The canonical player-facing shortlink is `https://play.drakesfood.com/`; Drake's
 - A prior desktop in-app Chromium playtest reached results in the original six playable modes, including narrow viewport checks at 390px and 320px. A fixed-height report box clipped wrapped lines; reports now grow to show their full text and reflow on resize. Drake subsequently completed the cross-device playtest and reported that those six modes looked good. See the [issue #12 playtest record](docs/issue-12-playtest.md).
 - The detailed score report remains readable, screenshot-friendly, and optionally copyable. Players may report the final rating and band without pasting every statistic; raw points and details remain available for the GM. Cross-mode anchors and bands are provisional pending further real-sample review after [issue #33](https://github.com/drakejrobert-sudo/galaxy-grown-games/issues/33).
 
-There are eight playable prototypes. Space Battle Gunner adds turret defense to the seven previously implemented modes; its acceptance record is [issue #38 playtesting](docs/issue-38-playtest.md). Shared setup, controls, manual reporting, and issue #12's cross-device acceptance evidence apply to the original six modes. The new platformer still needs its own real iPhone/iPad Safari playtest before [issue #10](https://github.com/drakejrobert-sudo/galaxy-grown-games/issues/10) can close; see the [issue #10 playtest record](docs/issue-10-playtest.md).
+There are eight playable prototypes. Space Battle Gunner adds turret defense to the seven previously implemented modes; its acceptance record is [issue #38 playtesting](docs/issue-38-playtest.md). Shared setup, controls, manual reporting, and issue #12's cross-device acceptance evidence apply to the original six modes. See the [issue #10 playtest record](docs/issue-10-playtest.md) for historical engineering and device evidence.
 
 ### Arcade polish review
 
@@ -136,11 +136,11 @@ There are eight playable prototypes. Space Battle Gunner adds turret defense to 
 
 Drake reviews and merges feature branches. A reviewed merge authorizes release of tested main to the designated Site with its existing audience and the automatic Pages deployment. See the [repository instructions](AGENTS.md), [campaign context](docs/campaign-context.md) and [ChatGPT project setup](docs/chatgpt-project-setup.md).
 
-For player-facing game changes, publish the checked PR head to the private Site for Drake’s playtest. After Drake merges, verify the accepted changes deployed on Pages. Keep the issue open until deployment and owner acceptance are recorded.
+For player-facing game changes, publish the checked PR head to the private Site for Drake’s playtest. After Drake merges, verify the changes deployed on Pages.
 
-Completed engineering work can be ready for PR review with owner playtesting still pending. Drafts are for incomplete work or unresolved engineering blockers. Game-change PRs identify linked issues, engineering validation, remaining owner checks, and a short playtest checklist. Use `Refs #N`; avoid automatic closing references in PR descriptions and commit messages while owner acceptance is pending.
+Completed engineering work can be ready for PR review with owner playtesting still pending. Drafts are for incomplete work or unresolved engineering blockers. Game-change PRs identify linked issues, engineering validation, remaining owner checks, and a short playtest checklist. Use `Closes #N` for issues completed by the PR; use `Refs #N` for broader issues only partially addressed. Record unfinished playtests or other work in a follow-up issue before merge.
 
-Close a game-change issue only after Drake explicitly accepts the affected changes and its remaining acceptance criteria are satisfied. Record acceptance, the tested revision, and applicable device/control coverage in the issue or a linked playtest record. Merge, deployment, tests, and partial positive feedback alone do not prove full acceptance; desktop/emulated QA does not establish actual iPhone/iPad Safari acceptance. Documentation and CI-only issues may close after review and applicable checks. Historical evidence and existing issue/PR states are preserved.
+GitHub closes completed issues when Drake merges. Record actual acceptance, tested revisions and device/control coverage when known; a merge or automated test does not establish physical Safari coverage. Preserve historical validation evidence.
 
 ### Proposed pilot balance update
 

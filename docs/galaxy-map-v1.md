@@ -78,7 +78,7 @@ Before acceptance, Drake should:
 - [ ] Schedule a surprise without exposing preparation; trigger random and immediate encounters and verify pause, final-step arrival and explicit resume.
 - [ ] Have the crew open Asteroid Field, Space Battle and Boarding Party links on their devices; confirm role selection, roll entry and manual GM reporting.
 - [ ] Run a Maps encounter, reload a paused journey, switch between party saves, and restore an exported backup.
-- [ ] Assess travel length, risk probabilities and table weights as provisional playtest values. Record acceptance with revision and device/control coverage before closing the issues.
+- [ ] Assess travel length, risk probabilities and table weights as provisional playtest values. Record acceptance with revision and device/control coverage when available; track remaining checks separately.
 
 ## Illustrated polish
 
