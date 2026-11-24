@@ -1,0 +1,35 @@
+.crew-rooms { padding-block: 24px 48px; }
+.room-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.room-heading h2 { margin: 0; }
+.room-grid { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: 20px; align-items: start; }
+.room-stack { display: grid; gap: 14px; }
+.room-stack p { margin-block: 4px; }
+.crew-rooms label { font-size: 1rem; }
+.crew-rooms label + label { margin-top: 14px; }
+.crew-rooms input[type="text"] { font-size: 1rem; }
+.crew-rooms button:disabled { opacity: .65; cursor: wait; }
+#room-status, #room-error { margin-block: 0 14px; }
+#room-status:empty, #room-error:empty { display: none; }
+#room-status { color: var(--mint); }
+#room-error { color: #ffb5aa; }
+#room-sign-in { color: var(--mint); display: inline-block; margin-bottom: 16px; }
+.room-help { color: var(--muted); margin: -12px 0 16px; }
+#host-rooms { grid-area: 1 / 1; }
+#host-rooms:not([hidden]) + #player-rooms { grid-area: 1 / 2; }
+#hosted-rooms { margin-top: 16px; }
+.room-card { border-top: 1px solid var(--edge); padding-top: 12px; }
+.room-card h3 { margin: 0 0 8px; font-size: 1.05rem; overflow-wrap: anywhere; }
+.seat-assignment { color: var(--mint); font-weight: 600; }
+.room-card time { color: var(--muted); display: block; margin-block: 8px 12px; }
+.room-code { display: flex; gap: 8px; align-items: center; }
+.room-code input[type="text"] { margin: 0; min-inline-size: 0; letter-spacing: .1em; font-weight: 700; }
+.room-code button { flex: none; padding-inline: 12px; }
+.station-assignment { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 4px 8px; margin-block: 12px; }
+.station-assignment label { grid-column: 1 / -1; overflow-wrap: anywhere; }
+.station-assignment select { margin: 0; padding: 8px; }
+.station-assignment button { padding-inline: 10px; }
+.close-room { color: #ffb5aa; margin-top: 6px; }
+@media (max-width: 740px) {
+  .room-grid { grid-template-columns: 1fr; }
+  #host-rooms, #host-rooms:not([hidden]) + #player-rooms { grid-area: auto; }
+}

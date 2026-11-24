@@ -5,6 +5,7 @@ import { runInNewContext } from 'node:vm';
 import ts from 'typescript';
 import * as rules from '../src/game/rules.ts';
 import * as aftView from '../src/game/boarding-aft-view.ts';
+import * as navigation from '../src/site-navigation.ts';
 
 function tick(scene: any, milliseconds: number) {
   scene.game.loop.rawDelta = milliseconds;
@@ -77,7 +78,7 @@ test('deferred first launch recovers from load failure, starts once, and retry r
   let runtimeShouldFail = true;
   let copyShouldFail = false;
   let copiedText = '';
-  load('../src/main.ts', { './style.css': {}, './bomber.css': {},
+  load('../src/main.ts', { './style.css': {}, './bomber.css': {}, './site-navigation': navigation,
     get './game/runtime'() {
       runtimeImports++;
       if (runtimeShouldFail) throw new Error('offline');
@@ -530,7 +531,7 @@ test('a deferred launch stays paused after switching away until explicit resume'
     }
     const sceneExports = load('../src/game/scene.ts', { phaser, './rules': rules, './boarding-aft-view': aftView });
     const idleInput = () => ({ read: () => ({}), enable() {}, reset() {} });
-    load('../src/main.ts', { './style.css': {}, './bomber.css': {}, './game/rules': rules,
+    load('../src/main.ts', { './style.css': {}, './bomber.css': {}, './site-navigation': navigation, './game/rules': rules,
       get './game/runtime'() {
         if (failImport) throw new Error('offline');
         return { Phaser: phaser, FlightScene: sceneExports.FlightScene };

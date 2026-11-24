@@ -1,0 +1,218 @@
+import assert from 'node:assert/strict';
+import { test, type TestContext } from 'node:test';
+import { roomApi } from '../src/rooms/api';
+import type { HostedRoom, RoomList } from '../src/rooms/types';
+import { roomsDatabase } from './fixtures/rooms-database';
+
+const origin = 'https://galaxy.test';
+const path = '/api/rooms';
+const start = 1_800_000_000_000;
+const hour = 60 * 60 * 1000;
+const dm = { id: 'dm-id', email: 'dm@example.invalid' };
+const pilot = { id: 'pilot-id', email: 'pilot@example.invalid' };
+const gunner = { id: 'gunner-id', email: 'gunner@example.invalid' };
+const secondDmSession = { ...dm, id: 'other-id' };
+
+function fixture(t: TestContext, codes = ['ABCDEF23', 'BCDEFG34']) {
+  const { database, binding } = roomsDatabase();
+  t.after(() => database.close());
+  let now = start;
+  function call(endpoint: string, user: typeof dm | null, method = 'GET', data?: object, from = origin, extra: Record<string, string> = {}) {
+    const headers = new Headers({ Origin: from, ...extra });
+    if (user) {
+      headers.set('oai-authenticated-user-id', user.id);
+      headers.set('oai-authenticated-user-email', user.email);
+    }
+    if (data) headers.set('Content-Type', 'application/json');
+    return roomApi(new Request(origin + path + endpoint, {
+      method, headers, body: data ? JSON.stringify(data) : undefined,
+    }), { DB: binding, ROOM_DM_EMAIL: dm.email, ROOM_RATE_LIMIT_KEY: 'fictional-fixture-key' }, now, () => codes.shift() ?? 'ZZZZZZZZ');
+  }
+  return {
+    call,
+    database,
+    clock: (value: number) => { now = value; },
+    async list(user: typeof dm | null, cookie?: string): Promise<RoomList> {
+      const result = await call('', user, 'GET', undefined, origin, cookie ? { Cookie: cookie } : {});
+      assert.equal(result.status, 200);
+      assert.equal(result.headers.get('cache-control'), 'private, no-store');
+      return result.json();
+    },
+    async create(user = dm): Promise<HostedRoom> {
+      const result = await call('', user, 'POST');
+      assert.equal(result.status, 201);
+      return result.json();
+    },
+  };
+}
+
+test('only Drake can host, each room is scoped to the authenticated owner, and management requires Site identity', async (t) => {
+  const { call, create, list } = fixture(t);
+  assert.equal((await call('', null, 'POST')).status, 403);
+  assert.equal((await call('', { ...dm, id: '' }, 'POST')).status, 403);
+  assert.equal((await call('', pilot, 'POST')).status, 403);
+  assert.equal((await call('', dm, 'POST', undefined, 'https://elsewhere.test')).status, 403);
+  const room = await create();
+  assert.deepEqual(await list(pilot), { canHost: false, hosted: [], joined: [] });
+  assert.deepEqual((await list(secondDmSession)).hosted, []);
+  assert.equal((await call('/' + room.id + '/close', secondDmSession, 'POST')).status, 404);
+  assert.deepEqual((await list(dm)).hosted, [room]);
+});
+
+test('two active rooms retry code collisions and keep seats and assignments separate', async (t) => {
+  const { call, create, list } = fixture(t, ['ABCDEF23', 'ABCDEF23', 'BCDEFG34']);
+  const [first, second] = await Promise.all([create(), create()]);
+  assert.notEqual(first.code, second.code);
+  assert.equal(first.expiresAt, start + 12 * hour);
+  const [a, b] = await Promise.all([
+    call('/join', pilot, 'POST', { code: first.code.toLowerCase(), name: 'Zed' }),
+    call('/join', gunner, 'POST', { code: second.code, name: 'Shay' }),
+  ]);
+  assert.equal(a.status, 200);
+  assert.equal(b.status, 200);
+  const player = await a.json();
+  assert.equal(player.seat.station, null);
+  assert.equal(player.code, undefined);
+  assert.equal((await list(gunner)).joined[0].id, second.id);
+  assert.equal((await list(dm)).hosted.find((room) => room.id === second.id)?.seats.length, 1);
+
+  const assignment = '/' + first.id + '/seats/' + player.seat.id;
+  assert.equal((await call(assignment, pilot, 'PUT', { station: 'Gunner' })).status, 403);
+  assert.equal((await call(assignment, dm, 'PUT', { station: 'Mystic' })).status, 400);
+  assert.equal((await call('/' + second.id + '/seats/' + player.seat.id, dm, 'PUT', { station: 'Gunner' })).status, 404);
+  assert.equal((await call(assignment, dm, 'PUT', { station: 'Gunner' })).status, 200);
+  assert.equal((await list(pilot)).joined[0].seat.station, 'Gunner');
+  assert.equal((await list(gunner)).joined[0].seat.station, null);
+  assert.equal((await call(assignment, dm, 'PUT', { station: null })).status, 200);
+  assert.equal((await list(pilot)).joined[0].seat.station, null);
+});
+
+test('concurrent repeated joins and a fresh visit reclaim the original seat', async (t) => {
+  const { call, create, list } = fixture(t);
+  const room = await create();
+  const attempts = await Promise.all(Array.from({ length: 5 }, () =>
+    call('/join', pilot, 'POST', { code: room.code, name: 'Zed' })));
+  const seatIds = await Promise.all(attempts.map(async (response) => {
+    assert.equal(response.status, 200);
+    return (await response.json()).seat.id;
+  }));
+  assert.equal(new Set(seatIds).size, 1);
+  assert.equal((await list(dm)).hosted[0].seats.length, 1);
+  const [seatId] = seatIds;
+  const assign = '/' + room.id + '/seats/' + seatId;
+  assert.equal((await call(assign, dm, 'PUT', { station: 'Pilot' })).status, 200);
+  const retry = await call('/join', pilot, 'POST', { code: room.code, name: 'Different name' });
+  assert.deepEqual((await retry.json()).seat, { id: seatId, name: 'Zed', station: 'Pilot' });
+  assert.deepEqual((await list(pilot)).joined[0].seat, { id: seatId, name: 'Zed', station: 'Pilot' });
+});
+
+test('closing or expiring a room ends access and blocks further joins and assignments', async (t) => {
+  const { call, clock, create, list } = fixture(t);
+  const closed = await create();
+  const expired = await create();
+  const joinClosed = { code: closed.code, name: 'Zed' };
+  const joinExpired = { code: expired.code, name: 'Zed' };
+  const joined = await (await call('/join', pilot, 'POST', joinClosed)).json();
+  assert.equal((await call('/join', pilot, 'POST', joinExpired)).status, 200);
+  const close = '/' + closed.id + '/close';
+  assert.equal((await call(close, pilot, 'POST')).status, 403);
+  assert.equal((await call(close, dm, 'POST')).status, 204);
+  assert.equal((await call(close, dm, 'POST')).status, 204);
+  assert.equal((await call('/join', pilot, 'POST', joinClosed)).status, 404);
+  assert.equal((await call('/' + closed.id + '/seats/' + joined.seat.id, dm, 'PUT', { station: 'Pilot' })).status, 404);
+  assert.equal((await list(pilot)).joined.length, 1);
+  clock(start + 12 * hour);
+  assert.equal((await call('/join', pilot, 'POST', joinExpired)).status, 404);
+  assert.equal((await list(pilot)).joined.length, 0);
+  assert.equal((await list(dm)).hosted.length, 0);
+});
+
+test('rate limits repeated wrong room codes per account and resets after ten minutes', async (t) => {
+  const { call, clock, create } = fixture(t);
+  const { code } = await create();
+  const guess = { code: 'ZZZZZZZZ', name: 'Zed' };
+  const attempts = await Promise.all(Array.from({ length: 12 }, () => call('/join', pilot, 'POST', guess)));
+  assert.deepEqual(attempts.map((response) => response.status), [...Array(10).fill(404), 429, 429]);
+  assert.equal((await call('/join', gunner, 'POST', { code, name: 'Shay' })).status, 200);
+  clock(start + 10 * 60 * 1000);
+  assert.equal((await call('/join', pilot, 'POST', { code, name: 'Zed' })).status, 200);
+});
+
+test('invalid forms and oversized input cannot create a seat', async (t) => {
+  const { call, create, list } = fixture(t);
+  const room = await create();
+  for (const data of [
+    { code: '11111', name: 'Zed' }, { code: room.code, name: '  ' },
+    { code: room.code, name: 'Zed\tFace' }, { code: room.code, name: 'a'.repeat(2000) },
+  ]) {
+    assert.equal((await call('/join', pilot, 'POST', data)).status, 400);
+  }
+  assert.equal((await list(dm)).hosted[0].seats.length, 0);
+});
+
+async function guestCookie(call: ReturnType<typeof fixture>['call']): Promise<string> {
+  const response = await call('', null);
+  assert.equal(response.status, 200);
+  assert.deepEqual(await response.json(), { canHost: false, hosted: [], joined: [] });
+  assert.equal(response.headers.get('cache-control'), 'private, no-store');
+  const cookie = response.headers.get('set-cookie') ?? '';
+  assert.match(cookie, /^__Host-gg_room_guest=[a-f0-9]{64}; Path=\/; Max-Age=43200; HttpOnly; Secure; SameSite=Lax$/);
+  return cookie.split(';')[0];
+}
+
+test('guests join by code, recover their assigned seat only with their browser cookie, and cannot manage rooms', async (t) => {
+  const { call, create, database, list } = fixture(t);
+  const room = await create();
+  const [first, second] = await Promise.all([guestCookie(call), guestCookie(call)]);
+  assert.notEqual(first, second);
+  const form = { code: room.code, name: 'Skye' };
+  assert.equal((await call('/join', null, 'POST', form)).status, 400);
+  const signedOut = (path: string, method: string, data?: object) => call(path, null, method, data, origin, { Cookie: first });
+  const joins = await Promise.all([signedOut('/join', 'POST', form), signedOut('/join', 'POST', form)]);
+  assert.deepEqual(joins.map((response) => response.status), [200, 200]);
+  const [{ seat }, retry] = await Promise.all(joins.map((response) => response.json()));
+  assert.equal(retry.seat.id, seat.id);
+  const path = '/' + room.id + '/seats/' + seat.id;
+  assert.equal((await signedOut(path, 'PUT', { station: 'Pilot' })).status, 403);
+  assert.equal((await signedOut('/' + room.id + '/close', 'POST')).status, 403);
+  assert.equal((await call(path, dm, 'PUT', { station: 'Pilot' })).status, 200);
+  assert.equal((await list(null, first)).joined[0].seat.station, 'Pilot');
+  assert.deepEqual((await list(null, second)).joined, []);
+  assert.equal((await list(pilot, first)).joined[0].seat.id, seat.id);
+  const loggedInRetry = await call('/join', pilot, 'POST', form, origin, { Cookie: first });
+  assert.equal((await loggedInRetry.json()).seat.id, seat.id);
+  const stored = database.prepare('SELECT user_id FROM room_members').get()?.user_id;
+  assert.match(String(stored), /^guest:[a-f0-9]{64}$/);
+  assert.ok(!first.includes(String(stored).slice(6)));
+  assert.equal((await call('/' + room.id + '/close', dm, 'POST')).status, 204);
+  assert.deepEqual((await list(null, first)).joined, []);
+});
+
+test('public guest requests are bounded across cookies on one network', async (t) => {
+  const { call, create } = fixture(t);
+  const room = await create();
+  const cookies = await Promise.all(Array.from({ length: 61 }, () => guestCookie(call)));
+  const form = { code: 'ZZZZZZZZ', name: 'Skye' };
+  const requests = await Promise.all(cookies.map((Cookie) => call('/join', null, 'POST', form, origin, {
+    Cookie, 'CF-Connecting-IP': '192.0.2.30',
+  })));
+  assert.equal(requests.filter((response) => response.status === 404).length, 60);
+  assert.equal(requests.filter((response) => response.status === 429).length, 1);
+  assert.equal((await call('/join', null, 'POST', { ...form, code: room.code }, origin, {
+    Cookie: cookies[60], 'CF-Connecting-IP': '192.0.2.31',
+  })).status, 200);
+});
+
+test('a full room still lets existing guests reclaim their seats', async (t) => {
+  const { call, create, list } = fixture(t);
+  const room = await create();
+  const cookies = await Promise.all(Array.from({ length: 17 }, () => guestCookie(call)));
+  const join = (Cookie: string) => call('/join', null, 'POST', { code: room.code, name: 'Crew' }, origin, { Cookie });
+  const results = await Promise.all(cookies.map(join));
+  assert.equal(results.filter((response) => response.status === 200).length, 16);
+  assert.equal(results.filter((response) => response.status === 409).length, 1);
+  const accepted = results.findIndex((response) => response.status === 200);
+  const { seat } = await results[accepted].json();
+  assert.equal((await (await join(cookies[accepted])).json()).seat.id, seat.id);
+  assert.equal((await list(dm)).hosted[0].seats.length, 16);
+});

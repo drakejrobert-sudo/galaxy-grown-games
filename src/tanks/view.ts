@@ -1,3 +1,4 @@
+import { surfaceNavigation } from '../site-navigation';
 import '../style.css';
 import './tanks.css';
 import { active, createMatch, defaultDirection, DEFAULT_ELEVATION, DEFAULT_POWER, drive, fire, nextSurvivor, TANK_WIDTH, type Aim, type Match } from './rules';
@@ -7,7 +8,7 @@ import { battlefield, COLORS } from './scene';
 document.title = 'Galaxy Grown · Hillside Tanks';
 const root = document.querySelector<HTMLElement>('#app')!;
 root.innerHTML = `<header><a href="./" class="brand">✦ <span>GALAXY GROWN</span></a></header>
-<nav class="surface-nav" aria-label="App sections"><a href="./">Flight Deck</a><a href="#/map">Galaxy Map</a><a href="#/tanks" aria-current="page">Tanks</a></nav>
+${surfaceNavigation('Tanks')}
 <main class="tanks"><h1>Hillside Tanks</h1>
 <section id="tank-setup"><p>Share this window with the table. Each player calls their move, direction, angle and power. Last tank standing wins.</p>
 <form><label>Battlefield <select id="battlefield"></select></label><label>Players <select id="count"></select></label><div id="seats"></div>
