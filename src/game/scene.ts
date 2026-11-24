@@ -10,7 +10,7 @@ import {
   stepFlight, stepGunner, stepLifeSupport, stepSpaceBattleBomber, stepSpaceBattlePilot, WIDTH, HEIGHT,
   spaceBomberLanding, mineDropPosition, automaticShipX, bomberBlastRadius, spaceBomberBlastRadius, BOMBER_MINE_COOLDOWN, BOMBER_MINE_LIFETIME, GUNNER_DEFENSE_LINE, type Asteroid, type FlightConfig, type FlightState,
   type BomberInput, type BomberState, type GunnerInput, type GunnerState, type Role, type Situation,
-  LIFE_SUPPORT_SWITCH_Y, type LifeSupportInput, type LifeSupportPacket, type LifeSupportRoute,
+  LIFE_SUPPORT_BAY, LIFE_SUPPORT_ROUTES, LIFE_SUPPORT_SWITCH_Y, type LifeSupportInput, type LifeSupportPacket, type LifeSupportRoute,
   type LifeSupportState, type SpaceBattleBomberInput, type SpaceBattleBomberState,
   type SpaceBattlePilotState, type EnemyShip, type EnemyShot, type FuelCell, type SpaceBomberEnemy,
   SPACE_BOMBER_MINE_COOLDOWN, SPACE_BOMBER_MINE_LIFETIME,
@@ -1753,10 +1753,6 @@ export class FlightScene extends Phaser.Scene {
     this.paintMineAim(g, rack, spaceBomberLanding(s), bomberBlastRadius(this.config), s.cooldown);
   }
 
-  private lifeSupportRouteX(route: LifeSupportRoute): number {
-    return route === 'Thrusters' ? 92 : route === 'Shields' ? WIDTH / 2 : WIDTH - 92;
-  }
-
   private lifeSupportRouteColor(route: LifeSupportRoute): number {
     return route === 'Thrusters' ? 0xffb866 : route === 'Shields' ? 0x79e1ce : 0xbba6ff;
   }
@@ -2021,9 +2017,9 @@ export class FlightScene extends Phaser.Scene {
     g.lineStyle(7, 0x79e1ce, 0.06); g.lineBetween(WIDTH / 2 - 43, scannerY, WIDTH / 2 + 43, scannerY);
     g.lineStyle(1, 0xbafff2, 0.5); g.lineBetween(WIDTH / 2 - 40, scannerY, WIDTH / 2 + 40, scannerY);
 
-    const routes: LifeSupportRoute[] = ['Thrusters', 'Shields', 'Guns'];
+    const routes = LIFE_SUPPORT_ROUTES;
     for (const [routeIndex, route] of routes.entries()) {
-      const x = this.lifeSupportRouteX(route);
+      const x = LIFE_SUPPORT_BAY.centerX[route];
       const selected = route === s.selectedRoute;
       const color = this.lifeSupportRouteColor(route);
       g.lineStyle(15, 0x192840, 0.98);
@@ -2042,9 +2038,9 @@ export class FlightScene extends Phaser.Scene {
       }
 
       // Each destination is a small illuminated subsystem bay with a status rail and hardware.
-      g.fillStyle(0x111d30, 0.98); g.fillRoundedRect(x - 52, 458, 104, 82, 14);
+      g.fillStyle(0x111d30, 0.98); g.fillRoundedRect(x - LIFE_SUPPORT_BAY.width / 2, LIFE_SUPPORT_BAY.top, LIFE_SUPPORT_BAY.width, LIFE_SUPPORT_BAY.height, 14);
       g.fillStyle(color, selected ? 0.14 : 0.045); g.fillRoundedRect(x - 46, 464, 92, 70, 10);
-      g.lineStyle(selected ? 3 : 1, color, selected ? 0.95 : 0.55); g.strokeRoundedRect(x - 52, 458, 104, 82, 14);
+      g.lineStyle(selected ? 3 : 1, color, selected ? 0.95 : 0.55); g.strokeRoundedRect(x - LIFE_SUPPORT_BAY.width / 2, LIFE_SUPPORT_BAY.top, LIFE_SUPPORT_BAY.width, LIFE_SUPPORT_BAY.height, 14);
       g.fillStyle(color, selected ? 0.9 : 0.35); g.fillRoundedRect(x - 31, 469, 62, 4, 2);
       for (const dx of [-43, 43]) for (const dy of [10, 71]) {
         g.fillStyle(0x7890a9, 0.72); g.fillCircle(x + dx, 458 + dy, 2);
@@ -2073,13 +2069,13 @@ export class FlightScene extends Phaser.Scene {
     g.fillStyle(0x0d1728, 0.95); g.lineStyle(2, 0x526a88, 0.8);
     g.fillCircle(WIDTH / 2, LIFE_SUPPORT_SWITCH_Y, 34); g.strokeCircle(WIDTH / 2, LIFE_SUPPORT_SWITCH_Y, 34);
     for (const route of routes) {
-      const routeAngle = Math.atan2(472 - LIFE_SUPPORT_SWITCH_Y, this.lifeSupportRouteX(route) - WIDTH / 2);
+      const routeAngle = Math.atan2(472 - LIFE_SUPPORT_SWITCH_Y, LIFE_SUPPORT_BAY.centerX[route] - WIDTH / 2);
       g.fillStyle(this.lifeSupportRouteColor(route), route === s.selectedRoute ? 0.95 : 0.35);
       g.fillCircle(WIDTH / 2 + Math.cos(routeAngle) * 27, LIFE_SUPPORT_SWITCH_Y + Math.sin(routeAngle) * 27, 3.5);
     }
     g.fillStyle(0x22314d); g.lineStyle(3, 0xc8d9ef, 0.9);
     g.fillCircle(WIDTH / 2, LIFE_SUPPORT_SWITCH_Y, 19); g.strokeCircle(WIDTH / 2, LIFE_SUPPORT_SWITCH_Y, 19);
-    const selectedX = this.lifeSupportRouteX(s.selectedRoute);
+    const selectedX = LIFE_SUPPORT_BAY.centerX[s.selectedRoute];
     const angle = Math.atan2(472 - LIFE_SUPPORT_SWITCH_Y, selectedX - WIDTH / 2);
     g.lineStyle(11, 0x111c2d, 0.95);
     g.lineBetween(WIDTH / 2, LIFE_SUPPORT_SWITCH_Y, WIDTH / 2 + Math.cos(angle) * 38, LIFE_SUPPORT_SWITCH_Y + Math.sin(angle) * 38);
@@ -2113,11 +2109,11 @@ export class FlightScene extends Phaser.Scene {
     }
 
     if (s.feedbackTime > 0 && s.routingFeedback) {
-      const x = this.lifeSupportRouteX(s.routingFeedback.selectedRoute);
+      const x = LIFE_SUPPORT_BAY.centerX[s.routingFeedback.selectedRoute];
       const alpha = Math.min(1, s.feedbackTime / 0.22);
       g.lineStyle(3, feedbackColor, alpha);
       g.strokeCircle(WIDTH / 2, LIFE_SUPPORT_SWITCH_Y, 38);
-      g.strokeRoundedRect(x - 52, 458, 104, 82, 14);
+      g.strokeRoundedRect(x - LIFE_SUPPORT_BAY.width / 2, LIFE_SUPPORT_BAY.top, LIFE_SUPPORT_BAY.width, LIFE_SUPPORT_BAY.height, 14);
       g.fillStyle(feedbackColor, .25 * alpha);
       g.fillRoundedRect(x - 46, 464, 92, 70, 10);
       // Check/cross marks communicate the outcome without relying on color.

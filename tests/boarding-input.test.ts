@@ -15,8 +15,8 @@ function setup(win:ReturnType<typeof target>){
   const aim=createSpaceGunnerInput(surface as any,fire as any);aim.enable(true);
   return {win,surface,fire,aim};
 }
-test('touch aims at a door control without firing; Fire owns a separate pointer',()=>harness(h=>{
-  h.surface.send('pointerdown',{clientX:60,clientY:160});assert.equal(h.aim.read().firing,false);
+test('touch fires at a door control; Fire owns a separate pointer',()=>harness(h=>{
+  h.surface.send('pointerdown',{clientX:60,clientY:160});assert.equal(h.aim.read().firing,true);
   h.fire.send('pointerdown',{pointerId:2});assert.equal(h.aim.read().firing,true);
   h.surface.send('pointerup');assert.equal(h.aim.read().firing,true);
   h.fire.send('pointerup',{pointerId:2});assert.equal(h.aim.read().firing,false);

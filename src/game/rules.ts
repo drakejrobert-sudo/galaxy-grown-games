@@ -575,6 +575,11 @@ export const LIFE_SUPPORT_TUNING: Record<Difficulty, LifeSupportTuning> = {
   'Very Easy': { speed: 96, spawnEvery: 1.28 },
 };
 export const LIFE_SUPPORT_ROUTES: readonly LifeSupportRoute[] = ['Thrusters', 'Shields', 'Guns'];
+export const LIFE_SUPPORT_BAY = {
+  centerX: { Thrusters: 92, Shields: WIDTH / 2, Guns: WIDTH - 92 },
+  top: 458, width: 104, height: 82,
+} as const;
+
 export const LIFE_SUPPORT_SWITCH_Y = 405;
 export const LIFE_SUPPORT_MAX_INTEGRITY = 5;
 export const LIFE_SUPPORT_PACKET_CYCLE = 12;

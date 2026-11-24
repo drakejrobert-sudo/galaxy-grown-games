@@ -100,17 +100,18 @@ const platformControls = get('platform-controls');
 const routeButtons = [get<HTMLButtonElement>('route-thrusters'), get<HTMLButtonElement>('route-shields'), get<HTMLButtonElement>('route-guns')];
 const input = createInput(canvas);
 const gunnerInput = createGunnerInput(canvas);
+const touchShootingHelp = 'Tap to shoot. Hold and drag to keep firing.';
 const boardingHelp: Record<Role, string> = {
   Pilot: 'Follow the teal rings and weave around asteroids and wreckage. If you miss a ring, dodge missiles or probes. Steer with arrows / WASD or hold and drag from where you touch. Diamond rings mark salvage bonuses. Plus rings repair hull.',
-  Gunner: 'Aim through the canopy. Shoot probes once and armored shuttles twice. A bright amber ring marks a new target. A red ring marks one about to hit. Target the carrier between launches. Touch to aim and hold Fire; mouse click or Space/Enter also fires. Aim with mouse or arrows/WASD. Flight is automatic.',
+  Gunner: `${touchShootingHelp} Aim through the canopy. Shoot probes once and armored shuttles twice. A bright amber ring marks a new target. A red ring marks one about to hit. Target the carrier between launches. Aim with mouse or arrows/WASD. Click, press Space/Enter, or use Fire to shoot. Flight is automatic.`,
   Bomber: 'Look out the rear window during automatic flight. Tap or drag and release above the rack to place a mine. Mouse hover previews; primary release launches. Left/Right or A/D rotates aim; Down/S aims straight aft. Space/Enter or Launch mine fires once using the preview. Bright rings mark new craft. Mines drift toward the carrier after arming and can intercept craft before the breach line.',
-  'Life Support': 'Shoot boarders when they raise rifles. Red lasers hurt on arrival and keep coming after a kill; surviving enemies advance. Shoot the glowing target beside a side door while boarders cross its bay to vent them. Late shots can miss the crossing. Aim with touch/mouse or arrows/WASD; Fire, mouse click or Space/Enter shoots.',
+  'Life Support': `${touchShootingHelp} Shoot boarders when they raise rifles. Red lasers hurt on arrival and keep coming after a kill; surviving enemies advance. Shoot the glowing target beside a side door while boarders cross its bay to vent them. Late shots can miss the crossing. Aim with mouse or arrows/WASD. Click, press Space/Enter, or use Fire to shoot.`,
 };
 const spaceGunnerInput = createSpaceGunnerInput(canvas, fireAction);
-const spaceGunnerHelp = 'Ship flies automatically. Touch/mouse aims; touch aim never fires. Hold Fire to shoot. Mouse primary click also fires. Arrow keys / WASD aims; Space / Enter fires.';
+const spaceGunnerHelp = `${touchShootingHelp} Ship flies automatically. Aim with mouse or arrows/WASD. Click, press Space/Enter, or use Fire to shoot.`;
 const bomberInput = createBomberInput(canvas, action);
 const spaceBomberInput = createSpaceBomberInput(canvas, action);
-const lifeSupportInput = createLifeSupportInput(routeButtons);
+const lifeSupportInput = createLifeSupportInput(canvas, routeButtons);
 const spaceLifeInput = createSpaceLifeInput({ left: get('move-left'), right: get('move-right'), jump: get('jump') });
 let game: Phaser.Game | null = null;
 let loading = false;
@@ -281,7 +282,7 @@ function refreshSetup() {
           : 'Ship flies automatically. Tap behind the aft rack or drag and release to launch up to 100px away. Mouse hover previews; primary release launches. Left/Right or A/D aims; Down/S selects straight aft. Space/Enter or Launch mine fires once per press. Mines explode on asteroids during travel. Only ship collisions cost hull; missed asteroids pass safely.'
         : selectedSituation === 'Space Battle'
           ? 'Move with Left/Right or A/D and jump with Up/W/Space. Stand beside a blue panel for 1.5 seconds to repair it automatically; progress is kept when you move away. Touch uses Left, Right, and Jump.'
-          : 'Use Left/Right or A/D to turn the routing switch. Use 1, 2, or 3 to choose a system directly. Touch players can tap a system button. Match power symbols to bays. Hearts routed to Shields restore up to 1 integrity. Send overloads to Guns; a mistake costs 2 integrity, other mistakes cost 1. Packets route at the switch.';
+          : 'Tap a matching bay or its system button to route the packet. Use Left/Right or A/D to turn the routing switch. Use 1, 2, or 3 to choose a system directly. Match power symbols to bays. Hearts routed to Shields restore up to 1 integrity. Send overloads to Guns; a mistake costs 2 integrity, other mistakes cost 1. Packets route at the switch.';
   if (selectedSituation === 'Boarding Party') {
     get('controls-help').textContent = boardingHelp[selectedRole];
     if (selectedRole === 'Life Support') get('impairment').textContent = natural.checked ? 'Sluggish airlocks · twice-normal recharge (playtest)' : 'Standard rifle and airlocks';
@@ -405,7 +406,7 @@ function launch() {
           : 'Automatic flight · Tap/drag-release aft: choose range · Mines hit in flight · ←/→ or A/D aim · ↓/S straight aft · Space/Enter or Launch mine fires once'
         : situation === 'Space Battle'
           ? 'Stomp orange fires; side contact hurts · Blue panels warn then shoot sparks: jump/dodge, stand nearby for 1.5s to repair · Progress is kept · Hearts heal · Avoid overloads'
-          : 'Match packet symbols at the switch · Left/Right or A/D · 1/2/3 · Tap a system · Hearts → Shields (+1 integrity) · Overloads → Guns (a mistake costs 2 integrity)';
+          : 'Match packet symbols at the switch · Left/Right or A/D · 1/2/3 · Tap a bay or system button · Hearts → Shields (+1 integrity) · Overloads → Guns (a mistake costs 2 integrity)';
   canvas.setAttribute('aria-label', situation === 'Space Battle'
     ? role === 'Gunner' ? `Space battle gunner station. ${spaceGunnerHelp}` : role === 'Bomber'
       ? 'Space battle bomber station. Automatic weaving. Tap behind the aft rack or drag and release to choose a landing point up to 100 logical pixels away; mines explode on ships during travel. Mouse hover previews and primary release launches. Left/Right or A/D rotates aim, Down/S selects straight aft. Space/Enter or Launch mine launches once when ready using the previewed direction and distance. Clean passes are harmless.'
@@ -415,7 +416,7 @@ function launch() {
     : role === 'Pilot' ? 'Asteroid field. Steer with arrow keys, WASD, or touch.'
     : role === 'Gunner' ? 'Asteroid gunner station. Ship flies automatically. Tap, hold, or drag with touch; move a mouse to aim and click or hold to fire.'
     : role === 'Bomber' ? 'Asteroid bomber station. Automatic flight. Tap behind the aft rack or drag and release to launch up to 100 logical pixels. Mouse hover previews; primary release launches. Left/Right or A/D rotates aim; Down/S selects straight aft. Space/Enter or Launch mine fires once per press. Mines explode on contact during travel.'
-    : 'Asteroid Life Support station. Route matching packets with Left and Right, A and D, number keys 1 through 3, or the three touch buttons.');
+    : 'Asteroid Life Support station. Route matching packets with Left and Right, A and D, number keys 1 through 3, or tap a bay or its system button.');
   const impairment = role === 'Pilot' ? 'overloaded engine'
     : role === 'Gunner' ? 'overheated gun'
       : role === 'Bomber' ? 'half-area mine blast target' : 'half hearts and extra overloads';

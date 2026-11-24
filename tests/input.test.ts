@@ -21,7 +21,11 @@ test('shared pilot input supports keyboard steering and speed-capped touch desti
     windowListeners.get('keyup')!({code:'KeyA'});
     surfaceListeners.get('pointerdown')!({pointerId:4,clientX:480,clientY:280,preventDefault:() => prevented++});
     assert.deepEqual(input.read(240, 280), {x:1,y:0});
-    surfaceListeners.get('pointerup')!({});
+    for (const event of ['pointerup', 'pointercancel', 'lostpointercapture']) {
+      surfaceListeners.get(event)!({pointerId:5});
+      assert.deepEqual(input.read(240, 280), {x:1,y:0});
+    }
+    surfaceListeners.get('pointerup')!({pointerId:4});
     assert.deepEqual(input.read(240, 280), {x:0,y:0});
   } finally { globalThis.window = oldWindow; }
 });
@@ -46,6 +50,11 @@ test('gunner touch input maps the canvas, supports drag firing, and retains its 
     assert.deepEqual(input.read(), {aimX:120,aimY:140,firing:true});
     surfaceListeners.get('pointerup')!({pointerId:7});
     assert.deepEqual(input.read(), {aimX:120,aimY:140,firing:false});
+    for (const event of ['pointercancel', 'lostpointercapture']) {
+      surfaceListeners.get('pointerdown')!({pointerId:8,pointerType:'touch',clientX:70,clientY:90,preventDefault() {}});
+      surfaceListeners.get(event)!({pointerId:8});
+      assert.equal(input.read().firing, false);
+    }
   } finally { globalThis.window = oldWindow; }
 });
 
@@ -79,7 +88,15 @@ test('life support switch supports cycling, direct keyboard selection, and touch
     const buttons = buttonListeners.map(listeners => ({
       addEventListener: (type: string, listener: Function) => listeners.set(type, listener),
     })) as any;
-    const input = createLifeSupportInput(buttons); input.enable(true);
+    const canvasListeners = new Map<string, Function>();
+    const surface = {
+      addEventListener: (type: string, listener: Function) => canvasListeners.set(type, listener),
+      querySelector: () => ({ getBoundingClientRect: () => ({left:10, top:20, width:240, height:280}) }),
+    } as any;
+    const tap = (x: number, y: number) => canvasListeners.get('pointerdown')!({
+      button: 0, clientX: 10 + x / 2, clientY: 20 + y / 2, preventDefault() {},
+    });
+    const input = createLifeSupportInput(surface, buttons); input.enable(true);
     let prevented = 0;
     assert.deepEqual(input.read(), {route:'Shields'});
     windowListeners.get('keydown')!({code:'ArrowRight',preventDefault:() => prevented++});
@@ -93,7 +110,13 @@ test('life support switch supports cycling, direct keyboard selection, and touch
     buttonListeners[0].get('pointerdown')!({preventDefault:() => prevented++});
     assert.deepEqual(input.read(), {route:'Thrusters'});
     assert.equal(prevented, 4);
+    for (const [x, route] of [[240, 'Shields'], [388, 'Guns'], [92, 'Thrusters']] as const) {
+      tap(x, 501); assert.equal(input.read().route, route);
+    }
+    tap(240, 300); tap(166, 501);
+    assert.equal(input.read().route, 'Thrusters');
     input.enable(false);
+    tap(388, 501);
     buttonListeners[2].get('pointerdown')!({preventDefault:() => prevented++});
     assert.deepEqual(input.read(), {route:'Thrusters'});
     input.enable(true);
