@@ -11,3 +11,9 @@
 
 /* Artwork stays beneath route labels and semantic selection feedback. */
 .map-scenery{opacity:.85}.destination-art{pointer-events:none}.art-loaded .node-symbol{visibility:hidden}.selection-brackets{fill:none;stroke:var(--mint);stroke-width:2;pointer-events:none}.map-legend{display:flex;flex-wrap:wrap;gap:8px 18px;color:var(--muted);font-size:12px;margin:12px 0}.map-legend span{white-space:nowrap}.destination-list button[aria-pressed=true]{border-color:var(--mint);box-shadow:inset 0 -3px var(--mint)}.journey-progress{font-variant-numeric:tabular-nums;border-left:3px solid var(--mint);padding:8px 12px;background:#10192d}.reference-marker .destination-art{opacity:.8}
+
+.cloud-saves p { font-size: 1rem; line-height: 1.5; overflow-wrap: anywhere; }
+.cloud-saves fieldset { border: 0; padding: 0; display: grid; gap: .75rem; min-width: 0; }
+.cloud-saves label { font-size: .9rem; }
+.cloud-saves button { white-space: normal; overflow-wrap: anywhere; }
+.cloud-saves select { max-width: 100%; }

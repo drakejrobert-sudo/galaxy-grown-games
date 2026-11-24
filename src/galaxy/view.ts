@@ -1,4 +1,6 @@
-import { surfaceNavigation } from '../site-navigation';
+import { CampaignCloud } from '../campaigns/client';
+import { cloudPanel } from '../campaigns/panel';
+import { surfaceNavigation, isSitesBuild } from '../site-navigation';
 import { MapViewState } from './view-state';
 import { normalizeBackground } from './background';
 import '../style.css';
@@ -15,6 +17,7 @@ try { archive = readArchive(localStorage) ?? initial(); }
 catch (e) { archive = initial(); storageProblem = `Saved data could not be loaded: ${message(e)}. Existing storage has been preserved. Import a backup or explicitly replace it in GM preparation.`; recovery = true; }
 function initial(): Archive { const c = demoCampaign(); return { version: 2, selected: c.id, campaigns: [c] }; }
 const viewState = new MapViewState();
+const cloud = new CampaignCloud();
 const failedArt = new Set<string>();
 const artUrl = (name: string) => new URL(`art/${name}.webp`, document.baseURI).href;
 function decoration(name: string, x: number, y: number, width: number, height: number, className: string) {
@@ -113,6 +116,7 @@ function prepPanel() {
   const warnings = activeMap(c).routes.filter(r=>!c.tables.find(t=>t.id===r.table)?.entries.length);
   return `<section class="prep-area"><p class="eyebrow">GM PREPARATION · LOCAL TO THIS BROWSER</p><p class="help">Leave screen sharing before preparing surprises. Presentation hides this content; it is not password protected. Export backups before clearing browser data or changing devices.</p>
   <div class="prep-grid"><section class="panel"><h2>Campaign saves</h2><label>Active campaign<select id="campaign-select">${archive.campaigns.map(c=>option(c.id,c.name,archive.selected)).join('')}</select></label>${form('rename',field('name','Campaign name',c.name,'text','required maxlength="100"'),'Rename campaign')}${form('new-campaign',field('name','New campaign name','','text','required maxlength="100"')+select('starter','Start from',choices(['Demo sector','Blank map'])),'Create campaign')}<button id="delete-campaign">Delete this campaign</button><button id="export">Export this campaign</button><label>Import campaign backup (adds independent copies)<input id="import" type="file" accept=".json,application/json"></label>${recovery?'<button id="recover">Replace unreadable browser save with current in-memory campaigns</button>':''}</section>
+  ${isSitesBuild ? '<section class="panel cloud-saves" id="cloud-saves"></section>' : ''}
   ${mapPreparation()}
   ${editorPanel()}
   <section class="panel"><h2>Encounter control</h2>${j && !j.arrived ? `<fieldset ${j.active?'disabled':''}>${form('insert',select('encounter','Insert now',encounterOptions()),'Insert encounter now')}</fieldset><p class="help">Only available when no encounter is active. Scheduling targets this confirmed course, including repeated route occurrences.</p>${form('schedule',select('encounter','Scheduled encounter',encounterOptions())+select('leg','Course leg',j.stops.slice(1).map((s,i)=>option(String(i),`${i+1}: ${nameOf(j.stops[i])} → ${nameOf(s)}`)).join(''))+field('step','Step within leg','1','number','min="1" required'),'Schedule encounter')}<ul>${activeMap(c).schedules.map(s=>`<li>Leg ${s.leg+1}, step ${s.step}: ${escape(c.encounters.find(e=>e.id===s.encounter)!.title)} ${s.consumed?'(revealed)':`<button data-remove-schedule="${escape(s.id)}">Remove</button>`}</li>`).join('')}</ul>` : '<p>Confirm a course to insert or schedule encounters.</p>'}
@@ -133,6 +137,11 @@ function render() {
   const c = campaign();
   root.innerHTML = `<header><a href="./" class="brand">✦ <span>GALAXY GROWN</span></a><span class="tag">GALAXY MAP · PROTOTYPE</span></header>${surfaceNavigation('Galaxy Map')}<main class="galaxy-main"><div class="map-heading"><div><p class="eyebrow">CHART YOUR NEXT CHAPTER</p><h1 id="map-title" tabindex="-1">${escape(c.name)}</h1></div><button id="toggle-prep">${preparing?'Present to players':'GM preparation'}</button></div><p class="help">Browser-local saves · Abstract travel steps · GM-controlled encounters</p>${mapNavigation()}<p class="prompt map-description">${escape(activeMap(c).description)}</p><p id="map-status" role="status" aria-live="polite">${escape(status)}</p>${storageProblem?`<p class="storage-error" role="alert">${escape(storageProblem)}</p>`:''}<div class="map-layout"><section class="map-board"><div class="map-canvas">${mapSvg()}</div><p class="map-legend"><span>⌜ ⌟ Selected</span><span>○ Current location / travel position</span><span>◌ Reference only</span><span>━ Plotted course</span></p><p class="help map-pan-hint">Swipe the map sideways, or choose a stop from the destination list.</p><details id="destination-picker" ${destinationListOpen?'open':''}><summary>Destination list</summary><div class="destination-list">${activeMap(c).destinations.map(d=>`<button data-destination="${escape(d.id)}" aria-pressed="${d.id === selected}">${escape(d.name)}${d.id === activeMap(c).location ? ' · Here' : ''}${d.navigable === false ? ' · Reference' : ''}</button>`).join('') || '<p>No destinations yet. Open GM preparation to create one.</p>'}</div></details>${destinationPanel()}</section><aside data-focus-region="journey">${journeyPanel()}</aside></div>${preparing?prepPanel():''}</main><footer>One crew. A galaxy of possibilities.<span>Layouts are schematic. Travel risk and minigame scoring are provisional.</span></footer>`;
   bind();
+  const cloudHost = root.querySelector<HTMLElement>('#cloud-saves');
+  if (cloudHost) cloudPanel(cloud, cloudHost, campaign, incoming => {
+    const restored = importCampaigns(archive, incoming);
+    change(() => { archive = restored; resetSelection(); });
+  }, download);
   viewState.restore(root, c.id, c.activeMap, focus);
 }
 function on(id: string, fn: () => void) { document.getElementById(id)?.addEventListener('click', fn); }

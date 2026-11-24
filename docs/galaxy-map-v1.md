@@ -91,3 +91,7 @@ Selecting destinations and performing same-map actions preserves keyboard focus 
 New demos include **Boarding Party — repel boarders** alongside Asteroid Field, Space Battle, narrative and VTT cards, all at weight one. Existing saves retain their own libraries. End active journeys to unlock shared-library editing, create a **minigame** card with situation **Boarding Party**, then include it at a positive weight in tables assigned to routes. It supports random, scheduled and inserted pauses with the same explicit GM resolution. Challenge links preselect Boarding Party only; players choose their own station and requested roll. There is no automatic score return or campaign damage.
 
 Archive versions 1/2 and the storage key are unchanged. This build accepts `boarding-party` in encounter situations; older builds cannot import cards containing that new value. Keep JSON backups when moving between revisions. See the [station design](boarding-party-design.md) and [remaining owner checks](boarding-party-playtest.md).
+
+## Optional Sites cloud saves
+
+Sites adds explicit private save/restore in GM preparation. Restoring creates an independent local copy. Portable backups embed artwork and still open on Pages; local save formats and travel behavior are unchanged. See [private cloud saves and recovery](campaign-cloud-saves.md) for account isolation, limits, conflict handling, and owner checks.

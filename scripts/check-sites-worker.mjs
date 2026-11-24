@@ -6,6 +6,7 @@ import worker from '../dist/server/index.js';
 const hosting = JSON.parse(readFileSync(new URL('../dist/.openai/hosting.json', import.meta.url), 'utf8'));
 assert.ok(hosting.project_id);
 assert.equal(hosting.d1, 'DB');
+assert.equal(hosting.r2, 'BUCKET');
 assert.equal(hosting.static, undefined);
 assert.ok(readdirSync(new URL('../dist/.openai/drizzle', import.meta.url)).some((name) => name.endsWith('.sql')));
 
@@ -33,6 +34,11 @@ assert.deepEqual(await rooms.json(), { canHost: false, hosted: [], joined: [] })
 assert.equal((await worker.fetch(new Request('https://artifact.invalid/api/rooms', {
   method: 'POST', headers: { Origin: 'https://artifact.invalid' },
 }), { DB: {} })).status, 403);
+
+assert.equal((await request('/api/campaigns')).status, 401);
+assert.equal((await worker.fetch(new Request('https://artifact.invalid/api/campaigns', {
+  headers: { 'oai-authenticated-user-id': 'fictional-account' },
+}), {})).status, 503);
 
 const size = gzipSync(readFileSync(new URL('../dist/server/index.js', import.meta.url))).length;
 assert.ok(size < 3_000_000, `Worker bundle is ${size} bytes compressed, near or above the 3 MB budget`);
