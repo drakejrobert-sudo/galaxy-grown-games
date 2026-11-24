@@ -1,9 +1,11 @@
+import { campaignApi, type CampaignEnvironment } from '../campaigns/api';
 import { assets } from 'virtual:sites-assets';
 import { roomApi, type RoomEnvironment } from './api';
 
 export default {
-  async fetch(request: Request, env: RoomEnvironment): Promise<Response> {
+  async fetch(request: Request, env: RoomEnvironment & CampaignEnvironment): Promise<Response> {
     const { pathname } = new URL(request.url);
+    if (pathname === '/api/campaigns' || pathname.startsWith('/api/campaigns/')) return campaignApi(request, env);
     if (pathname === '/api/rooms' || pathname.startsWith('/api/rooms/')) return roomApi(request, env);
     if (request.method !== 'GET' && request.method !== 'HEAD') return new Response(null, { status: 405 });
 
