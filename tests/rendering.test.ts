@@ -30,7 +30,9 @@ function harness() {
       if (name === 'setDepth') state.depth = args[0] as number;
       if (name === 'setVisible') state.visible = args[0] as boolean;
       if (name === 'clear') state.commands.length = 0;
-      state.commands.push([name, ...args]); commands.push([name, ...args]); return graphics;
+      // Paths created inside the VM have a different prototype from test arrays.
+      const command = [name, ...(name === 'fillPoints' ? structuredClone(args) : args)];
+      state.commands.push(command); commands.push(command); return graphics;
     } });
     return graphics;
   };
@@ -313,6 +315,89 @@ function asteroidGunnerFixture(scene: any) {
     ] });
 }
 
+test('asteroid plumes follow diagonal and reversed travel, with steady reduced-motion geometry', () => {
+  const h = harness();
+  const rock = { id: 1, x: 240, y: 260, radius: 20, speed: 100, vx: 70, hp: 1, maxHp: 2 };
+  const plume = () => {
+    const outer = h.commands.findIndex(c => c[0] === 'fillStyle' && c[1] === 0xe65527);
+    assert.ok(outer >= 0);
+    return h.commands[outer + 1][1] as { x: number; y: number }[];
+  };
+  for (const [role, key, vertical] of [
+    ['Pilot', 'flight', -1], ['Gunner', 'gunner', -1], ['Bomber', 'bomber', 1],
+  ] as const) {
+    h.scene.role = role;
+    h.scene.activeFlight = false;
+    const state = h.scene[key];
+    Object.assign(state, { elapsed: 2, asteroids: [rock] });
+    h.setReduced(false);
+    h.paint();
+    const tip = plume()[4];
+    assert.ok(tip.x < rock.x && (tip.y - rock.y) * vertical > rock.radius);
+    assert.ok(h.commands.some(c => c[0] === 'fillStyle' && c[1] === 0xffe2a1), 'hot core');
+    assert.ok(h.commands.some(c => c[0] === 'fillStyle' && c[1] === 0xf47742), 'embers');
+    const paused = structuredClone(h.commands);
+    h.commands.length = 0;
+    h.scene.update(10000, 1000);
+    assert.deepEqual(structuredClone(h.commands), paused);
+
+    h.setReduced(true);
+    h.paint();
+    const steady = structuredClone(plume());
+    state.elapsed += 3;
+    h.paint();
+    assert.deepEqual(plume(), steady);
+    assert.ok(!h.commands.some(c => c[0] === 'fillStyle' && c[1] === 0xf47742));
+    if (role === 'Gunner') assert.ok(h.commands.some(c => c[0] === 'strokeCircle' && c[1] === rock.x &&
+      c[2] === rock.y && c[3] === rock.radius), 'armor outline stays visible');
+  }
+});
+
+test('cockpit asteroids share the illustrated body and keep projected fire behind the rock and ring', () => {
+  const h = harness();
+  h.scene.begin({ total: 10, naturalOne: false }, 'Boarding Party', 'Pilot');
+  const state = h.scene.boardingPilot;
+  Object.assign(state, { elapsed: 9, x: 0, y: 0, attack: null,
+    rings: [{ kind: 'required', x: 0, y: 0, radius: 40, time: 10 }],
+    debris: [
+      { kind: 'asteroid', x: 0, y: 0, radius: 25, time: 10.3 },
+      { kind: 'asteroid', x: -90, y: -30, radius: 18, time: 10.4 },
+      { kind: 'junk', x: 80, y: 10, radius: 20, time: 10.5 },
+    ],
+  });
+  freeze(state);
+  h.setReduced(true);
+  let hasAsteroid = true;
+  h.scene.textures = { exists: (key: string) => hasAsteroid && key === 'illustrated-asteroid' };
+  const images: { depth: number; visible: boolean }[] = [];
+  h.scene.add.image = () => {
+    const image = { depth: 0, visible: true };
+    images.push(image);
+    return new Proxy(image, { get: (target, method, proxy) => (value: number | boolean) => {
+      if (method === 'setDepth') target.depth = Number(value);
+      if (method === 'setVisible') target.visible = Boolean(value);
+      return proxy;
+    } });
+  };
+  h.paint();
+  const halo = h.layers.find(layer => layer.commands.some(c => c[0] === 'fillStyle' && c[1] === 0xe85b29))!;
+  const ring = h.layers.find(layer => layer.commands.some(c => c[0] === 'lineStyle' && c[2] === 0x85f7e0))!;
+  assert.ok(halo.commands.some(c => c[0] === 'fillCircle' && c[1] === 240 && c[2] === 280));
+  assert.ok(!halo.commands.some(c => c[0] === 'fillStyle' && c[1] === 0xe65527), 'head-on core has no arbitrary tail direction');
+  assert.equal(images.length, 2, 'junk does not use asteroid art');
+  assert.ok(halo.depth < images[1].depth && images[1].depth < ring.depth, 'plume, then rock, then nearer ring');
+  const sidePlume = h.commands.findIndex(c => c[0] === 'fillStyle' && c[1] === 0xe65527);
+  assert.ok(sidePlume >= 0);
+  const [root, , , , tip] = h.commands[sidePlume + 1][1] as { x: number; y: number }[];
+  assert.ok(tip.x > root.x && tip.y > root.y, 'plume recedes toward the vanishing point');
+
+  hasAsteroid = false;
+  h.paint();
+  assert.ok(images.every(image => !image.visible));
+  assert.ok(halo.commands.some(c => c[0] === 'fillStyle' && c[1] === 0x312d37), 'fallback body remains visible');
+  assert.ok(h.commands.some(c => c[0] === 'lineStyle' && c[2] === 0xffbb66), 'collision warning remains visible');
+});
+
 test('Asteroid Gunner presents actual target selection and distinct bounded shot outcomes', () => {
   const h = harness(); asteroidGunnerFixture(h.scene);
   for (const outcome of ['miss', 'armor-hit', 'destroyed']) {
@@ -358,7 +443,7 @@ test('Asteroid Gunner reduced motion freezes decoration and feedback geometry wh
     assert.equal(geometry.length, laterGeometry.length);
     geometry.forEach((c, i) => c.forEach((v, j) => typeof v === 'number'
       ? assert.ok(Math.abs(v - Number(laterGeometry[i][j])) < 1e-9)
-      : assert.equal(v, laterGeometry[i][j])));
+      : assert.deepEqual(v, laterGeometry[i][j])));
   }
 });
 
@@ -446,7 +531,7 @@ test('illustrated sprites reuse a bounded pool, hide retired objects and leave a
   h.scene.textures.exists = () => false;
   h.paint();
   assert.ok(images.every(image => image.Visible[0] === false), 'failed/missing textures leave no stale sprites');
-  assert.ok(h.commands.some(command => command[0] === 'fillPath'), 'procedural objects still render');
+  assert.ok(h.commands.some(command => command[0] === 'fillStyle' && command[1] === 0x312d37), 'procedural rock still renders');
 });
 
 test('Boarding Party renderers keep frozen threats, cover, airlocks, warnings and HUD geometry finite',()=>{

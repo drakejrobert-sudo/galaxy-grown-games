@@ -36,11 +36,11 @@ export class FlightScene extends Phaser.Scene {
   spaceLife = createSpaceLifeSupport();
   private artPool: Phaser.GameObjects.Image[] = [];
   private artUsed = 0;
-  private interiorLayers: Phaser.GameObjects.Graphics[] = [];
-  private interiorUsed = 0;
+  private graphicsLayers: Phaser.GameObjects.Graphics[] = [];
+  private graphicsUsed = 0;
   private graphicsLayer(depth: number) {
-    const layer = this.interiorLayers[this.interiorUsed] ?? this.add.graphics();
-    this.interiorLayers[this.interiorUsed++] = layer;
+    const layer = this.graphicsLayers[this.graphicsUsed] ?? this.add.graphics();
+    this.graphicsLayers[this.graphicsUsed++] = layer;
     layer.setDepth(depth).setVisible(true);
     return layer;
   }
@@ -279,8 +279,8 @@ export class FlightScene extends Phaser.Scene {
     this.backgroundGraphics.clear();
     this.artUsed = 0;
     this.labelsUsed = 0;
-    for (const layer of this.interiorLayers) layer.clear().setVisible(false);
-    this.interiorUsed = 0;
+    for (const layer of this.graphicsLayers) layer.clear().setVisible(false);
+    this.graphicsUsed = 0;
     const cockpit = this.situation === 'Boarding Party' && this.role === 'Pilot';
     const elapsed = cockpit ? this.boardingPilot.elapsed : this.situation === 'Boarding Party' ? this.boarding.elapsed : this.situation === 'Space Battle'
       ? this.role === 'Life Support' ? this.spaceLife.elapsed : this.role === 'Bomber' ? this.spaceBomber.elapsed : this.role === 'Gunner' ? this.spaceGunner.elapsed : this.spacePilot.elapsed
@@ -308,44 +308,12 @@ export class FlightScene extends Phaser.Scene {
     for (let i = this.labelsUsed; i < this.labelPool.length; i++) this.labelPool[i].setVisible(false);
   }
 
-  private paintCockpitDebris(g: Phaser.GameObjects.Graphics, rock: BoardingPilotState['debris'][number],
-    x: number, y: number, r: number) {
-    const phase = rock.time + rock.x * .071 + rock.y * .037;
-    const elapsed = this.decorativeTime(this.boardingPilot.elapsed);
-    const angle = phase + elapsed * (.21 + .16 * Math.sin(phase));
+  private paintCockpitJunk(g: Phaser.GameObjects.Graphics, rock: BoardingPilotState['debris'][number],
+    x: number, y: number, r: number, phase: number, elapsed: number, angle: number) {
     const cosine = Math.cos(angle), sine = Math.sin(angle);
     const point = (dx: number, dy: number) => ({
       x: x + r * (dx * cosine - dy * sine), y: y + r * (dx * sine + dy * cosine),
     });
-    if (rock.kind === 'asteroid') {
-      const rim = Array.from({ length: 9 }, (_, i) => {
-        const a = i * Math.PI * 2 / 9;
-        const size = .84 + .13 * Math.sin(phase + i * 2.49);
-        return point(size * Math.cos(a), size * Math.sin(a));
-      });
-      g.fillStyle(0x312d37); g.fillPoints(rim, true);
-      const ridge = point(-.14, -.18);
-      for (let i = 0; i < rim.length; i++) {
-        const a = rim[i], b = rim[(i + 1) % rim.length];
-        const light = (x - (a.x + b.x) / 2 + y - (a.y + b.y) / 2) / r;
-        g.fillStyle(light > .65 ? 0xa59688 : light > .05 ? 0x78695f : light > -.65 ? 0x504650 : 0x332e3a);
-        g.fillTriangle(ridge.x, ridge.y, a.x, a.y, b.x, b.y);
-      }
-      for (const [dx, dy, size] of [[-.35, .14, .21], [.32, -.24, .14], [.28, .34, .1]]) {
-        const crater = point(dx, dy);
-        g.fillStyle(0xa49586, .75); g.fillEllipse(crater.x + r * .035, crater.y + r * .05, r * size * 2, r * size * 1.48);
-        g.fillStyle(0x342f38, .85); g.fillEllipse(crater.x, crater.y, r * size * 2, r * size * 1.48);
-      }
-      if (r > 10) {
-        for (let i = 0; i < 8; i++) {
-          const a = phase + i * 2.4, distance = .35 + .24 * Math.sin(i * 4.2 + phase);
-          const chip = point(Math.cos(a) * distance, Math.sin(a) * distance);
-          g.fillStyle(i % 2 ? 0xc3b3a0 : 0x221f2a, .46);
-          g.fillCircle(chip.x, chip.y, r * (.024 + i % 3 * .013));
-        }
-      }
-      return;
-    }
     const plating = rock.shape === 'rib'
       ? [point(-.85, -.32), point(.72, -.59), point(.52, -.1), point(-.13, .02), point(-.39, .72), point(-.73, .44)]
       : rock.shape === 'antenna'
@@ -381,10 +349,23 @@ export class FlightScene extends Phaser.Scene {
     // Debris stays in the course state until its swept collision window ends.
     const objects = [...s.rings, ...s.debris].filter(obj => obj.time <= s.elapsed + 7)
       .sort((a, b) => b.time - a.time);
-    for (const obj of objects) {
+    const depthStep = 1 / (objects.length + 1);
+    const elapsed = this.decorativeTime(s.elapsed);
+    for (const [index, obj] of objects.entries()) {
       const { x, y, r, scale } = project(obj);
+      const depth = -1.9 + (index + 1) * depthStep;
+      const layer = this.graphicsLayer(depth);
       if (obj.kind === 'asteroid' || obj.kind === 'junk') {
-        this.paintCockpitDebris(g, obj, x, y, r);
+        const phase = obj.time + obj.x * .071 + obj.y * .037;
+        const angle = phase + elapsed * (.21 + .16 * Math.sin(phase));
+        if (obj.kind === 'asteroid') {
+          const tail = projectPoint({ x: obj.x, y: obj.y,
+            z: Math.max(0, (obj.time - s.elapsed) * BOARDING_PILOT_FORWARD_SPEED) + obj.radius * 4 });
+          this.paintAsteroidPlume(layer, x, y, r, tail.x - x, tail.y - y, elapsed, phase);
+          this.paintAsteroidBody(layer, x, y, r, angle, depth + depthStep / 2);
+        } else {
+          this.paintCockpitJunk(layer, obj, x, y, r, phase, elapsed, angle);
+        }
         if (obj.time - s.elapsed <= 1.6 && Math.hypot(obj.x - s.x, obj.y - s.y) <= obj.radius + PILOT_RADIUS) {
           const edge = r + 4 * scale;
           g.lineStyle(Math.max(1.5, 2.2 * scale), 0xffbb66, .95);
@@ -398,24 +379,24 @@ export class FlightScene extends Phaser.Scene {
         const color = obj.kind === 'required' ? 0x85f7e0 : obj.kind === 'bonus' ? 0xffcd78 : 0xa3bdff;
         const alpha = obj.kind === 'required' && obj !== next ? .52 : 1;
         const rim = Math.max(2.5, 10 * scale);
-        g.lineStyle(rim, 0x1e2a37, alpha); g.strokeCircle(x, y, r + rim / 2);
-        g.lineStyle(rim * .35, 0x81929a, alpha); g.strokeCircle(x, y, r + rim * .75);
-        g.lineStyle(Math.max(1.5, 2.4 * scale), color, alpha); g.strokeCircle(x, y, r);
+        layer.lineStyle(rim, 0x1e2a37, alpha); layer.strokeCircle(x, y, r + rim / 2);
+        layer.lineStyle(rim * .35, 0x81929a, alpha); layer.strokeCircle(x, y, r + rim * .75);
+        layer.lineStyle(Math.max(1.5, 2.4 * scale), color, alpha); layer.strokeCircle(x, y, r);
         const tilt = 'tilt' in obj ? obj.tilt ?? 0 : 0;
         for (let i = 0; i < 6; i++) {
           const angle = tilt + i * Math.PI / 3;
           const inner = r + rim * .25, outer = r + rim * (tilt && i % 2 ? 1.25 : .9);
-          g.lineStyle(Math.max(1, 2.5 * scale), i % 2 ? 0x9aabae : color, alpha);
-          g.lineBetween(x + Math.cos(angle) * inner, y + Math.sin(angle) * inner,
+          layer.lineStyle(Math.max(1, 2.5 * scale), i % 2 ? 0x9aabae : color, alpha);
+          layer.lineBetween(x + Math.cos(angle) * inner, y + Math.sin(angle) * inner,
             x + Math.cos(angle) * outer, y + Math.sin(angle) * outer);
         }
         if (obj.kind === 'required') {
           for (const side of [-1, 1]) {
-            g.lineBetween(x + side * r, y, x + side * (r + 5 * scale), y);
+            layer.lineBetween(x + side * r, y, x + side * (r + 5 * scale), y);
             if (obj === next) {
               const chevron = Math.max(4, 6 * scale), at = x + side * (r + rim + chevron);
-              g.lineBetween(at + side * chevron, y - chevron, at, y);
-              g.lineBetween(at, y, at + side * chevron, y + chevron);
+              layer.lineBetween(at + side * chevron, y - chevron, at, y);
+              layer.lineBetween(at, y, at + side * chevron, y + chevron);
             }
           }
         } else if (obj.kind === 'bonus') {
@@ -426,17 +407,17 @@ export class FlightScene extends Phaser.Scene {
             const angle = Math.atan2(target.y - y, target.x - x);
             for (let i = 0; i < 3; i++) {
               const distance = r + rim + (i + 1) * mark;
-              g.fillStyle(color, .75 - i * .18);
-              g.fillCircle(x + Math.cos(angle) * distance, y + Math.sin(angle) * distance, Math.max(1.3, mark * .25));
+              layer.fillStyle(color, .75 - i * .18);
+              layer.fillCircle(x + Math.cos(angle) * distance, y + Math.sin(angle) * distance, Math.max(1.3, mark * .25));
             }
           }
-          g.lineStyle(Math.max(1.5, 2.4 * scale), color, alpha);
-          g.strokePoints([{x, y: y - r - 2 * mark}, {x: x + mark, y: y - r - mark},
+          layer.lineStyle(Math.max(1.5, 2.4 * scale), color, alpha);
+          layer.strokePoints([{x, y: y - r - 2 * mark}, {x: x + mark, y: y - r - mark},
             {x, y: y - r}, {x: x - mark, y: y - r - mark}], true);
         } else {
           const mark = Math.max(4, 7 * scale);
-          g.lineBetween(x - mark, y - r - mark, x + mark, y - r - mark);
-          g.lineBetween(x, y - r - 2 * mark, x, y - r);
+          layer.lineBetween(x - mark, y - r - mark, x + mark, y - r - mark);
+          layer.lineBetween(x, y - r - 2 * mark, x, y - r);
         }
       }
     }
@@ -967,62 +948,84 @@ export class FlightScene extends Phaser.Scene {
     g.lineStyle(1, 0x344563); g.strokeRect(8, 8, WIDTH - 16, HEIGHT - 16);
   }
 
-  private paintAsteroid(g: Phaser.GameObjects.Graphics, asteroid: Asteroid, armored = false, damaged = false, travelDirection = 1) {
-    const pilot = this.role === 'Pilot';
-    const vx = asteroid.vx ?? 0, vy = asteroid.speed * travelDirection;
-    const trailTime = pilot ? .28 : .18;
-    const trailX = asteroid.x - vx * trailTime;
-    const trailY = asteroid.y - vy * trailTime;
-    g.lineStyle(asteroid.radius * .65, armored ? 0xc0785b : 0x95b6d0, pilot ? .20 : .07);
-    g.lineBetween(asteroid.x, asteroid.y, trailX, trailY);
-    const speed = Math.hypot(vx, vy);
-    if (pilot && speed * trailTime > asteroid.radius) {
-      const edge = asteroid.radius / speed;
-      g.lineStyle(2, 0xe3c9b0, .48);
-      g.lineBetween(asteroid.x - vx * edge, asteroid.y - vy * edge, trailX, trailY);
+  private paintAsteroidPlume(g: Phaser.GameObjects.Graphics, x: number, y: number, radius: number,
+    tailX: number, tailY: number, elapsed: number, phase: number) {
+    const length = Math.min(Math.hypot(tailX, tailY), radius * 2.3, 60);
+    const directional = Math.min(1, length / (radius * .5));
+    if (directional < 1) {
+      // Near head-on, most of the flame sits behind the rock.
+      g.fillStyle(0xe85b29, .45 * (1 - directional));
+      g.fillCircle(x, y, radius * 1.04);
+      g.fillStyle(0xffb85d, .44 * (1 - directional));
+      g.fillCircle(x, y, radius * .94);
     }
-    if (this.drawArt('asteroid', asteroid.x, asteroid.y, asteroid.radius * 2, asteroid.radius * 2, asteroid.rotation ?? 0)) {
-      // Armor/damage overlays below describe actual HP; art never supplies hit geometry.
-      if (armored || damaged) {
-        g.lineStyle(armored ? 2 : 1, damaged ? 0xffbc74 : 0xe6a87d, .9);
-        g.strokeCircle(asteroid.x, asteroid.y, asteroid.radius);
-      }
-      return;
-    }
-    g.fillStyle(armored ? 0x8e685f : 0x897c88);
-    g.lineStyle(armored ? 3 : 2, damaged ? 0xffbc74 : armored ? 0xe6a87d : 0xc5b4ad);
-    g.beginPath();
-    for (let i = 0; i < 10; i++) {
-      const angle = i * Math.PI / 5 + (asteroid.rotation ?? 0);
-      const radius = asteroid.radius * (i % 2 ? 0.85 : 1);
-      const x = asteroid.x + Math.cos(angle) * radius;
-      const y = asteroid.y + Math.sin(angle) * radius;
-      if (!i) g.moveTo(x, y); else g.lineTo(x, y);
-    }
-    g.closePath(); g.fillPath(); g.strokePath();
+    if (length < .5) return;
+    const bearing = Math.atan2(tailY, tailX);
+    const ux = Math.cos(bearing), uy = Math.sin(bearing);
+    const wave = Math.sin(elapsed * 19 + phase);
+    const reach = length * (.9 + wave * .1);
+    const edge = radius * .78;
+    const width = radius * .39;
+    const point = (along: number, across: number) => ({
+      x: x + (edge + reach * along) * ux - width * across * uy,
+      y: y + (edge + reach * along) * uy + width * across * ux,
+    });
+    g.fillStyle(0xe65527, .55 * directional);
+    g.fillPoints([point(0, -.85), point(.28, -1.05), point(.53, -.55),
+      point(.76, -.38 + wave * .18), point(1, wave * .5), point(.77, .16 + wave * .28),
+      point(.5, .64), point(.25, .91), point(0, .82)], true);
+    g.fillStyle(0xffa238, .83 * directional);
+    g.fillPoints([point(0, -.57), point(.23, -.65), point(.48, -.26),
+      point(.82, wave * .27), point(.53, .18), point(.22, .57), point(0, .53)], true);
+    g.fillStyle(0xffe2a1, .93 * directional);
+    g.fillPoints([point(0, -.34), point(.21, -.38), point(.59, wave * .15),
+      point(.23, .3), point(0, .33)], true);
+
+    if (this.reducedMotion?.matches || reach < 8) return;
     for (let i = 0; i < 3; i++) {
-      const angle = i * 2.1 + (asteroid.rotation ?? 0);
-      const x = asteroid.x + Math.cos(angle) * asteroid.radius * 0.42;
-      const y = asteroid.y + Math.sin(angle) * asteroid.radius * 0.42;
-      g.fillStyle(0x514b60); g.fillCircle(x, y, asteroid.radius * (0.17 + i * 0.025));
-      g.lineStyle(1, 0xb0a0a2, 0.7); g.strokeCircle(x - 1, y - 1, asteroid.radius * (0.17 + i * 0.025));
+      const age = ((elapsed * 1.8 + phase * .11 + i / 3) % 1 + 1) % 1;
+      const ember = point(.51 + age * .65, (i - 1) * (.22 + age * .34) + wave * age * .35);
+      g.fillStyle(i === 1 ? 0xffbd68 : 0xf47742, (1 - age) * directional * .64);
+      g.fillCircle(ember.x, ember.y, Math.min(2.3, radius * .09) * (1 - age * .53));
     }
-    if (this.role === 'Pilot' || this.role === 'Bomber' || (this.situation === 'Asteroid Field' && this.role === 'Gunner')) {
-      // Surface facets remain inside the existing rock outline; no new armor meaning.
-      const r = asteroid.radius;
-      g.fillStyle(0xc5b4ad, 0.19);
-      g.fillTriangle(asteroid.x - r * .75, asteroid.y - r * .3,
-        asteroid.x - r * .15, asteroid.y - r * .72, asteroid.x + r * .25, asteroid.y - r * .18);
-      g.fillStyle(0x302d45, 0.28);
-      g.fillTriangle(asteroid.x + r * .7, asteroid.y - r * .2,
-        asteroid.x + r * .6, asteroid.y + r * .6, asteroid.x - r * .2, asteroid.y + r * .55);
-      g.lineStyle(1, 0x38364c, .65);
-      g.lineBetween(asteroid.x + r * .3, asteroid.y - r * .55, asteroid.x + r * .15, asteroid.y - r * .1);
-      g.lineBetween(asteroid.x + r * .15, asteroid.y - r * .1, asteroid.x + r * .45, asteroid.y + r * .2);
+  }
+
+  private paintAsteroidBody(g: Phaser.GameObjects.Graphics, x: number, y: number, radius: number,
+    angle: number, depth = -1) {
+    if (this.drawArt('asteroid', x, y, radius * 2, radius * 2, angle, 1, false, depth)) return;
+    const cosine = Math.cos(angle), sine = Math.sin(angle);
+    const point = (dx: number, dy: number) => ({
+      x: x + radius * (dx * cosine - dy * sine), y: y + radius * (dx * sine + dy * cosine),
+    });
+    const rim = Array.from({ length: 9 }, (_, i) => {
+      const bearing = i * Math.PI * 2 / 9;
+      const size = .9 + .1 * Math.sin(i * 2.49 + .6);
+      return point(size * Math.cos(bearing), size * Math.sin(bearing));
+    });
+    g.fillStyle(0x312d37);
+    g.fillPoints(rim, true);
+    const ridge = point(-.14, -.18);
+    for (let i = 0; i < rim.length; i++) {
+      const a = rim[i], b = rim[(i + 1) % rim.length];
+      const light = (x - (a.x + b.x) / 2 + y - (a.y + b.y) / 2) / radius;
+      g.fillStyle(light > .65 ? 0xa59688 : light > .05 ? 0x78695f : light > -.65 ? 0x504650 : 0x332e3a);
+      g.fillTriangle(ridge.x, ridge.y, a.x, a.y, b.x, b.y);
     }
-    g.lineStyle(1, 0xd6c7b9, 0.6);
-    g.lineBetween(asteroid.x - asteroid.radius * 0.6, asteroid.y - asteroid.radius * 0.4,
-      asteroid.x - asteroid.radius * 0.2, asteroid.y - asteroid.radius * 0.7);
+    for (const [dx, dy, size] of [[-.35, .14, .21], [.32, -.24, .14], [.28, .34, .1]]) {
+      const crater = point(dx, dy);
+      g.fillStyle(0xa49586, .75);
+      g.fillEllipse(crater.x + radius * .035, crater.y + radius * .05, radius * size * 2, radius * size * 1.48);
+      g.fillStyle(0x342f38, .85);
+      g.fillEllipse(crater.x, crater.y, radius * size * 2, radius * size * 1.48);
+    }
+  }
+
+  private paintAsteroid(g: Phaser.GameObjects.Graphics, asteroid: Asteroid, elapsed: number, travelDirection = 1) {
+    const { x, y, radius, rotation = 0, vx = 0, speed } = asteroid;
+    const trailTime = this.role === 'Pilot' ? .28 : .23;
+    this.paintAsteroidPlume(this.backgroundGraphics, x, y, radius,
+      -vx * trailTime, -speed * travelDirection * trailTime, this.decorativeTime(elapsed), radius);
+    this.paintAsteroidBody(g, x, y, radius, rotation);
   }
 
   private paintPilotMode(g: Phaser.GameObjects.Graphics) {
@@ -1046,7 +1049,7 @@ export class FlightScene extends Phaser.Scene {
           g.lineBetween(tip, warningY, x, warningY + 9);
         }
       }
-      this.paintAsteroid(g, asteroid);
+      this.paintAsteroid(g, asteroid, s.elapsed);
     }
     if (s.invulnerable) this.paintProtection(g, s.x, s.y, 26, s.elapsed);
     if (s.invulnerable && !this.reducedMotion?.matches && Math.floor(s.elapsed * 10) % 2 === 0) return;
@@ -1265,9 +1268,11 @@ export class FlightScene extends Phaser.Scene {
     g.lineStyle(2, s.impactFlash ? 0xff9b83 : 0x79e1ce, 0.65);
     g.lineBetween(10, GUNNER_DEFENSE_LINE, WIDTH - 10, GUNNER_DEFENSE_LINE);
     for (const asteroid of s.asteroids) {
-      this.paintAsteroid(g, asteroid, asteroid.maxHp > 1, asteroid.hp < asteroid.maxHp);
+      this.paintAsteroid(g, asteroid, s.elapsed);
       if (asteroid.maxHp > 1) {
         const r = asteroid.radius;
+        g.lineStyle(2, asteroid.hp < asteroid.maxHp ? 0xffbc74 : 0xe6a87d, .9);
+        g.strokeCircle(asteroid.x, asteroid.y, r);
         // Inset armor follows the rock, with exposed seams after the first hit.
         for (const side of [-1, 1]) {
           g.lineStyle(3, asteroid.hp > 1 ? 0xffca83 : 0xa0775c, .9);
@@ -1741,7 +1746,7 @@ export class FlightScene extends Phaser.Scene {
     if (s.impactFlash) { g.fillStyle(0xff715b, 0.14); g.fillRect(9, 9, WIDTH - 18, HEIGHT - 18); }
     for (const explosion of s.explosions) this.paintMineExplosion(g, explosion);
     for (const mine of s.mines) this.paintMine(g, mine, s.elapsed, BOMBER_MINE_LIFETIME);
-    for (const asteroid of s.asteroids) this.paintAsteroid(g, asteroid, false, false, -1);
+    for (const asteroid of s.asteroids) this.paintAsteroid(g, asteroid, s.elapsed, -1);
     g.lineStyle(1, 0x79e1ce, 0.18); g.lineBetween(12, s.y + 34, WIDTH - 12, s.y + 34);
     this.paintPlayerShip(g, s.x, s.y, s.elapsed, false);
     if (s.invulnerable > 0) this.paintProtection(g, s.x, s.y, 32, s.elapsed);
