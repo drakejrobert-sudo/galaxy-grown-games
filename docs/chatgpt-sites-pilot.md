@@ -1,19 +1,25 @@
 # ChatGPT Sites pilot
 
-The initial private pilot used GitHub revision `64eaa9d` and includes Flight Deck, Galaxy Map and Hillside Tanks. The hosting manifest points to static Vite output. GitHub CI tests the repository and validates builds in separate directories for the Sites root and the Pages repository path. For publishing, run `npm ci`, `npm test`, and `npm run build:sites` from the exact GitHub revision to produce the root-mounted `dist/` required by the manifest. Publish that output to the private test project specified in the manifest.
+The designated [private test Site](https://galaxy-grown-games-test.suppletarragon7.chatgpt.site) serves the root-mounted Vite client through a Sites Worker. Run `npm ci`, `npm test`, then `npm run build:sites` from the reviewed source. The package includes `dist/server/index.js` with embedded client assets, `dist/.openai/hosting.json`, and the D1 migrations. Use a clean Sites source checkout for packaging. CI checks the Pages artifact separately at `/galaxy-grown-games/`. Sites publication is independent of the Pages workflow and the play.drakesfood.com redirect.
 
-The pilot has no server bindings and uses only the application's shipped assets. The new origin starts with its own browser storage. Use the fictional demo for testing. The existing export/import controls can transfer a chosen campaign between origins. Treat archives and uploaded background art as private. Players would need access to the Site before an in-game invitation could work.
+### Rooms test setup
+
+Configure `ROOM_DM_EMAIL` as a secret runtime value on the designated Site using Drake's verified ChatGPT email. The hosted gateway supplies identity, and the Worker stores stable Site account IDs for ownership and seat reclaim. The email and account IDs stay out of the browser and the repository. Sites applies the SQL migrations under `drizzle/` to its `DB` binding at publish time. Add future migrations as new SQL files and keep applied SQL immutable.
+
+Drake opens **Rooms**, creates a room and copies its eight-character code. Rooms expire after 12 hours and can close earlier. A separately approved Site viewer signs in, enters the code and a display name, then receives a seat. Drake uses **Refresh rooms** to see the player and **Save station** to assign a role. The player refreshes to see it. Verify the seat returns on reload or a fresh session with the same signed-in account, and disappears when the room closes. Check two live rooms with fictional names and assignments. Room codes grant access to an in-game seat for players who already have Site access.
+
+The Site origin has its own browser storage. Use the fictional demo for testing. The existing export/import controls can transfer a chosen campaign between origins. Treat archives and uploaded background art as private.
 
 ## Feasibility of shared play
 
 | Feature | Existing game | Possible Sites extension and test |
 | --- | --- | --- |
 | Campaign saves across devices | Galaxy Map saves to local browser storage and exports v2 JSON with a v1 migration. | An optional Worker can associate D1 campaign records with the signed-in DM's Site user ID. Keep large private art in R2 behind owner checks. Preserve archive validation and export. Test a second device, a stale write rejected by revision, and isolation between two DMs. |
-| Player room codes | The DM shares encounter links and players run stations independently. | Issue random, expiring room codes through a Worker. Enforce uniqueness, limit join attempts, and issue revocable player membership scoped to one room. A join code grants no DM permissions. Test expired codes, reconnects and room isolation. |
+| Player room codes | Rooms use a Worker and D1 for expiring codes, seat reclaim and manual station assignments. | Verify two-account access, room isolation and reconnect on physical devices. |
 | Central DM dashboard | Players report scores manually. Hillside Tanks already supports play at a single DM-operated screen. | A DM-only view could read a room roster, round status and submitted results from D1. Start with explicit submissions and refresh only while the room is active. Deduplicate retries and require DM confirmation of consequences. Expose only player-safe fields to members. |
 | Real-time sessions | Simulation, input, and rendering run in each browser. | Sites documents WebSocket transport. Shared action gameplay still needs an authoritative room process, message ordering, reconnect snapshots and fan-out across Worker instances. Verify supported coordination bindings, two-client latency, recovery and usage metering in a separate spike before promising synchronized play. Slow HTTP polling suits a scoreboard. |
 
-Sites documents integrated database and file storage, hosted sign-in and WebSockets. These extensions have not been implemented or load-tested. [Sites runtime](https://learn.chatgpt.com/docs/sites) · [Data and connections](https://learn.chatgpt.com/docs/sites/data-and-connections)
+Sites documents integrated database and file storage, hosted sign-in and WebSockets. Representative hosted load remains unmeasured. [Sites runtime](https://learn.chatgpt.com/docs/sites) · [Data and connections](https://learn.chatgpt.com/docs/sites/data-and-connections)
 
 ## January 2027 hosting estimate
 
@@ -46,7 +52,7 @@ The stable player link currently uses Pages at https://drakejrobert-sudo.github.
 
 Before moving the player link, exercise Flight Deck, Galaxy Map and Hillside Tanks on the hosted build, check player access from a second account with the intended permissions, and complete physical iPhone/iPad Safari playtests. Rehearse recovery with a fictional campaign exported from Sites and imported into the Pages build. Record the working Pages destination. Drake approves audience changes and the independently managed redirect cutover separately.
 
-If a return to Pages is needed, verify the Pages revision and standalone flows, export any needed campaigns while Sites is accessible, and restore the approved redirect through the Drake’s Food infrastructure project with Drake’s approval. The two origins have separate browser storage. Future shared rooms, results and live sessions would require a replacement backend for service on Pages.
+If a return to Pages is needed, verify the Pages revision and standalone flows, export any needed campaigns while Sites is accessible, and restore the approved redirect through the Drake’s Food infrastructure project with Drake’s approval. The two origins have separate browser storage. Shared rooms and future results or live sessions would require a backend to work on Pages.
 
 ## Suggested issues in priority order
 

@@ -4,6 +4,8 @@ if (window.location.hash === '#/map') {
   import('./galaxy/view').catch(showLoadError);
 } else if (window.location.hash === '#/tanks') {
   import('./tanks/view').catch(showLoadError);
+} else if (import.meta.env.MODE === 'sites' && window.location.hash === '#/rooms') {
+  import('./rooms/view').catch(showLoadError);
 } else {
   import('./main').catch(showLoadError);
 }

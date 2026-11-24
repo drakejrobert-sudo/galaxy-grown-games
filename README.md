@@ -109,7 +109,7 @@ Each finished run now shows a provisional **0–100 rating** and GM advisory ban
 
 ### ChatGPT Sites and GitHub Pages
 
-ChatGPT Sites is the primary development and release target. GitHub holds the reviewed source. Build for the Site root with `npm run build:sites`. The private Site supports testing while the player link continues to serve Pages. The release guide covers publishing a checked PR to the private Site for playtesting, verifying the Pages deployment after merge, and recovering standalone play. [Sites release guide and roadmap](docs/chatgpt-sites-pilot.md)
+ChatGPT Sites is the primary development and release target. GitHub holds the reviewed source. Build the Sites Worker and root-mounted client with `npm run build:sites`. The private Site supports testing while the player link continues to serve Pages. The release guide covers publishing a checked PR to the private Site for playtesting, verifying the Pages deployment after merge, and recovering standalone play. [Sites release guide and roadmap](docs/chatgpt-sites-pilot.md)
 
 #### GitHub Pages fallback
 
@@ -250,6 +250,6 @@ Asteroid Bomber launcher engineering validation and remaining device checks are 
 
 Flight Deck and schematic Galaxy Maps use compact original illustrated artwork with procedural fallbacks. Gameplay geometry, controls, balance and save formats are unchanged. Map selections preserve keyboard focus and horizontal scroll; linked views remember their scroll positions until the page reloads. Uploaded map backgrounds still take precedence. See [artwork provenance and rendering contract](docs/illustrated-artwork.md).
 
-Three portable, automatically discoverable Codex skills live in `.agents/skills/`: `galaxy-game-development`, `galaxy-map-development` and `galaxy-playtest`. They provide focused entry points, relevant tests and evidence requirements for Sol, Terra or other coding models, without requiring personal plugins. Invoke a skill by name or let Codex select it for matching work. `AGENTS.md` remains the workflow authority.
+Four portable, automatically discoverable Codex skills live in `.agents/skills/`: `galaxy-game-development`, `galaxy-map-development`, `galaxy-sites-development` and `galaxy-playtest`. They provide focused entry points, relevant tests and evidence requirements for Sol, Terra or other coding models, without requiring personal plugins. Invoke a skill by name or let Codex select it for matching work. `AGENTS.md` remains the workflow authority.
 
 With Playwright available, run `node scripts/browser-polish-check.cjs` against a running local server. `BASE_URL` overrides its default `http://127.0.0.1:5187/galaxy-grown-games/`; `PLAYWRIGHT_MODULE` can point to an existing installation, and `QA_OUTPUT` selects an artifact directory outside the repository. Browser automation is optional tooling, not an application dependency. See [illustrated polish validation](docs/illustrated-polish-playtest.md) for evidence and outstanding owner checks. Run `node scripts/browser-flight-layout-check.cjs` with the same environment variables to check all twelve stations at compact portrait, landscape, and desktop sizes.
