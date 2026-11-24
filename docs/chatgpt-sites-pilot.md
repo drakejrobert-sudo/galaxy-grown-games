@@ -27,6 +27,8 @@ The Site origin has its own browser storage. Use the fictional demo for testing.
 
 Sites documents integrated database and file storage, hosted sign-in and WebSockets. Representative hosted load remains unmeasured. [Sites runtime](https://learn.chatgpt.com/docs/sites) · [Data and connections](https://learn.chatgpt.com/docs/sites/data-and-connections)
 
+The [issue #111 feasibility assessment](shared-flight-feasibility.md) records a **no-go as of November 24, 2026**: a supported Sites room-coordinator provisioning contract has not been established. WebSocket transport alone does not establish shared simulation authority across Worker instances. Shared flight remains unavailable; the assessment records the agreed asteroid-defense prototype and the evidence required to reopen implementation.
+
 ## January 2027 hosting estimate
 
 Hosting is free through December 31, 2026. From January 1, Plus includes 125 hosting credits per month shared across Sites. The approximate rates used here are 15 credits per 100,000 requests, 25 per storage-enabled Site-month, 150 per GiB-month of database storage and 3.75 per GiB-month of uploaded files. The default Sites address avoids the custom-domain fee. Building and editing use separate Codex usage. [OpenAI hosting rates](https://learn.chatgpt.com/docs/sites/usage-and-cost)
