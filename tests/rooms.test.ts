@@ -1,8 +1,8 @@
 import assert from 'node:assert/strict';
 import { test, type TestContext } from 'node:test';
 import { roomApi } from '../src/rooms/api';
-import type { HostedRoom, RoomList } from '../src/rooms/types';
-import { roomsDatabase } from './fixtures/rooms-database';
+import type { HostedRoom, JoinedRoom, RoomList, RoomReport } from '../src/rooms/types';
+import { applyDashboardMigration, roomsDatabase } from './fixtures/rooms-database';
 
 const origin = 'https://galaxy.test';
 const path = '/api/rooms';
@@ -13,8 +13,8 @@ const pilot = { id: 'pilot-id', email: 'pilot@example.invalid' };
 const gunner = { id: 'gunner-id', email: 'gunner@example.invalid' };
 const secondDmSession = { ...dm, id: 'other-id' };
 
-function fixture(t: TestContext, codes = ['ABCDEF23', 'BCDEFG34']) {
-  const { database, binding } = roomsDatabase();
+function fixture(t: TestContext, codes = ['ABCDEF23', 'BCDEFG34'], includeDashboard = true) {
+  const { database, binding } = roomsDatabase(includeDashboard);
   t.after(() => database.close());
   let now = start;
   function call(endpoint: string, user: typeof dm | null, method = 'GET', data?: object, from = origin, extra: Record<string, string> = {}) {
@@ -102,8 +102,8 @@ test('concurrent repeated joins and a fresh visit reclaim the original seat', as
   const assign = '/' + room.id + '/seats/' + seatId;
   assert.equal((await call(assign, dm, 'PUT', { station: 'Pilot' })).status, 200);
   const retry = await call('/join', pilot, 'POST', { code: room.code, name: 'Different name' });
-  assert.deepEqual((await retry.json()).seat, { id: seatId, name: 'Zed', station: 'Pilot' });
-  assert.deepEqual((await list(pilot)).joined[0].seat, { id: seatId, name: 'Zed', station: 'Pilot' });
+  assert.deepEqual((await retry.json()).seat, { id: seatId, name: 'Zed', station: 'Pilot', startedAt: null, report: null });
+  assert.deepEqual((await list(pilot)).joined[0].seat, { id: seatId, name: 'Zed', station: 'Pilot', startedAt: null, report: null });
 });
 
 test('closing or expiring a room ends access and blocks further joins and assignments', async (t) => {
@@ -215,4 +215,111 @@ test('a full room still lets existing guests reclaim their seats', async (t) => 
   const { seat } = await results[accepted].json();
   assert.equal((await (await join(cookies[accepted])).json()).seat.id, seat.id);
   assert.equal((await list(dm)).hosted[0].seats.length, 16);
+});
+
+const assignment = { situation: 'Asteroid Field', station: 'Pilot' };
+const flightReport: RoomReport = {
+  text: 'Galaxy Grown Flight Report\nAsteroid Field / Pilot\nRating: 60/100',
+  outcome: 'Course complete.',
+  rating: 60,
+  ratingLabel: 'Steady',
+  points: 750,
+  victoryBonus: 0,
+};
+
+test('dashboard migration preserves existing room codes, members and station assignments', async (t) => {
+  const { call, database, list } = fixture(t, undefined, false);
+  const roomId = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+  const seatId = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
+  database.prepare('INSERT INTO rooms (id, owner_id, code, expires_at) VALUES (?, ?, ?, ?)')
+    .run(roomId, dm.id, 'ABCDEF23', start + hour);
+  database.prepare('INSERT INTO room_members (id, room_id, user_id, name, station) VALUES (?, ?, ?, ?, ?)')
+    .run(seatId, roomId, pilot.id, 'Skye', 'Pilot');
+
+  applyDashboardMigration(database);
+  assert.deepEqual((await list(dm)).hosted[0], {
+    id: roomId, code: 'ABCDEF23', expiresAt: start + hour, situation: null,
+    seats: [{ id: seatId, name: 'Skye', station: 'Pilot', startedAt: null, report: null }],
+  });
+  const rejoin = await call('/join', pilot, 'POST', { code: 'ABCDEF23', name: 'Skye' });
+  assert.equal((await rejoin.json()).seat.id, seatId);
+});
+
+test('an assigned guest starts with the current encounter and station; only started choices lock', async (t) => {
+  const { call, create, list } = fixture(t);
+  const room = await create();
+  const cookie = await guestCookie(call);
+  const guest = (path: string, method: string, data?: object) => call(path, null, method, data, origin, { Cookie: cookie });
+  const joined: JoinedRoom = await (await guest('/join', 'POST', { code: room.code, name: 'Skye' })).json();
+  const second: JoinedRoom = await (await call('/join', gunner, 'POST', { code: room.code, name: 'Finch' })).json();
+  const seatPath = `/${room.id}/seats/${joined.seat.id}`;
+  const encounterPath = `/${room.id}/encounter`;
+
+  assert.equal((await guest(encounterPath, 'PUT', assignment)).status, 403);
+  assert.equal((await call(encounterPath, secondDmSession, 'PUT', assignment)).status, 404);
+  assert.equal((await call(encounterPath, dm, 'PUT', { situation: 'Other' })).status, 400);
+  assert.equal((await guest(seatPath + '/start', 'POST', assignment)).status, 409);
+  assert.equal((await call(encounterPath, dm, 'PUT', { situation: 'Space Battle' })).status, 204);
+  assert.equal((await call(seatPath, dm, 'PUT', { station: 'Gunner' })).status, 200);
+  assert.equal((await guest(seatPath + '/start', 'POST', assignment)).status, 409);
+  assert.equal((await call(encounterPath, dm, 'PUT', assignment)).status, 204);
+  assert.equal((await guest(seatPath + '/start', 'POST', assignment)).status, 409);
+  assert.equal((await call(seatPath, dm, 'PUT', assignment)).status, 200);
+  assert.equal((await call(seatPath + '/start', gunner, 'POST', assignment)).status, 404);
+  assert.equal((await guest(seatPath, 'GET')).status, 200);
+  assert.deepEqual(await (await guest(seatPath, 'GET')).json(), (await list(null, cookie)).joined[0]);
+
+  for (const result of await Promise.all(Array.from({ length: 2 }, () => guest(seatPath + '/start', 'POST', assignment)))) {
+    assert.equal(result.status, 204);
+  }
+  assert.equal((await list(dm)).hosted[0].seats.find((seat) => seat.id === joined.seat.id)?.startedAt, start);
+  assert.equal((await call(encounterPath, dm, 'PUT', { situation: 'Space Battle' })).status, 409);
+  assert.equal((await call(seatPath, dm, 'PUT', { station: 'Gunner' })).status, 409);
+  assert.equal((await call(`/${room.id}/seats/${second.seat.id}`, dm, 'PUT', { station: 'Gunner' })).status, 200);
+});
+
+test('the first explicit report wins across concurrent tabs and is visible only to the member and DM', async (t) => {
+  const { call, clock, create, database, list } = fixture(t);
+  const [room, otherRoom] = await Promise.all([create(), create(secondDmSession)]);
+  const player: JoinedRoom = await (await call('/join', pilot, 'POST', { code: room.code, name: 'Skye' })).json();
+  const other: JoinedRoom = await (await call('/join', gunner, 'POST', { code: otherRoom.code, name: 'Finch' })).json();
+  const seatPath = `/${room.id}/seats/${player.seat.id}`;
+  const reportPath = seatPath + '/report';
+  const secondReport = { ...flightReport, rating: 70, points: 900 };
+
+  assert.equal((await call(reportPath, pilot, 'POST', flightReport)).status, 409);
+  assert.equal((await call(`/${room.id}/encounter`, dm, 'PUT', assignment)).status, 204);
+  assert.equal((await call(seatPath, dm, 'PUT', assignment)).status, 200);
+  assert.equal((await call(seatPath + '/start', pilot, 'POST', assignment)).status, 204);
+  assert.equal((await call(reportPath, gunner, 'POST', flightReport)).status, 404);
+  assert.equal((await call(reportPath, null, 'POST', flightReport)).status, 404);
+  assert.equal((await call(reportPath, pilot, 'POST', flightReport, 'https://elsewhere.test')).status, 403);
+  assert.equal((await call(reportPath, pilot, 'POST', { ...flightReport, rating: 101 })).status, 400);
+  assert.equal((await call(reportPath, pilot, 'POST', { ...flightReport, text: 'a'.repeat(9000) })).status, 400);
+
+  const responses = await Promise.all([flightReport, secondReport, flightReport].map((report) =>
+    call(reportPath, pilot, 'POST', report)));
+  assert.deepEqual(responses.map((response) => response.status), [200, 200, 200]);
+  const [saved, ...retries] = await Promise.all(responses.map((response) => response.json()));
+  assert.deepEqual(retries, [saved, saved]);
+  assert.deepEqual(await (await call(reportPath, pilot, 'POST', secondReport)).json(), saved);
+  assert.equal(database.prepare('SELECT count(*) AS count FROM room_members WHERE report IS NOT NULL').get()?.count, 1);
+  assert.deepEqual((await list(dm)).hosted[0].seats[0].report, saved);
+  assert.deepEqual((await list(pilot)).joined[0].seat.report, saved);
+  assert.equal((await call(seatPath, dm)).status, 404, 'only a seat member can open the player flight');
+  assert.equal((await call(seatPath, gunner)).status, 404);
+  assert.equal((await list(secondDmSession)).hosted[0].seats[0].report, null);
+  assert.equal((await list(gunner)).joined[0].seat.id, other.seat.id);
+  assert.equal((await call(seatPath + '/start', pilot, 'POST', assignment)).status, 409);
+
+  assert.equal((await call(`/${room.id}/close`, dm, 'POST')).status, 204);
+  assert.equal((await call(reportPath, pilot, 'POST', flightReport)).status, 404);
+  assert.equal((await call(seatPath, pilot)).status, 404);
+  assert.equal((await call(seatPath + '/start', pilot, 'POST', assignment)).status, 404);
+  assert.deepEqual((await list(dm)).hosted, []);
+  clock(start + 12 * hour);
+  const expiredSeat = `/${otherRoom.id}/seats/${other.seat.id}`;
+  assert.equal((await call(expiredSeat, gunner)).status, 404);
+  assert.equal((await call(expiredSeat + '/start', gunner, 'POST', assignment)).status, 404);
+  assert.equal((await call(expiredSeat + '/report', gunner, 'POST', flightReport)).status, 404);
 });

@@ -1,4 +1,6 @@
-import { surfaceNavigation } from './site-navigation';
+import { isSitesBuild, surfaceNavigation } from './site-navigation';
+import { assignedFlight } from './rooms/flight';
+import type { JoinedRoom, RoomReport } from './rooms/types';
 import type Phaser from 'phaser';
 import './style.css';
 import './bomber.css';
@@ -25,6 +27,7 @@ ${surfaceNavigation('Flight Deck')}
   <div class="intro"><p class="eyebrow">CREW CHALLENGE 01</p><h1>A steady hand.<br>A galaxy of trouble.</h1><p class="lede">Choose your station, face the danger ahead, and bring your individual score back to the GM.</p><div class="details"><span>60-second challenge</span><span>Role-specific systems</span><span>Solo run</span></div></div>
   <form id="flight-form" class="panel">
     <h2>Prepare for flight</h2>
+    <p id="room-flight-assignment" class="help" role="status" hidden></p>
     <div class="fields"><label>Situation<select id="situation"><option>Asteroid Field</option><option>Space Battle</option><option>Boarding Party</option></select></label><label>Crew position<select id="role"><option>Pilot</option><option id="role-gunner">Gunner</option><option id="role-bomber">Bomber</option><option id="role-life-support">Life Support</option></select></label></div>
     <label for="total">Check total <span class="muted">including modifiers</span></label>
     <input id="total" name="total" type="text" autocomplete="off" placeholder="Enter your final total" aria-describedby="total-help error" required />
@@ -64,13 +67,19 @@ ${surfaceNavigation('Flight Deck')}
   <p id="rating-band" class="rating-band"></p><p id="raw-points" class="raw-points"></p>
   <textarea id="summary" readonly aria-label="Flight result summary" rows="6"></textarea>
   <p class="help">Share this report with your GM. They decide what happens next.</p>
-  <div class="actions"><button id="copy" class="primary" type="button">Copy score report</button><button id="again" type="button">Back to setup</button></div><p id="copy-status" role="status"></p>
+  <div class="actions"><button id="submit-room-report" class="primary" type="button" hidden>Submit to DM</button><button id="copy" class="primary" type="button">Copy score report</button><button id="again" type="button">Back to setup</button></div><p id="copy-status" role="status"></p><p id="submit-room-status" role="status"></p>
 </section>
 </main><footer>One crew. A galaxy of possibilities.<span>Playtest build · Scoring and balance are provisional.</span></footer>`;
 const get = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 const total = get<HTMLInputElement>('total'), natural = get<HTMLInputElement>('natural-one');
 const roleSelect = get<HTMLSelectElement>('role');
 const situationSelect = get<HTMLSelectElement>('situation');
+const roomFlight = isSitesBuild && typeof location !== 'undefined'
+  ? assignedFlight(location.search) : null;
+let assignment: JoinedRoom | null = null;
+let roomReport: RoomReport | null = null;
+let scoredResult: Pick<RoomReport, 'rating' | 'ratingLabel' | 'points' | 'victoryBonus'>;
+
 if (typeof location !== 'undefined') {
   const requested = new URLSearchParams(location.search).get('situation');
   if (requested === 'asteroid-field' || requested === 'space-battle' || requested === 'boarding-party') situationSelect.value = requested === 'boarding-party' ? 'Boarding Party' : requested === 'space-battle' ? 'Space Battle' : 'Asteroid Field';
@@ -161,13 +170,74 @@ function sizeSummary() {
 function fillSummary(text: string) {
   get<HTMLTextAreaElement>('summary').value = text;
   sizeSummary();
+  if (roomFlight) {
+    roomReport = { ...scoredResult, text, outcome: get('outcome').textContent ?? '' };
+    roomFlight.savePending(roomReport);
+    updateRoomReportButton(false);
+  }
+}
+function showRating({ rating, ratingLabel, points, victoryBonus }: typeof scoredResult) {
+  get('final-score').textContent = String(rating);
+  get('rating-band').textContent = ratingLabel;
+  const bonus = victoryBonus ? ` · Victory bonus +${victoryBonus} points` : '';
+  get('raw-points').textContent = `${points} raw points${bonus} · Provisional GM advisory`;
 }
 function showRatedResult(mode: ScoreMode, points: number, failed: boolean, victoryBonus = 0) {
   const { rating, band, capped } = rateScore(mode, points, failed);
-  get('final-score').textContent = String(rating);
-  get('rating-band').textContent = `${band}${capped ? ` · capped after ${mode === 'boarding-pilot' ? 'course failure' : 'system failure'}` : ''}`;
-  const bonus = victoryBonus ? ` · Victory bonus +${victoryBonus} points` : '';
-  get('raw-points').textContent = `${points} raw points${bonus} · Provisional GM advisory`;
+  const ratingLabel = `${band}${capped ? ` · capped after ${mode === 'boarding-pilot' ? 'course failure' : 'system failure'}` : ''}`;
+  scoredResult = { rating, ratingLabel, points, victoryBonus };
+  showRating(scoredResult);
+}
+function updateRoomReportButton(sent: boolean) {
+  const submit = get<HTMLButtonElement>('submit-room-report');
+  submit.hidden = sent;
+  submit.disabled = false;
+  get('submit-room-status').textContent = sent ? 'Report submitted to your DM.' : '';
+}
+function restoreRoomReport(report: RoomReport, sent: boolean) {
+  roomReport = report;
+  show('results');
+  get('outcome').textContent = report.outcome;
+  showRating(report);
+  get<HTMLTextAreaElement>('summary').value = report.text;
+  sizeSummary();
+  updateRoomReportButton(sent);
+}
+async function loadRoomAssignment() {
+  if (!roomFlight) return;
+  const message = get('room-flight-assignment');
+  message.hidden = false;
+  message.textContent = 'Loading your room assignment…';
+  get('again').textContent = 'Back to Rooms';
+  const pending = roomFlight.pending();
+  setLoading(true);
+  try {
+    assignment = await roomFlight.assignment();
+    if (assignment.seat.report) {
+      roomFlight.savePending(null);
+      restoreRoomReport(assignment.seat.report, true);
+      return;
+    }
+    if (pending && assignment.seat.startedAt !== null) restoreRoomReport(pending, false);
+    if (!assignment.situation || !assignment.seat.station) {
+      message.textContent = 'Your assignment is pending. Return to Rooms for the latest update.';
+      assignment = null;
+      return;
+    }
+    situationSelect.value = assignment.situation;
+    roleSelect.value = assignment.seat.station;
+    refreshSetup();
+    message.textContent = `Room assignment · ${assignment.situation} / ${assignment.seat.station}`;
+  } catch (cause) {
+    const error = cause instanceof Error ? cause.message : 'Your room assignment could not be loaded.';
+    message.textContent = error + ' Return to Rooms or reload to try again.';
+    if (pending) {
+      restoreRoomReport(pending, false);
+      get('submit-room-status').textContent = error;
+    }
+  } finally {
+    setLoading(false);
+  }
 }
 window.addEventListener('resize', sizeSummary);
 function refreshSetup() {
@@ -251,7 +321,11 @@ function resetSetup() {
   inFlight = false; if (scene) scene.activeFlight = false; input.enable(false); gunnerInput.enable(false); spaceGunnerInput.enable(false); bomberInput.enable(false); spaceBomberInput.enable(false); lifeSupportInput.enable(false); spaceLifeInput.enable(false); paused = false;
   get('pause-overlay').hidden = true; show('setup'); total.focus();
 }
-get('abandon').addEventListener('click', resetSetup); get('again').addEventListener('click', resetSetup);
+get('abandon').addEventListener('click', resetSetup);
+get('again').addEventListener('click', () => {
+  if (roomFlight) location.assign('./#/rooms');
+  else resetSetup();
+});
 practiceExit.addEventListener('click', resetSetup);
 for (const button of [practiceExit, get('pause'), get('resume'), get('abandon')]) {
   button.addEventListener('keydown', event => {
@@ -362,9 +436,11 @@ function launch() {
 }
 function setLoading(value: boolean) {
   loading = value;
-  get<HTMLButtonElement>('start').disabled = value;
+  get<HTMLButtonElement>('start').disabled = value || Boolean(roomFlight && !assignment);
   practiceLauncher.disabled = value;
-  total.disabled = value; natural.disabled = value; roleSelect.disabled = value; situationSelect.disabled = value;
+  total.disabled = value; natural.disabled = value;
+  roleSelect.disabled = value || Boolean(roomFlight);
+  situationSelect.disabled = value || Boolean(roomFlight);
   get('start-label').textContent = value && !practice ? 'Loading flight…' : 'Start challenge';
   get('load-status').textContent = value
     ? practice ? 'Preparing launcher practice…' : 'Preparing the game. Your challenge will start when it is ready.'
@@ -379,7 +455,7 @@ get('practice-retry').addEventListener('click', () => startFlight(true));
 get('practice-start').addEventListener('click', () => startFlight(false));
 
 async function startFlight(drill: boolean) {
-  if (loading || launchPending) return;
+  if (loading || launchPending || (roomFlight && !assignment)) return;
   const parsed = drill ? 15 : parseTotal(total.value);
   if (parsed === null) {
     if (practice) resetSetup();
@@ -388,8 +464,20 @@ async function startFlight(drill: boolean) {
     return;
   }
   config = { total: parsed, naturalOne: !drill && natural.checked };
-  situation = situationSelect.value === 'Boarding Party' ? 'Boarding Party' : situationSelect.value === 'Space Battle' ? 'Space Battle' : 'Asteroid Field';
-  role = roleSelect.value as Role;
+  situation = assignment?.situation ?? (situationSelect.value === 'Boarding Party'
+    ? 'Boarding Party' : situationSelect.value === 'Space Battle' ? 'Space Battle' : 'Asteroid Field');
+  role = assignment?.seat.station ?? roleSelect.value as Role;
+  if (roomFlight && !drill) {
+    setLoading(true);
+    try {
+      await roomFlight.start(situation, role);
+    } catch (cause) {
+      get('error').textContent = cause instanceof Error ? cause.message : 'Could not start the assigned challenge.';
+      return;
+    } finally {
+      setLoading(false);
+    }
+  }
   practice = drill;
   launchPending = true;
   if (!game) {
@@ -598,3 +686,24 @@ get('copy').addEventListener('click', async () => {
   try { await navigator.clipboard.writeText(summary.value); get('copy-status').textContent = 'Copied. Share it with your GM.'; }
   catch { summary.focus(); summary.select(); get('copy-status').textContent = 'Report selected. Copy it manually, or take a screenshot.'; }
 });
+
+if (roomFlight) {
+  get('submit-room-report').addEventListener('click', async () => {
+    const submit = get<HTMLButtonElement>('submit-room-report');
+    if (!roomReport || submit.disabled) return;
+    const status = get('submit-room-status');
+    submit.disabled = true;
+    status.textContent = 'Submitting report…';
+    try {
+      const saved = await roomFlight.submit(roomReport);
+      roomFlight.savePending(null);
+      restoreRoomReport(saved, true);
+      get('copy').focus();
+    } catch (cause) {
+      status.textContent = (cause instanceof Error ? cause.message : 'Could not submit the report.')
+        + ' You can retry or copy the report.';
+      submit.disabled = false;
+    }
+  });
+  void loadRoomAssignment();
+}

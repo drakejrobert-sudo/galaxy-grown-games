@@ -1,4 +1,4 @@
-import { stations, type HostedRoom, type JoinedRoom, type RoomList, type Seat } from './types';
+import { encounters, readRoomReport, stations, type HostedRoom, type JoinedRoom, type RoomList, type Seat } from './types';
 
 interface DatabaseStatement {
   bind(...values: (string | number | null)[]): DatabaseStatement;
@@ -21,7 +21,7 @@ const guestCookieName = '__Host-gg_room_guest';
 const guestTokenPattern = /^[a-f0-9]{64}$/;
 const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 const codePattern = /^[A-HJ-NP-Z2-9]{8}$/;
-const roomAction = /^\/api\/rooms\/([a-f0-9-]{36})\/(close|seats\/([a-f0-9-]{36}))$/;
+const roomAction = /^\/api\/rooms\/([a-f0-9-]{36})\/(close|encounter|seats\/([a-f0-9-]{36})(?:\/(start|report))?)$/;
 const unavailable = 'This room code is invalid, expired, or closed.';
 const noStore = { 'Cache-Control': 'private, no-store' };
 
@@ -79,11 +79,11 @@ function error(message: string, status: number): Response {
   return json({ error: message }, status);
 }
 
-async function readForm(request: Request): Promise<Record<string, unknown> | null> {
+async function readForm(request: Request, maximumBytes = 1024): Promise<Record<string, unknown> | null> {
   if (request.headers.get('Content-Type')?.split(';')[0].trim() !== 'application/json') return null;
   const reader = request.body?.getReader();
   if (!reader) return null;
-  const buffer = new Uint8Array(1024);
+  const buffer = new Uint8Array(maximumBytes);
   let length = 0;
   try {
     for (;;) {
@@ -101,6 +101,17 @@ async function readForm(request: Request): Promise<Record<string, unknown> | nul
   } catch {
     return null;
   }
+}
+
+type SeatRow = Omit<Seat, 'report'> & { report: string | null };
+type JoinedRow = SeatRow & { roomId: string; expiresAt: number; situation: JoinedRoom['situation'] };
+
+function toSeat({ id, name, station, startedAt, report }: SeatRow): Seat {
+  return { id, name, station, startedAt, report: report === null ? null : JSON.parse(report) };
+}
+
+function toJoinedRoom(row: JoinedRow): JoinedRoom {
+  return { id: row.roomId, expiresAt: row.expiresAt, situation: row.situation, seat: toSeat(row) };
 }
 
 // Identity comes from the hosted Sites gateway. The test server injects fictional identities.
@@ -124,41 +135,40 @@ export async function roomApi(
   }
 
   try {
+    const anonymousId = guestToken ? await guestMemberId(guestToken) : null;
     if (url.pathname === '/api/rooms' && method === 'GET') {
-      const anonymousId = guestToken ? await guestMemberId(guestToken) : null;
       if (!accountId && !anonymousId) {
         const token = hex(crypto.getRandomValues(new Uint8Array(32)));
         return json({ canHost: false, hosted: [], joined: [] } satisfies RoomList, 200, token);
       }
       const [joinedRows, hostedRows] = await Promise.all([
         db.prepare(`
-          SELECT r.id AS roomId, r.expires_at AS expiresAt, m.id, m.name, m.station
+          SELECT r.id AS roomId, r.expires_at AS expiresAt, r.situation,
+            m.id, m.name, m.station, m.started_at AS startedAt, m.report
           FROM room_members m JOIN rooms r ON r.id = m.room_id
           WHERE m.user_id IN (?, ?) AND r.closed_at IS NULL AND r.expires_at > ?
           ORDER BY r.expires_at DESC
-        `).bind(accountId ?? null, anonymousId, now).all<Seat & { roomId: string; expiresAt: number }>(),
+        `).bind(accountId ?? null, anonymousId, now).all<JoinedRow>(),
         dmId
           ? db.prepare(`
-              SELECT r.id, r.code, r.expires_at AS expiresAt,
-                m.id AS seatId, m.name, m.station
+              SELECT r.id, r.code, r.expires_at AS expiresAt, r.situation,
+                m.id AS seatId, m.name, m.station, m.started_at AS startedAt, m.report
               FROM rooms r LEFT JOIN room_members m ON m.room_id = r.id
               WHERE r.owner_id = ? AND r.closed_at IS NULL AND r.expires_at > ?
               ORDER BY r.expires_at DESC, m.name COLLATE NOCASE, m.id
-            `).bind(dmId, now).all<Omit<HostedRoom, 'seats'> & { seatId: string | null; name: string; station: Seat['station'] }>()
+            `).bind(dmId, now).all<Omit<HostedRoom, 'seats'> & Omit<SeatRow, 'id'> & { seatId: string | null }>()
           : { results: [] },
       ]);
       const hosted = new Map<string, HostedRoom>();
-      for (const { id, code, expiresAt, seatId, name, station } of hostedRows.results) {
+      for (const { id, code, expiresAt, situation, seatId, ...seat } of hostedRows.results) {
         let room = hosted.get(id);
         if (!room) {
-          room = { id, code, expiresAt, seats: [] };
+          room = { id, code, expiresAt, situation, seats: [] };
           hosted.set(id, room);
         }
-        if (seatId) room.seats.push({ id: seatId, name, station });
+        if (seatId) room.seats.push(toSeat({ id: seatId, ...seat }));
       }
-      const joined = joinedRows.results.map(({ roomId, expiresAt, id, name, station }) => ({
-        id: roomId, expiresAt, seat: { id, name, station },
-      }));
+      const joined = joinedRows.results.map(toJoinedRoom);
       return json({ canHost: Boolean(dmId), hosted: [...hosted.values()], joined } satisfies RoomList);
     }
 
@@ -172,7 +182,7 @@ export async function roomApi(
           INSERT INTO rooms (id, owner_id, code, expires_at) VALUES (?, ?, ?, ?)
           ON CONFLICT (code) DO NOTHING RETURNING id
         `).bind(id, dmId, code, expiresAt).first();
-        if (room) return json({ id, code, expiresAt, seats: [] } satisfies HostedRoom, 201);
+        if (room) return json({ id, code, expiresAt, situation: null, seats: [] } satisfies HostedRoom, 201);
       }
       return error('Could not create a room code. Try again.', 503);
     }
@@ -186,7 +196,6 @@ export async function roomApi(
         return error('Enter a display name of 1 to 32 characters.', 400);
       }
 
-      const anonymousId = guestToken ? await guestMemberId(guestToken) : null;
       const memberId = accountId ?? anonymousId;
       if (!memberId) return error('Allow cookies and refresh Rooms before joining.', 400);
 
@@ -209,11 +218,12 @@ export async function roomApi(
         ON CONFLICT (room_id, user_id) DO NOTHING RETURNING id
       `).bind(crypto.randomUUID(), memberId, name, code, now, maxRoomSeats, memberId, anonymousId).first();
       const joined = await db.prepare(`
-        SELECT r.id AS roomId, r.expires_at AS expiresAt, m.id, m.name, m.station
+        SELECT r.id AS roomId, r.expires_at AS expiresAt, r.situation,
+            m.id, m.name, m.station, m.started_at AS startedAt, m.report
         FROM rooms r JOIN room_members m ON m.room_id = r.id
         WHERE r.code = ? AND r.closed_at IS NULL AND r.expires_at > ? AND m.user_id IN (?, ?)
         ORDER BY (m.user_id = ?) DESC LIMIT 1
-      `).bind(code, now, memberId, anonymousId, memberId).first<Seat & { roomId: string; expiresAt: number }>();
+      `).bind(code, now, memberId, anonymousId, memberId).first<JoinedRow>();
       if (!joined) {
         const active = await db.prepare(`
           SELECT id FROM rooms WHERE code = ? AND closed_at IS NULL AND expires_at > ?
@@ -226,15 +236,65 @@ export async function roomApi(
         WHERE user_id = ? AND window_start = ? AND attempts > 0 RETURNING user_id
       `).bind(memberId, reservation.window_start).first();
       if (!joined) return error('This room is full.', 409);
-      const { roomId, expiresAt, ...seat } = joined;
-      return json({ id: roomId, expiresAt, seat } satisfies JoinedRoom, 200, accountId ? undefined : guestToken);
+      return json(toJoinedRoom(joined), 200, accountId ? undefined : guestToken);
     }
 
     const action = url.pathname.match(roomAction);
-    if (action && ((action[2] === 'close' && method === 'POST') || (action[3] && method === 'PUT'))) {
+    if (!action) return error('Room action not found.', 404);
+    const [, roomId, target, seatId, seatAction] = action;
+
+    if (seatId && ((method === 'GET' && !seatAction) || (method === 'POST' && seatAction))) {
+      const member = () => db.prepare(`
+        SELECT r.id AS roomId, r.expires_at AS expiresAt, r.situation,
+          m.id, m.name, m.station, m.started_at AS startedAt, m.report
+        FROM room_members m JOIN rooms r ON r.id = m.room_id
+        WHERE m.room_id = ? AND m.id = ? AND m.user_id IN (?, ?)
+          AND r.closed_at IS NULL AND r.expires_at > ?
+      `).bind(roomId, seatId, accountId ?? null, anonymousId, now).first<JoinedRow>();
+
+      if (method === 'GET') {
+        const row = await member();
+        return row ? json(toJoinedRoom(row)) : error('Your seat or active room could not be found.', 404);
+      }
+
+      if (seatAction === 'start') {
+        const fields = await readForm(request);
+        const station = stations.find((value) => value === fields?.station);
+        const situation = encounters.find((value) => value === fields?.situation);
+        if (!station || !situation) return error('Choose an assigned encounter and station.', 400);
+
+        // Match the assignment the player saw, atomically with the first start.
+        const seat = await db.prepare(`
+          UPDATE room_members SET started_at = COALESCE(started_at, ?)
+          WHERE room_id = ? AND id = ? AND user_id IN (?, ?) AND station = ? AND report IS NULL
+            AND EXISTS (SELECT 1 FROM rooms WHERE id = ? AND situation = ?
+              AND closed_at IS NULL AND expires_at > ?)
+          RETURNING id
+        `).bind(now, roomId, seatId, accountId ?? null, anonymousId, station, roomId, situation, now).first();
+        if (seat) return new Response(null, { status: 204, headers: noStore });
+        const row = await member();
+        if (!row) return error('Your seat or active room could not be found.', 404);
+        return error(row.report ? 'This seat already submitted a report. Reopen your assignment to view it.'
+          : 'Your assignment changed. Return to Rooms and open the latest assignment.', 409);
+      }
+
+      const report = readRoomReport(await readForm(request, 8192));
+      if (!report) return error('Could not read this Flight Deck report.', 400);
+      const saved = await db.prepare(`
+        UPDATE room_members SET report = COALESCE(report, ?)
+        WHERE room_id = ? AND id = ? AND user_id IN (?, ?) AND started_at IS NOT NULL
+          AND EXISTS (SELECT 1 FROM rooms WHERE id = ? AND closed_at IS NULL AND expires_at > ?)
+        RETURNING report
+      `).bind(JSON.stringify(report), roomId, seatId, accountId ?? null, anonymousId, roomId, now)
+        .first<{ report: string }>();
+      if (saved) return json(JSON.parse(saved.report));
+      if (!await member()) return error('Your seat or active room could not be found.', 404);
+      return error('Start your assigned challenge before submitting a report.', 409);
+    }
+
+    if ((target === 'close' && method === 'POST') || (method === 'PUT' && (target === 'encounter' || (seatId && !seatAction)))) {
       if (!dmId) return error('Only the signed-in DM can manage this room.', 403);
-      const roomId = action[1];
-      if (action[2] === 'close') {
+      if (target === 'close' && method === 'POST') {
         const room = await db.prepare(`
           UPDATE rooms SET closed_at = COALESCE(closed_at, ?)
           WHERE id = ? AND owner_id = ? RETURNING id
@@ -243,19 +303,44 @@ export async function roomApi(
         return new Response(null, { status: 204, headers: noStore });
       }
 
-      const fields = await readForm(request);
-      const station = fields?.station;
-      if (station !== null && !stations.some((option) => option === station)) {
-        return error('Choose a Flight Deck station.', 400);
+      if (target === 'encounter') {
+        const fields = await readForm(request);
+        const situation = encounters.find((value) => value === fields?.situation);
+        if (!situation) return error('Choose a Flight Deck encounter.', 400);
+        const room = await db.prepare(`
+          UPDATE rooms SET situation = ? WHERE id = ? AND owner_id = ?
+            AND expires_at > ? AND closed_at IS NULL
+            AND NOT EXISTS (SELECT 1 FROM room_members WHERE room_id = rooms.id AND started_at IS NOT NULL)
+          RETURNING id
+        `).bind(situation, roomId, dmId, now).first();
+        if (room) return new Response(null, { status: 204, headers: noStore });
+        const activeRoom = await db.prepare(`
+          SELECT id FROM rooms WHERE id = ? AND owner_id = ? AND expires_at > ? AND closed_at IS NULL
+        `).bind(roomId, dmId, now).first();
+        if (!activeRoom) return error('Active room not found.', 404);
+        return error('The encounter locks when a player starts.', 409);
       }
-      const seat = await db.prepare(`
-        UPDATE room_members SET station = ? WHERE id = ? AND room_id = ?
-          AND EXISTS (SELECT 1 FROM rooms WHERE id = ? AND owner_id = ?
-            AND expires_at > ? AND closed_at IS NULL)
-        RETURNING id, name, station
-      `).bind(station as Seat['station'], action[3], roomId, roomId, dmId, now).first<Seat>();
-      if (!seat) return error('Seat or active room not found.', 404);
-      return json(seat);
+
+      if (seatId) {
+        const fields = await readForm(request);
+        const station = fields?.station;
+        if (station !== null && !stations.some((option) => option === station)) {
+          return error('Choose a Flight Deck station.', 400);
+        }
+        const seat = await db.prepare(`
+          UPDATE room_members SET station = ? WHERE id = ? AND room_id = ? AND started_at IS NULL
+            AND EXISTS (SELECT 1 FROM rooms WHERE id = ? AND owner_id = ?
+              AND expires_at > ? AND closed_at IS NULL)
+          RETURNING id, name, station, started_at AS startedAt, report
+        `).bind(station as Seat['station'], seatId, roomId, roomId, dmId, now).first<SeatRow>();
+        if (seat) return json(toSeat(seat));
+        const lockedSeat = await db.prepare(`
+          SELECT m.id FROM room_members m JOIN rooms r ON r.id = m.room_id
+          WHERE m.id = ? AND r.id = ? AND r.owner_id = ? AND r.expires_at > ? AND r.closed_at IS NULL
+        `).bind(seatId, roomId, dmId, now).first();
+        if (!lockedSeat) return error('Seat or active room not found.', 404);
+        return error('The station locks when this player starts.', 409);
+      }
     }
     return error('Room action not found.', 404);
   } catch (cause) {

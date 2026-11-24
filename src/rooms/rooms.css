@@ -33,3 +33,8 @@
   .room-grid { grid-template-columns: 1fr; }
   #host-rooms, #host-rooms:not([hidden]) + #player-rooms { grid-area: auto; }
 }
+.room-flight-link { display: inline-block; padding-block: 10px; color: var(--mint); font-weight: 600; }
+.room-seat { border-top: 1px solid var(--edge); padding-block: 8px; }
+.room-seat .station-assignment { margin-block: 0 6px; }
+.room-seat summary { color: var(--mint); cursor: pointer; padding-block: 8px; }
+.room-seat pre { white-space: pre-wrap; overflow-wrap: anywhere; font: inherit; color: var(--muted); }
