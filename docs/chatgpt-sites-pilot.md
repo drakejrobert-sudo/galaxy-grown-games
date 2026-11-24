@@ -12,7 +12,7 @@ A seat shows **Ready** once the encounter and station are assigned, **Playing** 
 
 For the public smoke test, use an account-free browser for each player and a signed-in browser for the DM. Check two live rooms, the assignment and status updates, a completed report, seat recovery after reload, and polling shutdown when the last room closes. Keep test names fictional. For the dashboard workload check, record one 15-minute run with one DM and four guests, with counts for room polls and other requests, plus metered hosting credits where available.
 
-The Site now also uses the private `BUCKET` R2 binding and additive campaign-save D1 migration for [optional campaign cloud saves](campaign-cloud-saves.md). Cloud save access uses each signed-in account ID independently of room-host permission.
+The Site now also uses the private `BUCKET` R2 binding and additive campaign-save D1 migration for [optional campaign cloud saves](campaign-cloud-saves.md). Cloud save access is restricted to the signed-in account matching `ROOM_DM_EMAIL`, with records still owned by its stable Sites account ID.
 
 The Site origin has its own browser storage. Use the fictional demo for testing. The existing export/import controls can transfer a chosen campaign between origins. Treat archives and uploaded background art as private.
 

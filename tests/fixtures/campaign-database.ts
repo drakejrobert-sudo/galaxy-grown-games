@@ -17,6 +17,7 @@ export function campaignEnvironment() {
   }
   const objects = new Map<string, Uint8Array>();
   const env: Required<CampaignEnvironment> = {
+    ROOM_DM_EMAIL: 'fictional-dm-a@example.invalid',
     DB: { prepare, async batch(statements) {
       database.exec('BEGIN');
       try { const result = statements.map(s => (s as ReturnType<typeof prepare>).execute()); database.exec('COMMIT'); return result; }

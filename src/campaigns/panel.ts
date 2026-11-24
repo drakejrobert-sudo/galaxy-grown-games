@@ -9,9 +9,9 @@ export function cloudPanel(cloud: CampaignCloud, host: HTMLElement, current: () 
     const focused = document.activeElement?.id;
     const selected = cloud.saves.find(s => s.id === cloud.selected);
     host.innerHTML = `<h2>Private cloud saves</h2><p>Save this campaign for another device. Restoring adds an independent local copy. Changes stay local until you save again.</p>
-      <p class="help">Any signed-in account can keep its own private saves. Room-host permission is separate. Up to 20 saves, 10 MB and 100 illustrated maps each, and 40 uploads per day.</p>
+      <p class="help">Cloud saves are currently available only to the signed-in DM. Everyone can keep local saves and download backups. Up to 20 saves, 10 MB and 100 illustrated maps each, and 40 uploads per day.</p>
       <p role="status" aria-live="polite">${escape(cloud.status || (cloud.busy ? 'Working…' : cloud.loaded && !cloud.signedOut ? 'Cloud list is current as of your last refresh.' : 'Refresh cloud saves to check sign-in.'))}</p>
-      ${cloud.signedOut ? '<a href="/signin-with-chatgpt?return_to=%2F%23%2Fmap" target="_top">Sign in for private saves</a>' : ''}
+      ${cloud.signedOut || cloud.accessDenied ? '<a href="/signin-with-chatgpt?return_to=%2F%23%2Fmap" target="_top">Sign in for private saves</a>' : ''}
       <fieldset ${cloud.busy ? 'disabled' : ''}><button id="cloud-refresh">Refresh cloud saves</button>
       ${cloud.account ? `<label>Saved campaign<select id="cloud-select"><option value="">Choose a cloud save</option>${cloud.saves.map(s=>`<option value="${escape(s.id)}" ${s.id===cloud.selected?'selected':''}>${escape(s.name)}</option>`).join('')}</select></label>
       ${selected ? `<p>Last saved: ${escape(new Date(selected.updatedAt).toLocaleString())}</p>` : ''}

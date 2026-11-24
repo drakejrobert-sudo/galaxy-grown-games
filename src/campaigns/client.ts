@@ -28,6 +28,7 @@ export class CampaignCloud {
   busy = false;
   loaded = false;
   signedOut = false;
+  accessDenied = false;
   status = '';
   pending: Pending | null = null;
   conflict = false;
@@ -39,15 +40,16 @@ export class CampaignCloud {
     if (this.account !== list.account) { this.selected = ''; this.pending = null; }
     this.account = list.account; this.saves = list.saves;
     if (!this.saves.some(s => s.id === this.selected)) this.selected = '';
-    this.loaded = true; this.signedOut = false;
+    this.loaded = true; this.signedOut = false; this.accessDenied = false;
   }
   async run(action: () => Promise<void>) {
     if (this.busy) return;
     this.busy = true; this.status = ''; this.conflict = false; this.onChange();
     try { await action(); }
     catch (e) {
-      if (e instanceof CloudError && e.status === 401) {
-        this.account = ''; this.saves = []; this.selected = ''; this.pending = null; this.signedOut = true;
+      if (e instanceof CloudError && [401, 403].includes(e.status)) {
+        this.account = ''; this.saves = []; this.selected = ''; this.pending = null; this.loaded = false;
+        this.signedOut = e.status === 401; this.accessDenied = e.status === 403;
       }
       if (e instanceof CloudError && [404, 409].includes(e.status)) {
         try { await this.refresh(); } catch { /* Preserve the original operation error. */ }

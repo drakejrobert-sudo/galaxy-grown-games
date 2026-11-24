@@ -8,6 +8,7 @@ interface Statement {
   all<T>(): Promise<{ results: T[] }>;
 }
 export interface CampaignEnvironment {
+  ROOM_DM_EMAIL?: string;
   DB?: { prepare(sql: string): Statement; batch(statements: Statement[]): Promise<{ results: unknown[] }[]> };
   BUCKET?: {
     put(key: string, value: Uint8Array): Promise<unknown>;
@@ -98,6 +99,10 @@ export async function campaignApi(request: Request, environment: CampaignEnviron
   const url = new URL(request.url), method = request.method;
   const owner = request.headers.get('oai-authenticated-user-id')?.trim();
   if (!owner) return failure('Sign in to use private cloud saves.', 401);
+  const dmEmail = environment.ROOM_DM_EMAIL?.trim().toLowerCase();
+  if (!dmEmail) return failure('Cloud saves are unavailable until the DM account is configured. Local saves and exports still work.', 503);
+  const email = request.headers.get('oai-authenticated-user-email')?.trim().toLowerCase();
+  if (email !== dmEmail) return failure('Cloud saves are currently limited to the signed-in DM. Local saves and exports still work.', 403);
   if (method !== 'GET' && request.headers.get('Origin') !== url.origin) return failure('Open campaign saves from this Site to make changes.', 403);
   if (!environment.DB || !environment.BUCKET) return failure('Cloud saves are temporarily unavailable. Local saves and exports still work.', 503);
   const env = environment as Required<CampaignEnvironment>;

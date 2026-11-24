@@ -6,10 +6,10 @@ import { campaignEnvironment } from './fixtures/campaign-database.ts';
 import { demoCampaign } from '../src/galaxy/model.ts';
 
 function fixture() {
-  const { env, database } = campaignEnvironment(); let account='a', loseResponse=false;
+  const { env, database } = campaignEnvironment(); env.ROOM_DM_EMAIL='a@example.invalid'; let account='a', loseResponse=false;
   const request=async <T>(path='',method='GET',body?:unknown):Promise<T>=>{
     const response=await campaignApi(new Request('https://test.invalid/api/campaigns'+path, {
-      method, headers:{'oai-authenticated-user-id':account,Origin:'https://test.invalid','Content-Type':'application/json'},
+      method, headers:{'oai-authenticated-user-id':account,'oai-authenticated-user-email':account+'@example.invalid',Origin:'https://test.invalid','Content-Type':'application/json'},
       body: body === undefined ? undefined : JSON.stringify(body),
     }),env);
     const data=await response.json();
@@ -34,12 +34,14 @@ test('conflicting client save retains local changes and offers an independent co
   assert.equal(h.cloud.conflict,true);assert.equal(c.name,'Local unshared changes');
   await h.cloud.run(()=>h.cloud.save(c,false));assert.equal(h.cloud.saves.length,2);
 });
-test('account changes and sign-out discard private selections and reject uploads under stale identity',async()=>{
+test('switching to an unauthorized account clears cloud data and controls, and DM access can recover',async()=>{
   const h=fixture();await h.cloud.refresh();const c=demoCampaign();await h.cloud.save(c,false);
-  h.switchAccount('b');await h.cloud.run(()=>h.cloud.save(c,true));assert.equal(h.cloud.conflict,false); // other owner's save is 404
-  await h.cloud.refresh();assert.equal(h.cloud.selected,'');assert.equal(h.cloud.saves.length,0);
-  const accountB=h.cloud.account;h.switchAccount('a');await h.cloud.run(()=>h.cloud.save(c,false));
-  assert.equal(h.cloud.conflict,true);assert.notEqual(h.cloud.account,accountB);
+  h.switchAccount('b');await h.cloud.run(()=>h.cloud.save(c,true));
+  assert.equal(h.cloud.accessDenied,true);assert.equal(h.cloud.account,'');
+  assert.equal(h.cloud.selected,'');assert.equal(h.cloud.pending,null);assert.equal(h.cloud.saves.length,0);
+  assert.match(h.cloud.status,/limited to the signed-in DM/);
+  h.switchAccount('a');await h.cloud.run(()=>h.cloud.refresh());
+  assert.equal(h.cloud.accessDenied,false);assert.equal(h.cloud.saves.length,1);
   h.switchAccount('');await h.cloud.run(()=>h.cloud.refresh());assert.equal(h.cloud.signedOut,true);assert.equal(h.cloud.account,'');
 });
 test('a pending upload cannot be retried from another local campaign and panels get completion notifications',async()=>{

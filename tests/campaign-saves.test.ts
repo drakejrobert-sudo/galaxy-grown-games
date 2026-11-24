@@ -9,7 +9,7 @@ const origin = 'https://fictional.invalid';
 function setup() {
   const h = campaignEnvironment();
   const call = async (path = '', method = 'GET', body?: unknown, user = 'fictional-dm-a', now = 1_000_000, requestOrigin = origin) => campaignApi(new Request(origin + '/api/campaigns' + path, {
-    method, headers: { ...(user ? {'oai-authenticated-user-id':user} : {}), Origin: requestOrigin, 'Content-Type':'application/json' },
+    method, headers: { ...(user ? {'oai-authenticated-user-id':user,'oai-authenticated-user-email':user+'@example.invalid'} : {}), Origin: requestOrigin, 'Content-Type':'application/json' },
     body: body === undefined ? undefined : JSON.stringify(body),
   }), h.env, now);
   const account = async (user = 'fictional-dm-a') => (await (await call('', 'GET', undefined, user)).json()).account as string;
@@ -40,12 +40,12 @@ test('private save reconstructs artwork, paused travel, linked maps and portable
 test('anonymous, cross-account, cross-origin and arbitrary artwork paths cannot access private content', async () => {
   const h=setup(), p=await h.payload(); await h.call('', 'POST', p);
   assert.equal((await h.call('', 'GET', undefined, '')).status,401);
-  for (const method of ['GET','PUT','DELETE']) assert.equal((await h.call('/'+p.id, method, method==='GET'?undefined:p, 'fictional-dm-b')).status,404);
-  assert.deepEqual((await (await h.call('', 'GET', undefined,'fictional-dm-b')).json()).saves,[]);
+  for (const method of ['GET','PUT','DELETE']) assert.equal((await h.call('/'+p.id, method, method==='GET'?undefined:p, 'fictional-dm-b')).status,403);
+  assert.equal((await h.call('', 'GET', undefined,'fictional-dm-b')).status,403);
   assert.equal((await h.call('', 'POST',p,'fictional-dm-a',1_000_000,'https://other.invalid')).status,403);
-  assert.equal((await h.call('', 'POST',p,'fictional-dm-b')).status,409);
+  assert.equal((await h.call('', 'POST',p,'fictional-dm-b')).status,403);
   assert.equal((await h.call('/'+p.id+'/art/some-key')).status,404);
-  assert.equal((await h.call('/'+p.id+'/export', 'GET',undefined,'fictional-dm-b')).status,404);
+  assert.equal((await h.call('/'+p.id+'/export', 'GET',undefined,'fictional-dm-b')).status,403);
 });
 
 test('lost responses retry once; stale and concurrent updates never overwrite the winner', async () => {
@@ -91,9 +91,13 @@ test('deletion is revision guarded and expired staging is reclaimed without touc
   del.revision=1;assert.equal((await h.call('/'+p.id,'DELETE',del)).status,200);
   assert.equal((await h.call('/'+p.id)).status,404);
   assert.equal((await h.call('','POST',p)).status,404);
-  const q=await h.payload();q.account=await h.account('fictional-dm-b');await h.call('','POST',q,'fictional-dm-b');
+  const q=await h.payload();
+  h.env.ROOM_DM_EMAIL='fictional-dm-b@example.invalid';
+  q.account=await h.account('fictional-dm-b');await h.call('','POST',q,'fictional-dm-b');
+  h.env.ROOM_DM_EMAIL='fictional-dm-a@example.invalid';
   const next=await h.payload(); await h.call('','POST',next,'fictional-dm-a',1_000_000+86_400_001);
   assert.equal(h.database.prepare('SELECT count(*) AS n FROM campaign_operations WHERE id=?').get(p.operationId)!.n,0);
+  h.env.ROOM_DM_EMAIL='fictional-dm-b@example.invalid';
   assert.deepEqual((await (await h.call('/'+q.id,'GET',undefined,'fictional-dm-b')).json()).archive,q.archive);
 });
 
@@ -165,4 +169,30 @@ test('rate-limit cleanup preserves an interrupted operation and its retry', asyn
   assert.equal(h.database.prepare('SELECT count(*) AS n FROM campaign_saves WHERE id=?').get(pending.id)!.n, 1);
   assert.equal((await h.call('', 'POST', pending)).status, 201);
   assert.deepEqual((await (await h.call('/' + pending.id)).json()).archive, pending.archive);
+});
+
+test('only the configured DM can use any cloud endpoint, before storage or request-body access', async () => {
+  const h = setup();
+  let reads = 0;
+  h.env.DB.prepare = () => { reads++; throw Error('Unauthorized request reached D1'); };
+  h.env.BUCKET.get = async () => { reads++; throw Error('Unauthorized request reached R2'); };
+  const id = crypto.randomUUID();
+  for (const [path, method] of [['', 'GET'], ['', 'POST'], ['/'+id, 'GET'], ['/'+id, 'PUT'], ['/'+id, 'DELETE'], ['/'+id+'/export', 'GET']]) {
+    const response = await h.call(path, method, method === 'GET' ? undefined : { archive: 'ignored' }, 'fictional-dm-b');
+    assert.equal(response.status, 403);
+    assert.match((await response.json()).error, /limited to the signed-in DM/);
+    assert.equal(response.headers.get('Cache-Control'), 'private, no-store');
+  }
+  assert.equal(reads, 0);
+});
+
+test('DM restriction fails closed without configuration or verified identity and normalizes configured email', async () => {
+  const h = setup();
+  h.env.ROOM_DM_EMAIL = '  FICTIONAL-DM-A@EXAMPLE.INVALID  ';
+  assert.equal((await h.call()).status, 200);
+  const request = (headers: Record<string,string>) => new Request(origin+'/api/campaigns', {headers});
+  assert.equal((await campaignApi(request({'oai-authenticated-user-id':'fictional-dm-a'}),h.env)).status,403);
+  assert.equal((await campaignApi(request({'oai-authenticated-user-email':'fictional-dm-a@example.invalid'}),h.env)).status,401);
+  h.env.ROOM_DM_EMAIL = '';
+  assert.equal((await h.call()).status,503);
 });

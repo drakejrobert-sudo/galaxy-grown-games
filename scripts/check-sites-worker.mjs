@@ -37,8 +37,11 @@ assert.equal((await worker.fetch(new Request('https://artifact.invalid/api/rooms
 
 assert.equal((await request('/api/campaigns')).status, 401);
 assert.equal((await worker.fetch(new Request('https://artifact.invalid/api/campaigns', {
-  headers: { 'oai-authenticated-user-id': 'fictional-account' },
-}), {})).status, 503);
+  headers: { 'oai-authenticated-user-id': 'fictional-account', 'oai-authenticated-user-email': 'dm@example.invalid' },
+}), { ROOM_DM_EMAIL: 'dm@example.invalid' })).status, 503);
+assert.equal((await worker.fetch(new Request('https://artifact.invalid/api/campaigns', {
+  headers: { 'oai-authenticated-user-id': 'other-account', 'oai-authenticated-user-email': 'other@example.invalid' },
+}), { ROOM_DM_EMAIL: 'dm@example.invalid' })).status, 403);
 
 const size = gzipSync(readFileSync(new URL('../dist/server/index.js', import.meta.url))).length;
 assert.ok(size < 3_000_000, `Worker bundle is ${size} bytes compressed, near or above the 3 MB budget`);
