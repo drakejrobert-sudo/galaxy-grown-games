@@ -8,6 +8,13 @@
       "when": 1795528563776,
       "tag": "0000_rooms",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "6",
+      "when": 1795528563777,
+      "tag": "0001_station_dashboard",
+      "breakpoints": true
     }
   ]
 }

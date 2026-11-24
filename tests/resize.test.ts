@@ -6,6 +6,7 @@ import ts from 'typescript';
 import * as rules from '../src/game/rules.ts';
 import * as aftView from '../src/game/boarding-aft-view.ts';
 import * as navigation from '../src/site-navigation.ts';
+import * as roomFlight from '../src/rooms/flight.ts';
 
 function startup() {
   const elements = new Map<string, any>();
@@ -73,7 +74,7 @@ function startup() {
   const scenes = load('../src/game/scene.ts', { phaser: Phaser, './rules': rules, './boarding-aft-view': aftView });
   const idleInput = () => ({ read: () => ({}), enable: (enabled: boolean) => inputCalls.push(enabled), reset() {} });
   load('../src/main.ts', {
-    './style.css': {}, './bomber.css': {}, './site-navigation': navigation, './game/runtime': { Phaser, FlightScene: scenes.FlightScene },
+    './style.css': {}, './bomber.css': {}, './site-navigation': navigation, './rooms/flight': roomFlight, './game/runtime': { Phaser, FlightScene: scenes.FlightScene },
     './game/rules': rules,
     './game/input': Object.fromEntries(['createInput', 'createGunnerInput', 'createSpaceGunnerInput', 'createBomberInput', 'createSpaceBomberInput', 'createLifeSupportInput', 'createSpaceLifeInput'].map(name => [name, idleInput])),
   }, {
