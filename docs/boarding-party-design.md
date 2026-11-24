@@ -35,7 +35,7 @@ Left and right zones span x=20–115 and 365–460, y=90–470. **Vent left/righ
 | Easy | 135 | 1.6 | 250 | .32 | 2.2 | 1.8 |
 | Very Easy | 110 | 2.0 | 260 | .28 | 2.6 | 2.1 |
 
-Gunner and Life Support use the approved direct touch/mouse aim exception: keyboard aim is normalized/capped at 225px/s; all inputs share firing cooldowns. Touch aims only, with a separate Fire button. Mouse primary click/hold and Space/Enter fire. Independent pointer ownership permits aim, Fire and vents together. Reticles clamp to x=12–468/y=18–542. Bomber uses the existing aft-release/Launch mine controls. Fire and vent controls remain outside the canvas, stacking on narrow screens.
+Gunner and Life Support use the approved direct touch/mouse aim exception: keyboard aim is normalized/capped at 225px/s; all inputs share firing cooldowns. Tap to shoot and hold or drag to sustain fire. The Fire button also shoots at the retained aim point. Mouse primary click/hold and Space/Enter fire. Independent pointer ownership permits aim, Fire and vents together. Reticles clamp to x=12–468/y=18–542. Bomber uses the existing aft-release/Launch mine controls. Fire and vent controls remain outside the canvas, stacking on narrow screens.
 
 ## Scores, map integration and saves
 

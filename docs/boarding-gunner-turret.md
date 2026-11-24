@@ -4,7 +4,7 @@
 
 The ship flies automatically. Aim through the glass from behind the turret. Probes and shuttles approach nose-first and grow as they close. A bright amber ring marks a craft you can already shoot. A red ring means it has half a second or less before contact. A red canopy flash confirms hull damage. Probes take one hit and armored shuttles take two. Aim at the carrier between threats. Destroying it ends the round immediately and awards the carrier victory bonus.
 
-Touch the window to aim and use **Fire** separately. Mouse movement aims and primary click or hold fires. Arrows/WASD aim and Space/Enter fire. All inputs share the cooldown, which doubles on a Natural 1. The GM still receives a manual score report.
+Tap a target in the window to shoot. Hold and drag to keep firing, or use **Fire** at the retained aim point. Mouse movement aims and primary click or hold fires. Arrows/WASD aim and Space/Enter fire. All inputs share the cooldown, which doubles on a Natural 1. The GM still receives a manual score report.
 
 The camera projects the existing approach paths into screen space. The reticle, hit test, and target rings agree in that space, including the fixed seven-pixel aim allowance. The carrier cycle, world-space breach line and impact timing are unchanged. The camera stays fixed while aiming and remains useful with reduced motion or missing artwork.
 

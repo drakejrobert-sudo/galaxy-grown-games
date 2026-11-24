@@ -64,7 +64,7 @@ async function verifyTouchPair(page, first, second) {
   if (output) fs.mkdirSync(output, { recursive: true });
   const browser = await chromium.launch();
   try {
-    for (const [width, height] of [[320, 568], [390, 740], [740, 390], [1280, 900]]) {
+    for (const [width, height] of [[320, 568], [390, 740], [740, 390], [768, 1024], [1280, 900]]) {
       const touch = width < 1000;
       const context = await browser.newContext({ viewport: { width, height }, isMobile: touch, hasTouch: touch });
       const page = await context.newPage();
@@ -86,6 +86,13 @@ async function verifyTouchPair(page, first, second) {
         await page.locator('#pause').click();
         await page.locator('#resume').waitFor();
         assert.ok((await page.locator('#play-help').innerText()).length > 20, label);
+        if (width === 768 && role === 'Bomber') {
+          for (const edge of [616, 617]) {
+            await page.setViewportSize({ width: edge, height });
+            await verifyLayout(page, `${label} at ${edge}px`);
+          }
+          await page.setViewportSize({ width, height });
+        }
         const time = await page.locator('#time').innerText();
         await page.waitForTimeout(120);
         assert.equal(await page.locator('#time').innerText(), time, label);

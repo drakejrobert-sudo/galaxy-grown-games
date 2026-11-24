@@ -26,15 +26,20 @@ function setup(window: ReturnType<typeof target>) {
   return { surface, button, window, input };
 }
 
-test('touch aims at scaled canvas coordinates without held/queued firing or cooldown consumption', () => harness(h => {
+test('a quick playfield tap attempts one shot at the scaled target, including during cooldown', () => harness(h => {
   const s = createSpaceGunner(); s.spawnIn = 100;
-  for (const type of ['pointerdown', 'pointermove', 'pointerup', 'lostpointercapture']) {
-    h.surface.send(type);
-    const i = h.input.read(); assert.equal(i.firing, false);
-    assert.deepEqual([i.aimX, i.aimY], [240, 280]);
-    stepSpaceGunner(s, { total: 10, naturalOne: false }, i, 0.05);
+  const config = { total: 10, naturalOne: false };
+  for (const clientX of [130, 70]) {
+    h.surface.send('pointerdown', { clientX });
+    h.surface.send('pointerup'); h.surface.send('lostpointercapture');
+    const { first, continued } = h.input.readFrame();
+    assert.deepEqual([first.aimX, first.aimY], [(clientX - 10) * 2, 280]);
+    assert.equal(first.firing, true); assert.equal(continued.firing, false);
+    stepSpaceGunner(s, config, first, 0.05);
+    assert.equal(s.shots, 1);
   }
-  assert.equal(s.shots, 0); assert.equal(s.cooldown, 0);
+  for (let i = 0; i < 30; i++) stepSpaceGunner(s, config, h.input.read(), 0.05);
+  assert.equal(s.shots, 1);
 }));
 
 test('aim and Fire release independently; Fire coordinates never alter aim', () => harness(h => {
@@ -47,7 +52,7 @@ test('aim and Fire release independently; Fire coordinates never alter aim', () 
   h.surface.send('pointerdown'); h.button.send('pointerdown', { pointerId: 2 }); h.input.read();
   h.button.send('pointerup', { pointerId: 2 }); h.button.send('lostpointercapture', { pointerId: 2 });
   h.surface.send('pointermove', { clientX: 70 });
-  assert.equal(h.input.read().aimX, 120); assert.equal(h.input.read().firing, false);
+  assert.equal(h.input.read().aimX, 120); assert.equal(h.input.read().firing, true);
 }));
 
 test('quick Fire taps survive ordinary release plus capture loss and are consumed once', () => harness(h => {

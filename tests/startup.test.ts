@@ -287,7 +287,7 @@ test('deferred first launch recovers from load failure, starts once, and retry r
   assert.equal(element('role-bomber').disabled, false);
   assert.equal(element('role-life-support').disabled, false);
   assert.equal(element('role').value, 'Gunner');
-  assert.match(element('controls-help').textContent, /touch aim never fires/);
+  assert.match(element('controls-help').textContent, /Tap to shoot/);
   await submit();
   assert.equal(element('routing-info').hidden, true);
   assert.equal(spaceGunnerInputEnabled, true); assert.equal(gunnerInputEnabled, false);

@@ -1,6 +1,13 @@
-import type { LifeSupportRoute, SpaceLifeInput, SpaceBattleBomberInput } from './rules';
+import { WIDTH, HEIGHT, LIFE_SUPPORT_BAY, LIFE_SUPPORT_ROUTES } from './rules';
+import type { SpaceLifeInput, SpaceBattleBomberInput } from './rules';
 
 export interface InputFrame<T> { first: T; continued: T }
+
+function playfieldPoint(surface: HTMLElement, event: PointerEvent) {
+  const box = surface.querySelector('canvas')?.getBoundingClientRect();
+  if (!box?.width || !box.height) return;
+  return { x: (event.clientX - box.left) * WIDTH / box.width, y: (event.clientY - box.top) * HEIGHT / box.height };
+}
 
 export function createInput(surface: HTMLElement) {
   const keys = new Set<string>();
@@ -25,8 +32,7 @@ export function createInput(surface: HTMLElement) {
   surface.addEventListener('pointermove', e => { if (enabled && e.pointerId === pointer) { e.preventDefault(); setTouch(e); } });
   for (const event of ['pointerup', 'pointercancel', 'lostpointercapture']) {
     surface.addEventListener(event, ((e: PointerEvent) => {
-      if (!relativeDrag) clear();
-      else if (e.pointerId === pointer) { touch = null; dragOrigin = null; pointer = null; }
+      if (e.pointerId === pointer) { touch = null; dragOrigin = null; pointer = null; }
     }) as EventListener);
   }
   window.addEventListener('keydown', down);
@@ -80,8 +86,13 @@ export function createGunnerInput(surface: HTMLElement) {
   const release = (e: PointerEvent) => {
     if (e.pointerId === pointer) pointer = null;
   };
-  for (const event of ['pointerup', 'pointercancel', 'lostpointercapture']) {
-    surface.addEventListener(event, release as EventListener);
+  surface.addEventListener('pointerup', release);
+  for (const event of ['pointercancel', 'lostpointercapture']) {
+    surface.addEventListener(event, ((e: PointerEvent) => {
+      if (e.pointerId !== pointer) return;
+      queuedShot = false;
+      release(e);
+    }) as EventListener);
   }
   window.addEventListener('blur', clear);
   return {
@@ -159,10 +170,7 @@ export function createSpaceBomberInput(surface: HTMLElement, action: HTMLElement
   let aim: { x: number; y: number } | undefined;
   let launch: typeof aim;
   const clear = () => { keys.clear(); held.clear(); queued.clear(); keyboardQueued = false; straightQueued = false; gesture = null; aim = undefined; launch = undefined; };
-  const point = (e: PointerEvent) => {
-    const box = surface.querySelector('canvas')?.getBoundingClientRect();
-    return box && box.width && box.height ? { x: (e.clientX - box.left) / box.width * 480, y: (e.clientY - box.top) / box.height * 560 } : undefined;
-  };
+  const point = (e: PointerEvent) => playfieldPoint(surface, e);
   surface.addEventListener('pointerdown', e => {
     if (!enabled || gesture !== null || (e.pointerType === 'mouse' && e.button !== 0)) return;
     e.preventDefault(); gesture = e.pointerId; aim = point(e); surface.setPointerCapture?.(gesture);
@@ -224,8 +232,8 @@ export function createSpaceBomberInput(surface: HTMLElement, action: HTMLElement
   };
 }
 
-export function createLifeSupportInput(routeButtons: readonly HTMLElement[]) {
-  const routes: readonly LifeSupportRoute[] = ['Thrusters', 'Shields', 'Guns'];
+export function createLifeSupportInput(surface: HTMLElement, routeButtons: readonly HTMLElement[]) {
+  const routes = LIFE_SUPPORT_ROUTES;
   let selected = 1;
   let enabled = false;
   const choose = (index: number) => {
@@ -245,6 +253,15 @@ export function createLifeSupportInput(routeButtons: readonly HTMLElement[]) {
       e.preventDefault(); choose((selected + 1) % routes.length);
     }
   };
+  surface.addEventListener('pointerdown', e => {
+    if (!enabled || e.button !== 0) return;
+    const point = playfieldPoint(surface, e);
+    const bay = LIFE_SUPPORT_BAY;
+    if (!point || point.y < bay.top || point.y > bay.top + bay.height) return;
+    const index = routes.findIndex(route => Math.abs(bay.centerX[route] - point.x) <= bay.width / 2);
+    if (index < 0) return;
+    e.preventDefault(); choose(index);
+  });
   routeButtons.forEach((button, index) => button.addEventListener('pointerdown', e => {
     if (!enabled) return;
     e.preventDefault(); choose(index);
@@ -257,7 +274,7 @@ export function createLifeSupportInput(routeButtons: readonly HTMLElement[]) {
   };
 }
 
-/** Space Battle touch aims only; firing sources have independent held/queued ownership. */
+/** Playfield, Fire button, and keyboard share one weapon cooldown. */
 export function createSpaceGunnerInput(surface: HTMLElement, fireAction: HTMLElement) {
   let enabled = false;
   let aimPointer: number | null = null;
@@ -282,7 +299,7 @@ export function createSpaceGunnerInput(surface: HTMLElement, fireAction: HTMLEle
     if (!enabled || (e.pointerType === 'mouse' && e.button !== 0) || aimPointer !== null) return;
     e.preventDefault(); aimPointer = e.pointerId;
     surface.setPointerCapture?.(e.pointerId); setAim(e);
-    if (e.pointerType === 'mouse') { held.add(e.pointerId); queued.add(e.pointerId); }
+    held.add(e.pointerId); queued.add(e.pointerId);
   });
   surface.addEventListener('pointermove', e => {
     if (!enabled || (e.pointerType !== 'mouse' && e.pointerId !== aimPointer)) return;

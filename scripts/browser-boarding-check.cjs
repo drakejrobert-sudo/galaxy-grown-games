@@ -84,10 +84,10 @@ async function checkCoveredHelmets(page, width, fallback = false) {
         assert.match(await page.locator('#mode-label').innerText(), /BOARDING PARTY/);
         assert.equal(await page.locator('#vent-controls').count(), 0);
         await page.locator('#canvas').focus();
-        const before = await page.evaluate(() => ({ x: qaScene.boarding.x, aim: qaScene.boarding.crosshairX }));
+        const before = await page.evaluate(() => ({ x: qaScene.boardingPilot.x, aim: qaScene.boarding.crosshairX }));
         if (role === 'Pilot' || role === 'Gunner' || role === 'Life Support') {
           await page.keyboard.down('ArrowRight'); await page.waitForTimeout(160); await page.keyboard.up('ArrowRight');
-          const after = await page.evaluate(() => ({ x: qaScene.boarding.x, aim: qaScene.boarding.crosshairX }));
+          const after = await page.evaluate(() => ({ x: qaScene.boardingPilot.x, aim: qaScene.boarding.crosshairX }));
           assert.ok(role === 'Pilot' ? after.x > before.x : after.aim > before.aim);
         }
         if (role === 'Bomber') {
@@ -100,9 +100,6 @@ async function checkCoveredHelmets(page, width, fallback = false) {
           const shots = await page.evaluate(() => qaScene.boarding.shots);
           if (width < 600) {
             await page.touchscreen.tap(box.x+box.width*.3, box.y+box.height*.6);
-            await page.waitForTimeout(60);
-            assert.equal(await page.evaluate(() => qaScene.boarding.shots), shots, 'touch aim alone never fires');
-            await page.locator('#fire-action').tap();
           } else await page.mouse.click(box.x+box.width*.3, box.y+box.height*.6);
           await page.waitForTimeout(90);
           assert.ok(await page.evaluate(n => qaScene.boarding.shots > n, shots));
@@ -116,10 +113,7 @@ async function checkCoveredHelmets(page, width, fallback = false) {
             },side);
             const box=await page.locator('canvas').boundingBox(),x=side?380:100,y=280;
             if(width<600) {
-              const shots=await page.evaluate(()=>qaScene.boarding.shots);
               await page.touchscreen.tap(box.x+box.width*x/480,box.y+box.height*y/560);
-              assert.equal(await page.evaluate(()=>qaScene.boarding.shots),shots,'door target touch aims without firing');
-              await page.locator('#fire-action').tap();
             } else {
               // Keyboard can fire at a pointer-selected target too.
               await page.mouse.move(box.x+box.width*x/480,box.y+box.height*y/560);
@@ -146,9 +140,10 @@ async function checkCoveredHelmets(page, width, fallback = false) {
 
         }
         await page.locator('#pause').click();
-        const paused = await page.evaluate(() => JSON.stringify(qaScene.boarding));
+        const stateKey = role === 'Pilot' ? 'boardingPilot' : 'boarding';
+        const paused = await page.evaluate(key => JSON.stringify(qaScene[key]), stateKey);
         await page.waitForTimeout(150);
-        assert.equal(await page.evaluate(() => JSON.stringify(qaScene.boarding)), paused);
+        assert.equal(await page.evaluate(key => JSON.stringify(qaScene[key]), stateKey), paused);
         for (const w of [615, 633, width]) {
           await page.setViewportSize({ width: w, height: 1100 });
           assert.ok((await page.locator('canvas').boundingBox()).width > 0);
@@ -157,6 +152,7 @@ async function checkCoveredHelmets(page, width, fallback = false) {
         await page.locator('#resume').click();
         // Readable-threat screenshot fixture, separate from the live input checks above.
         await page.evaluate(role => {
+          if (role === 'Pilot') return;
           const scene=qaScene,s=scene.boarding;scene.activeFlight=false;
           s.elapsed=role==='Life Support'?3:4;s.grace=0;s.carrier.x=240;s.carrier.targetX=240;s.carrier.y=250;s.carrier.cycle=0;
           s.pods=[{id:100,kind:'probe',hp:1,maxHp:1,warningRemaining:0,hitFlash:0,x:140,y:340,vx:45,vy:-100,radius:12},{id:101,kind:'shuttle',hp:1,maxHp:2,warningRemaining:.4,hitFlash:.1,x:310,y:420,vx:-55,vy:-80,radius:18}];
@@ -184,16 +180,25 @@ async function checkCoveredHelmets(page, width, fallback = false) {
         }
         if(role==='Life Support') { await checkCoveredHelmets(page,width); await checkCoveredHelmets(page,width,true); }
         // Finish using a synthetic end-boundary fixture, verify the actual report UI and retry.
-        await page.evaluate(() => { const s=qaScene.boarding;s.elapsed=59.98;s.pods=[];s.boarders=[];s.lasers=[];s.carrier.hp=0;s.disabled=true;s.spawnIn=100;qaScene.activeFlight=true; });
+        await page.evaluate(role => {
+          if (role === 'Pilot') qaScene.boardingPilot.elapsed = 59.98;
+          else {
+            const s = qaScene.boarding;
+            s.elapsed = 59.98; s.pods = []; s.boarders = []; s.lasers = []; s.spawnIn = 100;
+          }
+          qaScene.activeFlight = true;
+        }, role);
         await page.locator('#results:not([hidden])').waitFor();
         assert.match(await page.locator('#summary').inputValue(), /Boarding Party/);
         assert.match(await page.locator('#summary').inputValue(), /Natural 1: No/);
         assert.match(await page.locator('#summary').inputValue(), /GM determines campaign outcome/);
         await page.locator('#again').click(); await page.locator('#natural-one').check(); await page.locator('#start').click();
-        assert.equal(await page.evaluate(() => qaScene.boarding.elapsed), 0);
-        assert.equal(await page.evaluate(() => qaScene.boarding.aimDistance), 100);
-        assert.equal(await page.evaluate(() => qaScene.boarding.ejections.length),0);
-        assert.ok(await page.evaluate(() => qaScene.boarding.airlocks.every(l=>l.cooldown===0&&l.openRemaining===0)));
+        assert.ok(await page.evaluate(key => qaScene[key].elapsed < 1, stateKey));
+        if (role === 'Bomber') assert.equal(await page.evaluate(() => qaScene.boarding.aimDistance), 100);
+        if (role === 'Life Support') {
+          assert.equal(await page.evaluate(() => qaScene.boarding.ejections.length), 0);
+          assert.ok(await page.evaluate(() => qaScene.boarding.airlocks.every(l => l.cooldown === 0 && l.openRemaining === 0)));
+        }
         assert.equal(await page.locator('vite-error-overlay').count(), 0);
         checks.push({ width, role, liveControls: true, screenshotAndEndFixture: true });
       }

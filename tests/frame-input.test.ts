@@ -19,7 +19,7 @@ test('weapon frame snapshots consume a released tap once and preserve supported 
           : kind === 'spaceGunner' ? createSpaceGunnerInput(playfield as any, action as any)
             : createSpaceBomberInput(playfield as any, action as any);
       input.enable(true);
-      const control = kind === 'gunner' ? playfield : action;
+      const control = kind.includes('unner') ? playfield : action;
       control.emit('pointerdown'); if (!held) { control.emit('pointerup'); control.emit('lostpointercapture'); }
       const frame = input.readFrame() as any, property = kind.includes('unner') ? 'firing' : 'placing';
       assert.equal(frame.first[property], true);
