@@ -13,4 +13,11 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm test
-      - run: npm run build
+      - name: Build and verify Pages
+        run: |
+          npm run build -- --outDir dist/pages
+          node scripts/check-build-assets.mjs dist/pages /galaxy-grown-games/
+      - name: Build and verify Sites
+        run: |
+          npm run build:sites -- --outDir dist/sites
+          node scripts/check-build-assets.mjs dist/sites /

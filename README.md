@@ -109,7 +109,7 @@ Each finished run now shows a provisional **0–100 rating** and GM advisory ban
 
 ### ChatGPT Sites and GitHub Pages
 
-ChatGPT Sites is the primary development and release target. GitHub holds the reviewed source. Build for the Site root with `npm run build:sites`. The private Site supports testing while the player link continues to serve Pages. The release guide covers publishing reviewed main, recording the deployed version, moving the player link after acceptance, and recovering standalone play. [Sites release guide and roadmap](docs/chatgpt-sites-pilot.md)
+ChatGPT Sites is the primary development and release target. GitHub holds the reviewed source. Build for the Site root with `npm run build:sites`. The private Site supports testing while the player link continues to serve Pages. The release guide covers publishing a checked PR to the private Site for playtesting, verifying the Pages deployment after merge, and recovering standalone play. [Sites release guide and roadmap](docs/chatgpt-sites-pilot.md)
 
 #### GitHub Pages fallback
 
@@ -134,7 +134,7 @@ There are eight playable prototypes. Space Battle Gunner adds turret defense to 
 
 Drake reviews and merges feature branches. A reviewed merge authorizes release of tested main to the designated Site with its existing audience and the automatic Pages deployment. See the [repository instructions](AGENTS.md), [campaign context](docs/campaign-context.md) and [ChatGPT project setup](docs/chatgpt-project-setup.md).
 
-For player-facing game changes, verify the deployed revision on the host Drake will playtest. Keep the issue open through owner acceptance.
+For player-facing game changes, publish the checked PR head to the private Site for Drake’s playtest. After Drake merges, verify the accepted changes deployed on Pages. Keep the issue open until deployment and owner acceptance are recorded.
 
 Completed engineering work can be ready for PR review with owner playtesting still pending. Drafts are for incomplete work or unresolved engineering blockers. Game-change PRs identify linked issues, engineering validation, remaining owner checks, and a short playtest checklist. Use `Refs #N`; avoid automatic closing references in PR descriptions and commit messages while owner acceptance is pending.
 
