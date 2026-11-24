@@ -1,6 +1,6 @@
 # ChatGPT Sites pilot
 
-The private pilot uses the application from GitHub main revision `64eaa9d`, including Flight Deck, Galaxy Map and Hillside Tanks. The hosting manifest points to static Vite output. The GitHub Pages workflow continues to build for its repository path. For Sites, run `npm ci`, `npm test`, then `npm run build:sites` to produce a root-mounted `dist/`. Publish that output only to the test project specified in the manifest. The two builds use the same output directory, so package the intended build before running the other. Sites publication is independent of GitHub branches and the play.drakesfood.com redirect.
+The initial private pilot used GitHub revision `64eaa9d` and includes Flight Deck, Galaxy Map and Hillside Tanks. The hosting manifest points to static Vite output. GitHub CI tests the repository and validates builds in separate directories for the Sites root and the Pages repository path. For publishing, run `npm ci`, `npm test`, and `npm run build:sites` from the exact GitHub revision to produce the root-mounted `dist/` required by the manifest. Publish that output to the private test project specified in the manifest.
 
 The pilot has no server bindings and uses only the application's shipped assets. The new origin starts with its own browser storage. Use the fictional demo for testing. The existing export/import controls can transfer a chosen campaign between origins. Treat archives and uploaded background art as private. Players would need access to the Site before an in-game invitation could work.
 
@@ -36,7 +36,13 @@ Open the private test origin while signed in. Launch a Flight Deck round and che
 
 ## Release and recovery
 
-GitHub holds the reviewed source. After Drake merges, build the exact main SHA for Sites, publish it to the designated Site with its existing audience, and record the SHA, Sites version, deployment result and hosted smoke-check result in the PR or linked playtest record. The GitHub workflow deploys Pages separately. For the initial private pilot, Sites reported a successful publish and the browser reached the sign-in screen. Signed-in gameplay still needs testing.
+GitHub holds the reviewed source. Use this sequence for a player-facing PR.
+
+1. Run the checks and open the PR with `Refs #N`. Build and publish the exact checked PR head to the designated private test Site. Record the GitHub SHA, Sites version, deployment result, hosted smoke result and Site URL in the PR or linked playtest record.
+2. Drake signs in, tests the hosted revision and records acceptance with the applicable device and control coverage. If the build changes, publish the updated PR head and repeat the affected checks before merge.
+3. Drake merges. Verify the automatic Pages deployment succeeded for the merge revision and contains the accepted changes. If the merged build differs from the accepted build, verify the affected behavior before closing the issue. Close after the deployment and all remaining issue criteria are recorded.
+
+The stable player link currently uses Pages at https://drakejrobert-sudo.github.io/galaxy-grown-games/. Confirm it still reaches that build during the rehearsal. To reconcile an out-of-date private Site with Pages, identify the SHA from the latest successful Pages deployment and publish a root-mounted build of that source to the test Site.
 
 Before moving the player link, exercise Flight Deck, Galaxy Map and Hillside Tanks on the hosted build, check player access from a second account with the intended permissions, and complete physical iPhone/iPad Safari playtests. Rehearse recovery with a fictional campaign exported from Sites and imported into the Pages build. Record the working Pages destination. Drake approves audience changes and the independently managed redirect cutover separately.
 
