@@ -107,7 +107,11 @@ Each finished run now shows a provisional **0–100 rating** and GM advisory ban
 
 `src/game/rules.ts` owns simulation and scoring. `scene.ts` renders it with Phaser. `input.ts` maps touch/keyboard to shared actions. `main.ts` owns HTML setup, HUD, pause and reporting. This keeps additional situations and roles separate from the shell.
 
-### GitHub Pages
+### ChatGPT Sites and GitHub Pages
+
+ChatGPT Sites is the primary development and release target. GitHub holds the reviewed source. Build for the Site root with `npm run build:sites`. The private Site supports testing while the player link continues to serve Pages. The release guide covers publishing reviewed main, recording the deployed version, moving the player link after acceptance, and recovering standalone play. [Sites release guide and roadmap](docs/chatgpt-sites-pilot.md)
+
+#### GitHub Pages fallback
 
 The build targets `/galaxy-grown-games/`. The check workflow runs tests and builds on pushes and pull requests. After a reviewed pull request is merged, the **Deploy game hub** workflow runs on `main`. Its build job repeats `npm test` and `npm run build`, uploads one Pages artifact, and then a separate dependent job deploys that artifact. Keeping deployment separate means retrying a transient deploy failure does not upload a duplicate artifact. The workflow can also be run manually from `main` when Drake explicitly approves that deployment. GitHub Actions must be selected as the Pages source in repository Settings → Pages.
 
@@ -128,9 +132,9 @@ There are eight playable prototypes. Space Battle Gunner adds turret defense to 
 
 ### Development context and review
 
-Read [AGENTS.md](AGENTS.md) for the required branch → pull request → Drake review workflow. Agents never merge or deploy autonomously. See [campaign context](docs/campaign-context.md) for the player-safe setting and role direction, and [ChatGPT project setup](docs/chatgpt-project-setup.md) for reusable project instructions.
+Drake reviews and merges feature branches. A reviewed merge authorizes release of tested main to the designated Site with its existing audience and the automatic Pages deployment. See the [repository instructions](AGENTS.md), [campaign context](docs/campaign-context.md) and [ChatGPT project setup](docs/chatgpt-project-setup.md).
 
-For player-facing game changes, the workflow is **implementation → engineering checks → Drake reviews/merges → successful automatic deployment → Drake playtests → issue closure**. Drake can merge reviewed, tested changes to make them available at the player link while gameplay, graphics, controls, and player-facing fix issues remain open for acceptance. Confirm the deployed revision before reporting that a change is live.
+For player-facing game changes, verify the deployed revision on the host Drake will playtest. Keep the issue open through owner acceptance.
 
 Completed engineering work can be ready for PR review with owner playtesting still pending. Drafts are for incomplete work or unresolved engineering blockers. Game-change PRs identify linked issues, engineering validation, remaining owner checks, and a short playtest checklist. Use `Refs #N`; avoid automatic closing references in PR descriptions and commit messages while owner acceptance is pending.
 

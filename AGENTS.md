@@ -9,7 +9,7 @@ Read this file, README.md, docs/campaign-context.md, and relevant code and tests
 - Always work on a descriptive feature, fix, or docs branch based on current main. Never commit or push directly to main.
 - Make requested changes, run relevant tests and the production build, and open a pull request for Drake to review. A request to implement a change authorizes branch work and a reviewable PR, not a merge.
 - Never merge a pull request, enable auto-merge, approve your own work, or bypass required checks. Drake reviews and performs the merge.
-- GitHub Pages deploys automatically after a change reaches `main`, but only after the deployment workflow's tests and production build pass. Drake's decision to merge a reviewed pull request is approval for that automatic deployment. Do not manually trigger a deployment, deploy from another branch, or bypass its checks without Drake's explicit approval.
+- Develop and release for ChatGPT Sites first. GitHub is the source of truth. Drake’s merge authorizes publishing the tested main revision to the designated Site with its existing audience. Record the GitHub SHA, Sites version, deployment result and hosted smoke check. Pages continues to deploy tested main automatically and serves the stable player link until Drake approves cutover after playtesting. Audience changes, redirect changes, branch deployments and manual Pages deployments need separate approval. See the [release and recovery guide](docs/chatgpt-sites-pilot.md).
 - Do not force-push shared branches or change repository permissions, branch protections, or review requirements without explicit instructions.
 - Include the problem, user-visible changes, linked issues, engineering validation, known limitations, remaining owner checks, and a short playtest checklist in each game-change PR. Report blockers honestly; a successful build is not browser QA. Documentation/CI-only PRs should state when gameplay checks are not applicable.
 - Completed engineering work can be ready for PR review while owner playtesting is pending. Use draft PRs for incomplete work or unresolved engineering blockers; pending owner acceptance alone does not require a draft.
@@ -17,7 +17,7 @@ Read this file, README.md, docs/campaign-context.md, and relevant code and tests
 
 ### Code delivery and owner acceptance
 
-For gameplay, graphics, controls, and other player-facing fixes, use this sequence: implementation → engineering checks → Drake reviews and merges → successful automatic deployment → Drake playtests → issue closure. Drake may merge reviewed, tested code so it becomes available to play while the related issues remain open for owner acceptance. A merge does not prove that deployment succeeded; verify the deployed revision before saying a change is live.
+For player-facing changes, implement and run engineering checks, then open a PR for Drake. After Drake merges, verify deployment of the reviewed revision on the host used for acceptance. Record Drake’s playtest before closing the issue.
 
 Use `Refs #N` to link game-change PRs to issues while owner acceptance is pending. Avoid GitHub closing keywords such as `Closes`, `Fixes`, or `Resolves` with issue references in PR descriptions and commit messages until acceptance is recorded, so merging does not automatically close those issues.
 
