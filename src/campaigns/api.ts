@@ -185,7 +185,14 @@ export async function campaignApi(request: Request, environment: CampaignEnviron
           ON CONFLICT(id) DO NOTHING RETURNING id`)
           .bind(operationId, saveId, owner, data.revision as number, digest, archive.campaigns[0].name, encoder.encode(JSON.stringify(archive)).length, chunks.length, now, owner, now - lifetime).first();
         operation = await env.DB.prepare('SELECT * FROM campaign_operations WHERE id=?').bind(operationId).first<Operation>();
-        if (!operation) return failure('Daily cloud save limit reached. Export locally and try again tomorrow.', 429);
+        if (!operation) {
+          // A rate-limited new copy never acquired an operation. Release only an
+          // unused reservation; another in-flight upload or complete save owns its slot.
+          await env.DB.prepare(`DELETE FROM campaign_saves WHERE id=? AND owner_id=? AND revision=0
+            AND NOT EXISTS(SELECT 1 FROM campaign_operations WHERE save_id=campaign_saves.id) RETURNING id`)
+            .bind(saveId, owner).first();
+          return failure('Daily cloud save limit reached. Export locally and try again tomorrow.', 429);
+        }
         if (operation.owner_id !== owner || operation.save_id !== saveId || operation.content_hash !== digest || operation.expected_revision !== data.revision) return failure('Save operation does not match.', 409);
       }
       await env.DB.batch([

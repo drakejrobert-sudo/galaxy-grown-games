@@ -131,3 +131,38 @@ test('an abandoned upload expires and 40-operation daily quota is enforced atomi
   assert.equal((await h.call('/'+q.id,'PUT',{...q,revision:40,operationId:crypto.randomUUID()})).status,429);
   assert.equal((await (await h.call('/'+q.id)).json()).save.revision,40);
 });
+
+test('rate-limited new copies do not consume invisible save slots after the daily quota resets', async () => {
+  const h = setup(), p = await h.payload();
+  assert.equal((await h.call('', 'POST', p)).status, 201);
+  for (let revision = 1; revision < 40; revision++) {
+    assert.equal((await h.call('/' + p.id, 'PUT', { ...p, revision, operationId: crypto.randomUUID() })).status, 200);
+  }
+  const rejectedAt = 1_000_000 + 23 * 60 * 60 * 1000;
+  for (let attempt = 0; attempt < 19; attempt++) {
+    const copy = await h.payload('Rejected new copy');
+    assert.equal((await h.call('', 'POST', copy, 'fictional-dm-a', rejectedAt)).status, 429);
+  }
+  assert.equal(h.database.prepare('SELECT count(*) AS n FROM campaign_saves WHERE deleted_at IS NULL').get()!.n, 1);
+  assert.equal((await (await h.call()).json()).saves.length, 1);
+  assert.deepEqual((await (await h.call('/' + p.id)).json()).archive, p.archive);
+  const next = await h.payload('After quota reset');
+  assert.equal((await h.call('', 'POST', next, 'fictional-dm-a', 1_000_000 + 86_400_001)).status, 201);
+});
+
+test('rate-limit cleanup preserves an interrupted operation and its retry', async () => {
+  const h = setup(), pending = await h.payload('Interrupted copy');
+  const put = h.env.BUCKET.put;
+  h.env.BUCKET.put = async () => { throw Error('Interrupted artwork upload'); };
+  assert.equal((await h.call('', 'POST', pending)).status, 503);
+  h.env.BUCKET.put = put;
+  const complete = await h.payload('Complete copy');
+  assert.equal((await h.call('', 'POST', complete)).status, 201);
+  for (let revision = 1; revision < 39; revision++) {
+    assert.equal((await h.call('/' + complete.id, 'PUT', { ...complete, revision, operationId: crypto.randomUUID() })).status, 200);
+  }
+  assert.equal((await h.call('', 'POST', { ...pending, operationId: crypto.randomUUID() })).status, 429);
+  assert.equal(h.database.prepare('SELECT count(*) AS n FROM campaign_saves WHERE id=?').get(pending.id)!.n, 1);
+  assert.equal((await h.call('', 'POST', pending)).status, 201);
+  assert.deepEqual((await (await h.call('/' + pending.id)).json()).archive, pending.archive);
+});

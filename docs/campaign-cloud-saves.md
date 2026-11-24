@@ -12,7 +12,7 @@ If another device updated the save, a stale update or delete is rejected. Restor
 
 ## Limits and storage
 
-Cloud saves allow 20 active saves per account, 10 MB of reconstructed UTF-8 JSON per save, at most 100 maps with backgrounds per save, and 40 new upload operations in a rolling 24-hour window. Retries of the same operation do not consume another upload. Existing embedded PNG/JPEG/WebP validation and the 750 KB per-image limit still apply. Cloud limits do not change local archive validation. A rejected cloud save leaves local work unchanged and exportable.
+Cloud saves allow 20 active saves per account, 10 MB of reconstructed UTF-8 JSON per save, at most 100 maps with backgrounds per save, and 40 new upload operations in a rolling 24-hour window. Retries of the same operation do not consume another upload. Rate-limited new-copy attempts release unused reservations without removing interrupted uploads that can still be retried. Existing embedded PNG/JPEG/WebP validation and the 750 KB per-image limit still apply. Cloud limits do not change local archive validation. A rejected cloud save leaves local work unchanged and exportable.
 
 D1 owns metadata, optimistic revisions and chunked map data. Private R2 objects store image bytes under server-generated keys. Only the Worker can reconstruct them after account ownership checks. Authenticated reads are not cacheable; mutating requests also require a same-origin Origin header and the current account fingerprint. Guest Rooms cookies do not authorize campaign access.
 
@@ -34,6 +34,6 @@ Issue #110 remains open through owner acceptance. No campaign content or example
 
 ## Engineering evidence — November 24, 2026
 
-All 406 Node 22 tests pass. Checks cover private authorization, independent imports and legacy migration, optimistic concurrency, exactly-once save retries, interrupted R2/D1 writes, missing/corrupt art, expiration cleanup, save/daily quotas, Unicode chunk boundaries, client account changes and pending upload snapshots. Both Pages and Sites production builds and asset/Worker checks pass; the existing Phaser chunk-size advisory remains.
+All 408 Node 22 tests pass. Checks cover private authorization, independent imports and legacy migration, optimistic concurrency, exactly-once save retries, interrupted R2/D1 writes, missing/corrupt art, expiration cleanup, save/daily quotas, Unicode chunk boundaries, client account changes and pending upload snapshots. Both Pages and Sites production builds and asset/Worker checks pass; the existing Phaser chunk-size advisory remains.
 
 Production-Worker Chromium QA used fictional gateway identities and local SQLite/R2 substitutes at desktop and 320/390px touch-emulated sizes. It exercised save, second-device restore, artwork and paused journeys, stale updates, a discarded successful upload response followed by retry, two-account isolation, anonymous sign-in guidance, deletion, reload, local-storage quota failure with an exportable in-memory restore, discarding a restore after a local campaign switch, and a self-contained cloud backup imported into the standalone Pages build. Captures were inspected outside the repository. This is not physical Safari or hosted signed-in validation.
