@@ -10,7 +10,7 @@ Repository: https://github.com/drakejrobert-sudo/galaxy-grown-games
 
 Start with the current AGENTS.md, README.md, docs/campaign-context.md and relevant files. Develop for ChatGPT Sites first. Use GitHub as the source of truth and open feature-branch PRs for my review. I perform all merges. Once a checked PR is open, publish its exact head to the designated private Sites test project for my playtest. Record the GitHub SHA, Sites version, deployment result and hosted smoke check. My merge authorizes the existing automatic Pages deployment. Ask separately before changing the audience or redirect, publishing to a different Site or manually triggering Pages.
 
-Keep play.drakesfood.com pointed at Pages until I approve cutover after playtesting. Preserve standalone play and portable campaign exports. Use Sites capabilities where they improve shared play. Follow the roadmap and release procedure in docs/chatgpt-sites-pilot.md.
+The player link play.drakesfood.com opens the public Sites release. Use the designated private test project for pre-merge playtests. Keep Pages available for rollback. Preserve standalone play and portable campaign exports. Use Sites capabilities where they improve shared play. Follow the roadmap and release procedure in docs/chatgpt-sites-pilot.md.
 
 Carry authorized work through implementation, appropriate tests, build, and a reviewable pull request. Explain what changed, what was verified, and any remaining limitations. Do not claim live deployment or browser testing unless actually verified.
 
