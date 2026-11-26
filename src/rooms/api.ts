@@ -1,3 +1,4 @@
+import { changeRoomMap, decideRouteProposal, roomMapAction, routePlanners, submitRouteProposal } from './map-api';
 import { encounters, readRoomReport, stations, type HostedRoom, type JoinedRoom, type RoomList, type Seat } from './types';
 
 interface DatabaseStatement {
@@ -104,7 +105,7 @@ async function readForm(request: Request, maximumBytes = 1024): Promise<Record<s
 }
 
 type SeatRow = Omit<Seat, 'report'> & { report: string | null };
-type JoinedRow = SeatRow & { roomId: string; expiresAt: number; situation: JoinedRoom['situation'] };
+type JoinedRow = SeatRow & { hasMap?: number; roomId: string; expiresAt: number; situation: JoinedRoom['situation'] };
 
 function toSeat({ id, name, station, startedAt, report }: SeatRow): Seat {
   return { id, name, station, startedAt, report: report === null ? null : JSON.parse(report) };
@@ -144,31 +145,43 @@ export async function roomApi(
       const [joinedRows, hostedRows] = await Promise.all([
         db.prepare(`
           SELECT r.id AS roomId, r.expires_at AS expiresAt, r.situation,
-            m.id, m.name, m.station, m.started_at AS startedAt, m.report
+            rm.revision IS NOT NULL AS hasMap, m.id, m.name, m.station, m.started_at AS startedAt, m.report
           FROM room_members m JOIN rooms r ON r.id = m.room_id
+          LEFT JOIN room_maps rm ON rm.room_id = r.id
           WHERE m.user_id IN (?, ?) AND r.closed_at IS NULL AND r.expires_at > ?
           ORDER BY r.expires_at DESC
         `).bind(accountId ?? null, anonymousId, now).all<JoinedRow>(),
         dmId
           ? db.prepare(`
               SELECT r.id, r.code, r.expires_at AS expiresAt, r.situation,
-                m.id AS seatId, m.name, m.station, m.started_at AS startedAt, m.report
+                rm.revision IS NOT NULL AS hasMap, m.id AS seatId, m.name, m.station, m.started_at AS startedAt, m.report
               FROM rooms r LEFT JOIN room_members m ON m.room_id = r.id
+              LEFT JOIN room_maps rm ON rm.room_id = r.id
               WHERE r.owner_id = ? AND r.closed_at IS NULL AND r.expires_at > ?
               ORDER BY r.expires_at DESC, m.name COLLATE NOCASE, m.id
-            `).bind(dmId, now).all<Omit<HostedRoom, 'seats'> & Omit<SeatRow, 'id'> & { seatId: string | null }>()
+            `).bind(dmId, now).all<Omit<HostedRoom, 'seats'> & Omit<SeatRow, 'id'> & { seatId: string | null; hasMap: number }>()
           : { results: [] },
       ]);
       const hosted = new Map<string, HostedRoom>();
-      for (const { id, code, expiresAt, situation, seatId, ...seat } of hostedRows.results) {
+      const planners: Promise<void>[] = [];
+      for (const { id, code, expiresAt, situation, seatId, hasMap, ...seat } of hostedRows.results) {
         let room = hosted.get(id);
         if (!room) {
           room = { id, code, expiresAt, situation, seats: [] };
           hosted.set(id, room);
+          if (hasMap) {
+            const hostRoom = room;
+            planners.push(routePlanners(db, id).then(planner => { hostRoom.planner = planner; }));
+          }
         }
         if (seatId) room.seats.push(toSeat({ id: seatId, ...seat }));
       }
-      const joined = joinedRows.results.map(toJoinedRoom);
+      const joined = joinedRows.results.map(row => {
+        const room = toJoinedRoom(row);
+        if (row.hasMap) planners.push(routePlanners(db, room.id, room.seat.id).then(planner => { room.planner = planner; }));
+        return room;
+      });
+      await Promise.all(planners);
       return json({ canHost: Boolean(dmId), hosted: [...hosted.values()], joined } satisfies RoomList);
     }
 
@@ -237,6 +250,22 @@ export async function roomApi(
       `).bind(memberId, reservation.window_start).first();
       if (!joined) return error('This room is full.', 409);
       return json(toJoinedRoom(joined), 200, accountId ? undefined : guestToken);
+    }
+
+    const mapAction = url.pathname.match(roomMapAction);
+    if (mapAction) {
+      const [, roomId, target, proposalId] = mapAction;
+      const share = target === 'map' && method === 'PUT';
+      const decide = Boolean(proposalId) && method === 'PUT';
+      const submit = target === 'proposals' && method === 'POST';
+      if (!share && !decide && !submit) return error('Room action not found.', 404);
+      if ((share || decide) && !dmId) return error('Only the signed-in DM can manage this room.', 403);
+      const fields = await readForm(request, share ? 131_072 : 8192);
+      const result = share ? await changeRoomMap(db, roomId, dmId!, now, fields)
+        : decide ? await decideRouteProposal(db, roomId, dmId!, proposalId, now, fields)
+          : await submitRouteProposal(db, roomId, accountId ?? null, anonymousId, now, fields);
+      if ('error' in result) return error(result.error, result.status);
+      return result.data === null ? new Response(null, { status: 204, headers: noStore }) : json(result.data);
     }
 
     const action = url.pathname.match(roomAction);

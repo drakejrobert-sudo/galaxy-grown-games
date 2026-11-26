@@ -2,7 +2,7 @@
 .room-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
 .room-heading h2 { margin: 0; }
 .room-grid { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: 20px; align-items: start; }
-.room-stack { display: grid; gap: 14px; }
+.room-stack { display: grid; grid-template-columns: minmax(0, 1fr); gap: 14px; }
 .room-stack p { margin-block: 4px; }
 .crew-rooms label { font-size: 1rem; }
 .crew-rooms label + label { margin-top: 14px; }
@@ -30,7 +30,7 @@
 .station-assignment button { padding-inline: 10px; }
 .close-room { color: #ffb5aa; margin-top: 6px; }
 @media (max-width: 740px) {
-  .room-grid { grid-template-columns: 1fr; }
+  .room-grid { grid-template-columns: minmax(0, 1fr); }
   #host-rooms, #host-rooms:not([hidden]) + #player-rooms { grid-area: auto; }
 }
 .room-flight-link { display: inline-block; padding-block: 10px; color: var(--mint); font-weight: 600; }
@@ -38,3 +38,17 @@
 .room-seat .station-assignment { margin-block: 0 6px; }
 .room-seat summary { color: var(--mint); cursor: pointer; padding-block: 8px; }
 .room-seat pre { white-space: pre-wrap; overflow-wrap: anywhere; font: inherit; color: var(--muted); }
+
+.room-route-panel { border-top: 1px solid var(--edge); margin-top: 1rem; padding-top: .75rem; overflow-wrap: anywhere; }
+.room-route-board { overflow: auto; margin-block: .75rem; border: 1px solid #34445a; border-radius: .5rem; background: #101a2a; }
+.room-route-board svg { display: block; width: 100%; min-width: 620px; }
+.room-route-board line { stroke: #708399; stroke-width: 3; }
+.room-route-board .course-leg { stroke: #71ebdc; stroke-width: 7; }
+.room-route-board circle { fill: #162e43; stroke: #8ba8bd; stroke-width: 2; }
+.room-route-board .selected-stop circle { fill: #215d62; stroke: #71ebdc; stroke-width: 4; }
+.room-route-board .next-stop { cursor: pointer; }
+.room-route-board .next-stop circle { stroke: #f9ca79; stroke-width: 4; }
+.room-route-board text { fill: #fff; font-size: 16px; paint-order: stroke; stroke: #101a2a; stroke-width: 3; }
+.room-route-choices { display: flex; flex-wrap: wrap; gap: .5rem; margin-block: .5rem; }
+.room-route-proposal { margin-block: .75rem; }
+.room-route-proposal button { margin-inline-end: .5rem; }

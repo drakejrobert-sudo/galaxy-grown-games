@@ -17,3 +17,8 @@
 .cloud-saves label { font-size: .9rem; }
 .cloud-saves button { white-space: normal; overflow-wrap: anywhere; }
 .cloud-saves select { max-width: 100%; }
+
+.room-map-share fieldset { display: grid; gap: .4rem; }
+.room-map-share fieldset label { display: flex; align-items: center; gap: .5rem; }
+.room-map-share fieldset label[hidden] { display: none; }
+.room-map-share input[type="checkbox"] { width: auto; }

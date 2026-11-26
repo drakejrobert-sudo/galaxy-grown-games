@@ -1,3 +1,6 @@
+import { copyPreset, installPreset, loadPreset } from './preset';
+import { openRoomCourse, roomPreviewKey } from './room-course';
+import { shareMapPanel } from './room-sharing';
 import { CampaignCloud } from '../campaigns/client';
 import { cloudPanel } from '../campaigns/panel';
 import { surfaceNavigation, isSitesBuild } from '../site-navigation';
@@ -32,6 +35,11 @@ let selected = '';
 let destinationListOpen = false;
 let plotted: string[] = [];
 let status = '';
+let preset: Campaign | undefined;
+let presetProblem = '';
+let presetRequest = 0;
+try { preset = loadPreset(localStorage); }
+catch (cause) { presetProblem = 'Private preset could not be loaded: ' + message(cause); }
 let editor: 'destinations' | 'routes' | 'encounters' | 'tables' = 'destinations';
 let editing = '';
 const campaign = () => archive.campaigns.find(c => c.id === archive.selected)!;
@@ -115,8 +123,9 @@ function prepPanel() {
   const c = campaign(), j = activeMap(c).journey;
   const warnings = activeMap(c).routes.filter(r=>!c.tables.find(t=>t.id===r.table)?.entries.length);
   return `<section class="prep-area"><p class="eyebrow">GM PREPARATION · LOCAL TO THIS BROWSER</p><p class="help">Leave screen sharing before preparing surprises. Presentation hides this content; it is not password protected. Export backups before clearing browser data or changing devices.</p>
-  <div class="prep-grid"><section class="panel"><h2>Campaign saves</h2><label>Active campaign<select id="campaign-select">${archive.campaigns.map(c=>option(c.id,c.name,archive.selected)).join('')}</select></label>${form('rename',field('name','Campaign name',c.name,'text','required maxlength="100"'),'Rename campaign')}${form('new-campaign',field('name','New campaign name','','text','required maxlength="100"')+select('starter','Start from',choices(['Demo sector','Blank map'])),'Create campaign')}<button id="delete-campaign">Delete this campaign</button><button id="export">Export this campaign</button><label>Import campaign backup (adds independent copies)<input id="import" type="file" accept=".json,application/json"></label>${recovery?'<button id="recover">Replace unreadable browser save with current in-memory campaigns</button>':''}</section>
+  <div class="prep-grid"><section class="panel"><h2>Campaign saves</h2><label>Active campaign<select id="campaign-select">${archive.campaigns.map(c=>option(c.id,c.name,archive.selected)).join('')}</select></label>${form('rename',field('name','Campaign name',c.name,'text','required maxlength="100"'),'Rename campaign')}${form('new-campaign',field('name','New campaign name','','text','required maxlength="100"')+select('starter','Start from',choices(preset ? ['Private campaign preset','Demo sector','Blank map'] : ['Demo sector','Blank map'])),'Create campaign')}<label>Install private campaign preset<input id="install-preset" type="file" accept=".json,application/json"></label><p class="help">${escape(presetProblem || (preset ? 'Installed: ' + preset.name : 'Choose your illustrated or schematic starter archive. It stays in this browser.'))}</p><button id="delete-campaign">Delete this campaign</button><button id="export">Export this campaign</button><label>Import campaign backup (adds independent copies)<input id="import" type="file" accept=".json,application/json"></label>${recovery?'<button id="recover">Replace unreadable browser save with current in-memory campaigns</button>':''}</section>
   ${isSitesBuild ? '<section class="panel cloud-saves" id="cloud-saves"></section>' : ''}
+  ${isSitesBuild ? '<section class="panel" id="share-room-map"><h2>Share a map with a room</h2><p class="help">Select the stops and connections this crew can see.</p><button type="button">Choose what to share</button></section>' : ''}
   ${mapPreparation()}
   ${editorPanel()}
   <section class="panel"><h2>Encounter control</h2>${j && !j.arrived ? `<fieldset ${j.active?'disabled':''}>${form('insert',select('encounter','Insert now',encounterOptions()),'Insert encounter now')}</fieldset><p class="help">Only available when no encounter is active. Scheduling targets this confirmed course, including repeated route occurrences.</p>${form('schedule',select('encounter','Scheduled encounter',encounterOptions())+select('leg','Course leg',j.stops.slice(1).map((s,i)=>option(String(i),`${i+1}: ${nameOf(j.stops[i])} → ${nameOf(s)}`)).join(''))+field('step','Step within leg','1','number','min="1" required'),'Schedule encounter')}<ul>${activeMap(c).schedules.map(s=>`<li>Leg ${s.leg+1}, step ${s.step}: ${escape(c.encounters.find(e=>e.id===s.encounter)!.title)} ${s.consumed?'(revealed)':`<button data-remove-schedule="${escape(s.id)}">Remove</button>`}</li>`).join('')}</ul>` : '<p>Confirm a course to insert or schedule encounters.</p>'}
@@ -142,6 +151,18 @@ function render() {
     const restored = importCampaigns(archive, incoming);
     change(() => { archive = restored; resetSelection(); });
   }, download);
+  const shareHost = root.querySelector<HTMLElement>('#share-room-map');
+  if (shareHost) shareMapPanel(shareHost, c, () => {
+    if (recovery) throw Error('Restore a working campaign before sharing a map.');
+    const saved = readArchive(localStorage);
+    if (!saved) writeArchive(localStorage, archive);
+    else {
+      const savedMap = saved.campaigns.find(item => item.id === c.id)?.maps.find(item => item.id === c.activeMap);
+      if (JSON.stringify(savedMap) !== JSON.stringify(activeMap(c))) {
+        throw Error('The saved map changed. Reload Galaxy Map before sharing.');
+      }
+    }
+  });
   viewState.restore(root, c.id, c.activeMap, focus);
 }
 function on(id: string, fn: () => void) { document.getElementById(id)?.addEventListener('click', fn); }
@@ -204,7 +225,32 @@ function bind() {
   on('copy-link',async()=>{const input=document.getElementById('challenge-link') as HTMLInputElement;try{await navigator.clipboard.writeText(input.value);document.getElementById('map-status')!.textContent='Challenge link copied.';}catch{input.focus();input.select();document.getElementById('map-status')!.textContent='Select and copy the challenge link manually.';}});
   document.getElementById('campaign-select')?.addEventListener('change',e=>{archive.selected=(e.target as HTMLSelectElement).value;selected='';plotted=[];editing='';persist();render();});
   submit('rename',f=>change(c=>{c.name=String(f.get('name')).trim();}));
-  submit('new-campaign',f=>change(()=>{const c=f.get('starter')==='Demo sector'?demoCampaign(String(f.get('name')).trim()):blankCampaign(String(f.get('name')).trim());archive.campaigns.push(c);archive.selected=c.id;plotted=[];selected='';editing='';}));
+  submit('new-campaign', f => change(() => {
+    const name = String(f.get('name')).trim();
+    const starter = f.get('starter');
+    const copy = starter === 'Private campaign preset' && preset ? copyPreset(preset, name)
+      : starter === 'Demo sector' ? demoCampaign(name) : blankCampaign(name);
+    archive.campaigns.push(copy);
+    archive.selected = copy.id;
+    resetSelection();
+  }));
+  document.getElementById('install-preset')?.addEventListener('change', async event => {
+    const file = (event.target as HTMLInputElement).files?.[0];
+    if (!file) return;
+    const request = ++presetRequest;
+    try {
+      if (file.size > 10_000_000) throw Error('Save is too large (10 MB maximum).');
+      const raw = await file.text();
+      if (request !== presetRequest) return;
+      preset = installPreset(localStorage, raw);
+      presetProblem = '';
+      status = 'Private campaign preset installed.';
+    } catch (cause) {
+      if (request !== presetRequest) return;
+      presetProblem = 'Preset installation failed: ' + message(cause);
+    }
+    render();
+  });
   on('delete-campaign',()=>{if(!confirm('Delete this campaign and its journey? Export a backup first.'))return;change(c=>{archive.campaigns=archive.campaigns.filter(x=>x.id!==c.id);if(!archive.campaigns.length)archive.campaigns.push(blankCampaign('New campaign'));archive.selected=archive.campaigns[0].id;plotted=[];selected='';editing='';});});
   on('export',()=>download(exportCampaign(campaign()),'galaxy-campaign.json'));
   document.getElementById('import')?.addEventListener('change',async e=>{try{const file=(e.target as HTMLInputElement).files?.[0];if(!file)return;if(file.size>10000000)throw Error('Save is too large (10 MB maximum).');const imported=parseArchive(await file.text());change(()=>{archive=importCampaigns(archive,imported);plotted=[];selected='';editing='';});}catch(e){status=`Import failed: ${message(e)} Existing saves were preserved.`;render();}});
@@ -232,5 +278,18 @@ function bind() {
   submit('insert',f=>change(c=>insertEncounter(c,String(f.get('encounter')))));
   submit('schedule',f=>change(c=>scheduleEncounter(c,Number(f.get('leg')),Number(f.get('step')),String(f.get('encounter')))));
   document.querySelectorAll<HTMLElement>('[data-remove-schedule]').forEach(el=>el.addEventListener('click',()=>change(c=>{activeMap(c).schedules=activeMap(c).schedules.filter(s=>s.id!==el.dataset.removeSchedule || s.consumed);} )));
+}
+if (isSitesBuild) {
+  try {
+    const pending = sessionStorage.getItem(roomPreviewKey);
+    if (pending) {
+      sessionStorage.removeItem(roomPreviewKey);
+      plotted = openRoomCourse(archive, JSON.parse(pending));
+      persist();
+      status = 'Room course loaded. Edit it or confirm when ready.';
+    }
+  } catch (cause) {
+    status = message(cause);
+  }
 }
 render();

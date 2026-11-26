@@ -57,6 +57,14 @@ Changes autosave in this browser, on this origin, under `galaxy-grown-map-v1`. T
 
 Storage and quota errors display a warning. The current in-memory campaign remains exportable. If an existing save cannot be read, its bytes are preserved and autosaving is suspended; import a backup or explicitly replace the unreadable browser save from preparation. A failed import leaves existing campaigns intact. Delete campaign requires confirmation; deleting the last campaign creates a blank replacement.
 
+## Private campaign preset and room proposals
+
+To reuse a campaign starter, open **GM preparation → Install private campaign preset** and select its JSON archive. Choose the illustrated starter to keep its embedded artwork, or the schematic starter for a smaller file. Then use **Start from → Private campaign preset** and create a named campaign for each crew. Each campaign has independent maps and travel, with a fresh location, course, schedule, and log. The installed source is local to this browser and origin. Back up working campaigns through the existing export or private cloud save controls.
+
+On Sites, sign in as DM and create a room. In Galaxy Map, open the intended working campaign and map, then choose **GM preparation → Share a map with a room**. Select an active room, a starting stop, the stops it can see, and each connection to reveal. If the party has a current location, the new course must start there. The crew receives a schematic with those stops and connections. A changed selection replaces the room map and clears earlier proposals.
+
+Joined players can tap connected stops or use the stop buttons in **Rooms → Propose a route**, then choose **Send proposal**. The DM sees submissions in **Route proposals** and can decline or choose **Accept and preview**. The preview is editable. Select **Confirm course** to commit it and **Advance one step** when ready. Players see their own proposal status while the shared map and room are active.
+
 ## Engineering validation and owner checklist
 
 Work items: Refs #60, Refs #61, Refs #62, Refs #63, Refs #64. PR merge does not close them. No campaign canon, actual coordinates, GM secrets or party discoveries ship with the demo. No fuel, ship capability calculations, automatic rewards/damage, moving destinations, cloud saves, multiplayer state or Maps API integration is included.

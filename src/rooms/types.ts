@@ -1,3 +1,4 @@
+import type { GuestRoutePlanner, HostRoutePlanner } from './map-types';
 import type { Role, Situation } from '../game/rules';
 
 export const stations = ['Pilot', 'Gunner', 'Bomber', 'Life Support'] as const satisfies readonly Role[];
@@ -44,6 +45,7 @@ export interface HostedRoom {
   expiresAt: number;
   situation: Situation | null;
   seats: Seat[];
+  planner?: HostRoutePlanner;
 }
 
 export interface JoinedRoom {
@@ -51,6 +53,7 @@ export interface JoinedRoom {
   expiresAt: number;
   situation: Situation | null;
   seat: Seat;
+  planner?: GuestRoutePlanner;
 }
 
 export interface RoomList {

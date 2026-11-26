@@ -323,3 +323,82 @@ test('the first explicit report wins across concurrent tabs and is visible only 
   assert.equal((await call(expiredSeat + '/start', gunner, 'POST', assignment)).status, 404);
   assert.equal((await call(expiredSeat + '/report', gunner, 'POST', flightReport)).status, 404);
 });
+
+test('room map proposals use approved schematic fields, isolate players, and allow safe retries', async (t) => {
+  const { call, create, list, clock } = fixture(t);
+  const room = await create();
+  const other = await create();
+  const guestSession = await call('', null);
+  const cookie = guestSession.headers.get('set-cookie')!.split(';')[0];
+  const join = await call('/join', null, 'POST', { code: room.code, name: 'Mira' }, origin, { Cookie: cookie });
+  const { seat } = await join.json() as JoinedRoom;
+  await call('/join', gunner, 'POST', { code: room.code, name: 'Zed' });
+  const path = '/' + room.id;
+  const map = {
+    start: 'a',
+    stops: [{ id: 'a', name: 'Alpha', x: 100, y: 100, notes: 'secret' },
+      { id: 'b', name: 'Beta', x: 450, y: 250 }, { id: 'c', name: 'Gamma', x: 800, y: 400 }],
+    links: [['a', 'b'], ['b', 'c']],
+    backgroundImage: 'secret art',
+  };
+  const share = { map, campaignId: 'private campaign', mapId: 'private map' };
+  assert.equal((await call(path + '/map', gunner, 'PUT', share)).status, 403);
+  assert.equal((await call(path + '/map', secondDmSession, 'PUT', share)).status, 404);
+  assert.equal((await call(path + '/map', dm, 'PUT', share)).status, 204);
+  const planner = (await list(null, cookie)).joined[0].planner!;
+  const { revision } = planner.map;
+  assert.deepEqual(planner.map.stops[0], { id: 'a', name: 'Alpha', x: 100, y: 100 });
+  assert.doesNotMatch(JSON.stringify(planner), /secret|private|source/);
+
+  const send = (stops: string[], id = crypto.randomUUID(), version = revision) => call(path + '/proposals', null,
+    'POST', { id, revision: version, stops }, origin, { Cookie: cookie });
+  assert.equal((await send(['a', 'c'])).status, 400);
+  assert.equal((await send(['a', 'hidden'])).status, 400);
+  assert.equal((await send(['b', 'c'])).status, 400);
+  const id = crypto.randomUUID();
+  const retries = await Promise.all([send(['a', 'b', 'c'], id), send(['a', 'b', 'c'], id), send(['a', 'b', 'c'])]);
+  assert.deepEqual(await Promise.all(retries.map(response => response.json())), [{ id }, { id }, { id }]);
+  assert.equal((await send(['a', 'b'])).status, 200);
+  assert.equal((await list(null, cookie)).joined[0].planner!.proposals.length, 2);
+  assert.deepEqual((await list(gunner)).joined[0].planner!.proposals, []);
+  assert.deepEqual((await list(dm)).hosted.find(item => item.id === other.id)?.planner, undefined);
+  const host = (await list(dm)).hosted.find(item => item.id === room.id)?.planner!;
+  assert.deepEqual(host.source, { campaignId: share.campaignId, mapId: share.mapId });
+  assert.equal(host.proposals.find(item => item.id === id)?.player, 'Mira');
+
+  const accepted = { status: 'accepted', revision, seatId: seat.id };
+  assert.equal((await call(path + '/proposals/' + id, gunner, 'PUT', accepted)).status, 403);
+  assert.equal((await call(path + '/proposals/' + id, secondDmSession, 'PUT', accepted)).status, 409);
+  assert.equal((await call('/' + other.id + '/proposals/' + id, dm, 'PUT', accepted)).status, 409);
+  assert.equal((await call(path + '/proposals/' + id, dm, 'PUT', accepted)).status, 204);
+  assert.equal((await call(path + '/proposals/' + id, dm, 'PUT', accepted)).status, 204);
+  assert.equal((await call(path + '/proposals/' + id, dm, 'PUT', { ...accepted, status: 'declined' })).status, 409);
+  assert.equal((await list(null, cookie)).joined[0].planner!.proposals.find(item => item.id === id)?.status, 'accepted');
+
+  assert.equal((await call(path + '/map', dm, 'PUT', share)).status, 204);
+  assert.equal((await list(null, cookie)).joined[0].planner!.map.revision, revision);
+  assert.equal((await call(path + '/map', dm, 'PUT', { ...share, map: { ...map, links: [['a', 'b']] } })).status, 204);
+  assert.equal((await send(['a', 'b'])).status, 409);
+  assert.equal((await call(path + '/proposals/' + id, dm, 'PUT', accepted)).status, 409);
+  assert.deepEqual((await list(null, cookie)).joined[0].planner!.proposals, []);
+  const updated = (await list(null, cookie)).joined[0].planner!.map.revision;
+  clock(room.expiresAt);
+  assert.equal((await send(['a', 'b'], crypto.randomUUID(), updated)).status, 404);
+  assert.deepEqual((await list(null, cookie)).joined, []);
+});
+
+test('closing a room deletes its shared schematic and proposals', async (t) => {
+  const { call, create, list, database } = fixture(t);
+  const room = await create();
+  const path = '/' + room.id;
+  await call('/join', pilot, 'POST', { code: room.code, name: 'Mira' });
+  await call(path + '/map', dm, 'PUT', { campaignId: 'campaign', mapId: 'sector', map: {
+    start: 'a', stops: [{ id: 'a', name: 'A', x: 100, y: 100 }, { id: 'b', name: 'B', x: 200, y: 100 }],
+    links: [['a', 'b']],
+  } });
+  const { revision } = (await list(pilot)).joined[0].planner!.map;
+  await call(path + '/proposals', pilot, 'POST', { id: crypto.randomUUID(), revision, stops: ['a', 'b'] });
+  assert.equal((await call(path + '/close', dm, 'POST')).status, 204);
+  assert.deepEqual(database.prepare('SELECT room_id FROM room_maps').all(), []);
+  assert.deepEqual(database.prepare('SELECT room_id FROM room_route_proposals').all(), []);
+});

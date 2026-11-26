@@ -38,11 +38,15 @@ export function routeBetween(c: Campaign, a: string, b: string) {
   return activeMap(c).routes.find(r => r.from === a && r.to === b || r.from === b && r.to === a);
 }
 export function routeFor(c: Campaign, j = activeMap(c).journey!) { return routeBetween(c, j.stops[j.leg], j.stops[j.leg + 1])!; }
-export function startJourney(c: Campaign, stops: string[]) {
+export function validateCourse(c: Campaign, stops: string[]) {
   const m = activeMap(c);
   if (m.journey && !m.journey.arrived) throw Error('End the current journey before plotting another course.');
   if (stops.length < 2 || stops.some(s => !m.destinations.some(d => d.id === s && d.navigable !== false)) || stops.slice(1).some((s, i) => !routeBetween(c, stops[i], s))) throw Error('Choose at least two connected stops.');
   if (m.location && stops[0] !== m.location) throw Error('Start at your current destination.');
+}
+export function startJourney(c: Campaign, stops: string[]) {
+  validateCourse(c, stops);
+  const m = activeMap(c);
   m.journey = { stops: [...stops], leg: 0, step: 0, active: null, arrived: false }; m.location = stops[0]; m.schedules = [];
   m.log.push('Course confirmed.');
 }
