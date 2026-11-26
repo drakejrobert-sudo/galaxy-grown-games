@@ -1,6 +1,6 @@
 # ChatGPT Sites pilot
 
-The designated [public test Site](https://galaxy-grown-games-test.suppletarragon7.chatgpt.site) serves the root-mounted Vite client through a Sites Worker. Run `npm ci`, `npm test`, then `npm run build:sites` from the reviewed source. The package includes `dist/server/index.js` with embedded client assets, `dist/.openai/hosting.json`, and the D1 migrations. Use a clean Sites source checkout for packaging. CI checks the Pages artifact separately at `/galaxy-grown-games/`. Sites publication is independent of the Pages workflow and the play.drakesfood.com redirect.
+The [public Sites release](https://galaxy-grown-games-test.suppletarragon7.chatgpt.site) serves the root-mounted Vite client through a Sites Worker. Since the November 26, 2026 cutover, [play.drakesfood.com](https://play.drakesfood.com/) redirects to this origin. Run `npm ci`, `npm test`, then `npm run build:sites` from the reviewed source. The package includes `dist/server/index.js` with embedded client assets, `dist/.openai/hosting.json`, and the D1 migrations. Use a clean Sites source checkout for packaging. CI checks the Pages artifact separately at `/galaxy-grown-games/`. Sites publication is independent of the Pages workflow and the play.drakesfood.com redirect.
 
 ### Rooms test setup
 
@@ -25,7 +25,7 @@ The Site origin has its own browser storage. Use the fictional demo for testing.
 | Central DM dashboard | Players report scores manually. Hillside Tanks already supports play at a single DM-operated screen. | A DM-only view could read a room roster, round status and submitted results from D1. Start with explicit submissions and refresh only while the room is active. Deduplicate retries and require DM confirmation of consequences. Expose only player-safe fields to members. |
 | Real-time sessions | Simulation, input, and rendering run in each browser. | Sites documents WebSocket transport. Shared action gameplay still needs an authoritative room process, message ordering, reconnect snapshots and fan-out across Worker instances. Verify supported coordination bindings, two-client latency, recovery and usage metering in a separate spike before promising synchronized play. Slow HTTP polling suits a scoreboard. |
 
-Sites documents integrated database and file storage, hosted sign-in and WebSockets. Representative hosted load remains unmeasured. [Sites runtime](https://learn.chatgpt.com/docs/sites) · [Data and connections](https://learn.chatgpt.com/docs/sites/data-and-connections)
+Sites documents integrated database and file storage, hosted sign-in and WebSockets. The existing dashboard workload was [measured on Sites v10](https://github.com/drakejrobert-sudo/galaxy-grown-games/issues/116#issuecomment-7195354225). Real-time workload remains unmeasured. [Sites runtime](https://learn.chatgpt.com/docs/sites) · [Data and connections](https://learn.chatgpt.com/docs/sites/data-and-connections)
 
 The [issue #111 feasibility assessment](shared-flight-feasibility.md) records a **no-go as of November 24, 2026**: a supported Sites room-coordinator provisioning contract has not been established. WebSocket transport alone does not establish shared simulation authority across Worker instances. Shared flight remains unavailable; the assessment records the agreed asteroid-defense prototype and the evidence required to reopen implementation.
 
@@ -46,7 +46,7 @@ Five-second polling adds 6 × 4 × 3 × 3,600 ÷ 5 = 51,840 requests. Storage co
 
 ## Owner smoke test
 
-Open the private test origin while signed in. Launch a Flight Deck round and check art, pause/resume, and manual reporting. Open Galaxy Map, save a fictional campaign, reload, export and import it. Open Hillside Tanks and complete a turn. Repeat relevant controls on physical iPhone/iPad Safari. Hosted browser and device acceptance are pending.
+Open the private test origin while signed in. Launch a Flight Deck round and check art, pause/resume, and manual reporting. Open Galaxy Map, save a fictional campaign, reload, export and import it. Open Hillside Tanks and complete a turn. Repeat relevant controls on physical iPhone/iPad Safari and record the accepted revision and device coverage.
 
 ## Release and recovery
 
@@ -56,13 +56,13 @@ GitHub holds the reviewed source. Use this sequence for a player-facing PR.
 2. Drake can sign in and test the hosted revision; record actual acceptance and device/control coverage when available. If the build changes, publish the updated PR head and repeat the affected engineering checks before merge.
 3. Drake merges, and GitHub closes issues named by the closing references. Verify the automatic Pages deployment succeeded for the merge revision and contains the changes. If the merged build differs from a tested build, verify the affected behavior and record any remaining work in a follow-up.
 
-The stable player link currently uses Pages at https://drakejrobert-sudo.github.io/galaxy-grown-games/. Confirm it still reaches that build during the rehearsal. To reconcile an out-of-date test Site with Pages, identify the SHA from the latest successful Pages deployment and publish a root-mounted build of that source to the test Site.
+Drake approved the November 26, 2026 cutover to Sites v10. A signed-out browser verified the shortlink’s uncached 302, the Flight Deck landing page, and a Rooms deep link with repeated query parameters. [Cutover record](https://github.com/drakejrobert-sudo/drakesfood/issues/142). Use a designated private Site for pre-merge playtests. Keep [GitHub Pages](https://drakejrobert-sudo.github.io/galaxy-grown-games/) available for standalone rollback.
 
-Before moving the player link, exercise Flight Deck, Galaxy Map and Hillside Tanks on the hosted build, check player access from a signed-out browser, and complete physical iPhone/iPad Safari playtests. Rehearse recovery with a fictional campaign exported from Sites and imported into the Pages build. Record the working Pages destination. Drake approves audience changes and the independently managed redirect cutover separately.
+Before a future change to the player destination, exercise Flight Deck, Galaxy Map and Hillside Tanks on the hosted build, check player access from a signed-out browser, and complete physical iPhone/iPad Safari playtests. Rehearse recovery with a fictional campaign exported from Sites and imported into the Pages build. Record the working Pages destination. Drake approves audience changes and the independently managed redirect cutover separately.
 
 If a return to Pages is needed, verify the Pages revision and standalone flows, export any needed campaigns while Sites is accessible, and restore the approved redirect through the Drake’s Food infrastructure project with Drake’s approval. The two origins have separate browser storage. Shared rooms and future results or live sessions would require a backend to work on Pages.
 
-## Suggested issues in priority order
+## Original pilot roadmap
 
 1. **Validate the Sites release and rehearse cutover.** Add a root-path Sites build to CI alongside Pages. Exercise the hosted and recovery checks above before proposing the redirect change.
 2. **Create DM rooms with expiring player codes.** A signed-in DM opens a room. Guests join by code and display name, see their assignment and reclaim their seat in the same browser. Verify DM permissions and isolation with two simultaneous rooms.
@@ -70,4 +70,4 @@ If a return to Pages is needed, verify the Pages revision and standalone flows, 
 4. **Sync private campaign saves across devices.** Use D1 for DM-owned records and R2 for private art. Test a second-device restore, conflicting revisions, and a portable export with art that opens on Pages. Coordinate with [local-save acceptance](https://github.com/drakejrobert-sudo/galaxy-grown-games/issues/60).
 5. **Prototype a shared pilot and gunner encounter.** After station rooms work, test a two-player encounter over WebSockets for consistent hits, pause, reconnects, phone latency and actual hosting usage before committing to synchronized flight.
 
-These are proposed work items. Paid external services require Drake’s approval.
+This roadmap records the original pilot sequence. Paid external services require Drake’s approval.
