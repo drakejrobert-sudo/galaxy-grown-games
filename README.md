@@ -5,7 +5,7 @@ A repository for hosting mini games for the galaxy grown campaign.
 
 Asteroid Field / Pilot, Gunner, Bomber, and Life Support, Space Battle / Pilot, Gunner, Bomber, and Life Support, plus Boarding Party / Pilot, Gunner, Bomber, and Life Support, are implemented as **prototypes awaiting score calibration**. All twelve station combinations are now available. Players enter their GM-requested final skill-check total and a separate Natural 1 flag, play independently, and manually share their rating or score. Flight Deck has no live multiplayer service. The Galaxy Map prototype stores GM-authored campaigns locally in the browser.
 
-Player link: [play.drakesfood.com](https://play.drakesfood.com/). This HTTPS shortlink redirects to the current GitHub Pages deployment and remains the link to share if the underlying hosting URL changes.
+Player link: [play.drakesfood.com](https://play.drakesfood.com/). This HTTPS shortlink opens the player release on ChatGPT Sites.
 
 ## Hillside Tanks
 
@@ -111,7 +111,7 @@ Each finished run now shows a provisional **0–100 rating** and GM advisory ban
 
 ### ChatGPT Sites and GitHub Pages
 
-ChatGPT Sites is the primary development and release target. GitHub holds the reviewed source. Build the Sites Worker and root-mounted client with `npm run build:sites`. The public test Site supports testing while the player link continues to serve Pages. The release guide covers publishing a checked PR to the test Site for playtesting, verifying the Pages deployment after merge, and recovering standalone play. [Sites release guide and roadmap](docs/chatgpt-sites-pilot.md)
+ChatGPT Sites is the primary development and release target. GitHub holds the reviewed source. Build the Sites Worker and root-mounted client with `npm run build:sites`. The player link uses the public Sites release. GitHub Pages provides the standalone fallback. The release guide covers playtesting, verifying the Pages deployment after merge, and recovering standalone play. [Sites release guide and roadmap](docs/chatgpt-sites-pilot.md)
 
 #### GitHub Pages fallback
 
