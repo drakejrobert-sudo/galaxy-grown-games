@@ -19,8 +19,10 @@ async function openMap() {
       (await import('./galaxy/room-player-map')).showRoomMap(list?.joined ?? [], requestedRoom);
       return;
     }
+    (await import('./galaxy/view')).showGalaxyMap(list);
+    return;
   }
-  await import('./galaxy/view');
+  (await import('./galaxy/view')).showGalaxyMap(null);
 }
 
 if (hash === '#/map' || (sites && hash.startsWith('#/map/room/'))) {

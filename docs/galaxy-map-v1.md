@@ -65,7 +65,7 @@ The GM preparation sections are collapsible. On Sites, **Share a map with a room
 
 On Sites, sign in as DM and create a room. In Galaxy Map, open the intended working campaign and map, then use **GM preparation → Share a map with a room**. Select an active room, starting stop, and the stops and connections to reveal. The form recalls a room’s published selections for this map. You can preview and explicitly share the current background artwork. Review the whole image for unrevealed details before sharing it.
 
-Joined players can choose **Open shared map** in Rooms or select **Galaxy Map** from the site navigation. They see the published chart and can tap connected stops or use the stop buttons, then choose **Send proposal**. The DM can decline or choose **Accept and preview** from Rooms. The preview is editable. Select **Confirm course** to commit it and **Advance one step** when ready.
+Joined players can choose **Open shared map** in Rooms or select **Galaxy Map** from the site navigation. They see the published chart and can tap connected stops or use the stop buttons, then choose **Send proposal**. The DM can decline or choose **Accept and preview** in **Route proposals** beside their Galaxy Map or in Rooms. The DM map refreshes proposals every ten seconds while visible and a shared room is active. The preview is editable. Select **Confirm course** to commit it and **Advance one step** when ready.
 
 Players see their own proposal status while the shared map and room are active. Changing the shared stops, connections, or starting point starts a new proposal round. Changing or removing only the background keeps current proposals. Players outside the room cannot fetch the shared artwork.
 

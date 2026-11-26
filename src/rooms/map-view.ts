@@ -1,7 +1,7 @@
 import { readArchive } from '../galaxy/storage';
 import { roomCourse, roomPreviewKey, type RoomCoursePreview } from '../galaxy/room-course';
 import { roomRequest } from './client';
-import { type HostRoutePlanner, type RoomMap } from './map-types';
+import type { HostRoutePlanner, RoomMap } from './map-types';
 
 type RunAction = (action: () => Promise<string>) => void;
 
@@ -23,6 +23,38 @@ function stopNames(map: RoomMap, stops: string[]): string {
   return stops.map(id => map.stops.find(stop => stop.id === id)?.name ?? 'Unknown stop').join(' → ');
 }
 
+export type SharedProposal = HostRoutePlanner['proposals'][number];
+export type ReviewDecision = 'accepted' | 'declined';
+export type ReviewRoute = (proposal: SharedProposal, status: ReviewDecision) => void;
+
+export function decideRoomRoute(roomId: string, planner: HostRoutePlanner, proposal: SharedProposal, status: ReviewDecision) {
+  return roomRequest(`/${roomId}/proposals/${proposal.id}`, 'PUT', {
+    revision: planner.map.revision, seatId: proposal.seatId, status,
+  });
+}
+
+export function proposalEntries(roomId: string, planner: HostRoutePlanner, review: ReviewRoute, busy = false): HTMLElement[] {
+  if (!planner.proposals.length) return [node('p', 'Waiting for route proposals.')];
+  return planner.proposals.map(proposal => {
+    const entry = node('div');
+    entry.className = 'room-route-proposal';
+    entry.append(node('p', proposal.player + ' · ' + stopNames(planner.map, proposal.stops) + ' · ' + proposal.status));
+    const id = 'proposal-' + roomId + '-' + proposal.seatId + '-' + proposal.id;
+    if (proposal.status !== 'declined') {
+      const label = proposal.status === 'pending' ? 'Accept and preview' : 'Open course preview';
+      const accept = button(label, id + '-preview', () => review(proposal, 'accepted'));
+      accept.disabled = busy;
+      entry.append(accept);
+    }
+    if (proposal.status === 'pending') {
+      const decline = button('Decline', id + '-decline', () => review(proposal, 'declined'));
+      decline.disabled = busy;
+      entry.append(decline);
+    }
+    return entry;
+  });
+}
+
 export function hostRoutePanel(roomId: string, planner: HostRoutePlanner | undefined,
   run: RunAction, refresh: () => Promise<void>) {
   const panel = node('section');
@@ -31,34 +63,19 @@ export function hostRoutePanel(roomId: string, planner: HostRoutePlanner | undef
   share.href = './#/map';
   panel.append(node('h4', 'Route proposals'), share);
   if (!planner) return panel;
-  const { proposals, source, map } = planner;
-  if (!proposals.length) panel.append(node('p', 'Waiting for route proposals.'));
-  for (const proposal of proposals) {
-    const entry = node('div');
-    entry.className = 'room-route-proposal';
-    entry.append(node('p', proposal.player + ' · ' + stopNames(map, proposal.stops) + ' · ' + proposal.status));
-    const id = 'proposal-' + roomId + '-' + proposal.seatId + '-' + proposal.id;
-    const path = '/' + roomId + '/proposals/' + proposal.id;
-    const decide = (status: 'accepted' | 'declined') => roomRequest(path, 'PUT', {
-      revision: map.revision, seatId: proposal.seatId, status,
-    });
-    if (proposal.status !== 'declined') {
-      const label = proposal.status === 'pending' ? 'Accept and preview' : 'Open course preview';
-      entry.append(button(label, id + '-preview', () => run(async () => {
-        const preview: RoomCoursePreview = { source, map, stops: proposal.stops };
-        roomCourse(readArchive(localStorage), preview);
-        await decide('accepted');
-        sessionStorage.setItem(roomPreviewKey, JSON.stringify(preview));
-        location.assign('./#/map');
-        return 'Course accepted.';
-      })));
-    }
-    if (proposal.status === 'pending') entry.append(button('Decline', id + '-decline', () => run(async () => {
-      await decide('declined');
+  panel.append(...proposalEntries(roomId, planner, (proposal, decision) => run(async () => {
+    if (decision === 'declined') {
+      await decideRoomRoute(roomId, planner, proposal, decision);
       await refresh();
       return 'Proposal declined.';
-    })));
-    panel.append(entry);
-  }
+    }
+
+    const preview: RoomCoursePreview = { source: planner.source, map: planner.map, stops: proposal.stops };
+    roomCourse(readArchive(localStorage), preview);
+    await decideRoomRoute(roomId, planner, proposal, decision);
+    sessionStorage.setItem(roomPreviewKey, JSON.stringify(preview));
+    location.assign('./#/map');
+    return 'Course accepted.';
+  })));
   return panel;
 }

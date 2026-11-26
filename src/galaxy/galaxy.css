@@ -32,3 +32,11 @@
 .room-share-preview { display: block; width: 100%; max-width: 420px; border-radius: .5rem; }
 .shared-map .unavailable-stop { cursor: default; }
 .shared-map .destination:not(.unavailable-stop) circle { stroke: #f9ca79; stroke-width: 4; }
+
+.room-inbox { margin-top: 1rem; }
+.room-inbox h2 { margin-bottom: .35rem; }
+.room-inbox .route-inbox-feedback:empty { display: none; }
+.route-inbox-room { margin-top: 1rem; }
+.route-inbox-room h3 { font-size: 1rem; margin: 0; }
+.room-inbox .room-route-proposal { border-top: 1px solid var(--edge); padding-block: .25rem .65rem; overflow-wrap: anywhere; }
+.room-inbox .room-route-proposal p { margin-block: .4rem; }

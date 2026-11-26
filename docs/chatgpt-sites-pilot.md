@@ -29,9 +29,9 @@ Sites documents integrated database and file storage, hosted sign-in and WebSock
 
 The [issue #111 feasibility assessment](shared-flight-feasibility.md) records a **no-go as of November 24, 2026**: a supported Sites room-coordinator provisioning contract has not been established. WebSocket transport alone does not establish shared simulation authority across Worker instances. Shared flight remains unavailable; the assessment records the agreed asteroid-defense prototype and the evidence required to reopen implementation.
 
-## January 2027 hosting estimate
+## Hosting estimate
 
-Hosting is free through December 31, 2026. From January 1, Plus includes 125 hosting credits per month shared across Sites. The approximate rates used here are 15 credits per 100,000 requests, 25 per storage-enabled Site-month, 150 per GiB-month of database storage and 3.75 per GiB-month of uploaded files. The default Sites address avoids the custom-domain fee. Building and editing use separate Codex usage. [OpenAI hosting rates](https://learn.chatgpt.com/docs/sites/usage-and-cost)
+OpenAI plans to show usage starting January 1, 2027. Hosting is free through January 31, 2027, with overage billing planned for February 1. Plus includes 125 hosting credits per month shared across Sites. The approximate rates used here are 15 credits per 100,000 requests, 25 per storage-enabled Site-month, 150 per GiB-month of database storage and 3.75 per GiB-month of uploaded files. The default Sites address avoids the custom-domain fee. Building and editing use separate Codex usage. [OpenAI hosting rates](https://learn.chatgpt.com/docs/sites/usage-and-cost)
 
 Assume one DM and five players, four three-hour sessions per month, one 40-request visit per browser per session, and no other traffic. The storage scenarios assume 10 MiB of database records and 100 MiB of uploaded art for the full month.
 
@@ -39,10 +39,15 @@ Assume one DM and five players, four three-hour sessions per month, one 40-reque
 | --- | ---: | ---: |
 | Static pilot | 960 | 0.14 |
 | Shared saves, before extra reads and writes | 960 | 26.98 |
+| Five players polling every five seconds and the DM map polling every ten seconds | 48,480 | 34.10 |
 | Six clients also polling every five seconds while playing | 52,800 | 34.75 |
 | Six clients instead polling every second while playing | 260,160 | 65.86 |
 
-Five-second polling adds 6 × 4 × 3 × 3,600 ÷ 5 = 51,840 requests. Storage contributes about 26.83 credits per month. Cache behavior, other visits, writes, retention and traffic from other Sites change available headroom. The rate card does not establish a per-message WebSocket rate. Measure usage for a representative hosted session before budgeting real-time play.
+The DM map checks all active shared rooms in one request. At ten seconds per check, twelve hours of active foreground use adds up to 4,320 requests, or about 0.65 credits of traffic. If the DM map replaces a single five-second Rooms tab for that time, its polling traffic is halved. Storage contributes about 26.83 credits per month. Cache behavior, other visits, writes, retention and traffic from other Sites change available headroom. The rate card does not establish a per-message WebSocket rate. Measure usage for a representative hosted session before budgeting real-time play.
+
+The earlier hosted Rooms test observed 174 DM room-list requests and 688 guest room-list requests across four guest browsers in 15 minutes. Metered credits were unavailable. [Hosted Rooms workload](https://github.com/drakejrobert-sudo/galaxy-grown-games/issues/116#issuecomment-7195354225)
+
+In a local production Worker browser test, one DM map request retrieved both active rooms, and the next automatic request arrived 10.004 seconds later. A simulated hidden tab made zero requests in 10.5 seconds and one immediately on return. After the last shared room closed, there were zero requests in the next 10.5 seconds. These are request counts from the local test.
 
 ## Owner smoke test
 

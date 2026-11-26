@@ -26,7 +26,7 @@ function label(text: string, input: HTMLElement): HTMLLabelElement {
   return label;
 }
 
-export function shareMapPanel(panel: HTMLElement, campaign: Campaign, save: () => void) {
+export function shareMapPanel(panel: HTMLElement, campaign: Campaign, save: () => void, onShared: () => void) {
   const map = activeMap(campaign);
   const load = panel.querySelector<HTMLButtonElement>('button')!;
   const feedback = document.createElement('p');
@@ -148,7 +148,8 @@ export function shareMapPanel(panel: HTMLElement, campaign: Campaign, save: () =
             campaignId: campaign.id, mapId: map.id, map: schematic, artwork: includeArtwork ? illustration : null,
           });
           published.set(roomId, { ...schematic, artworkRevision: includeArtwork ? artworkRevision : undefined });
-          feedback.textContent = 'Map shared. Review proposals in Rooms.';
+          feedback.textContent = 'Map shared. Review proposals beside your map.';
+          onShared();
         } catch (cause) {
           feedback.textContent = cause instanceof Error ? cause.message : 'Could not share this map.';
         } finally {

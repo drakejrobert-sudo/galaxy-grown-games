@@ -1,7 +1,9 @@
+import { RoomInbox } from './room-inbox';
+import type { RoomList } from '../rooms/types';
 import { PrepDisclosure } from './prep-disclosure';
 import { bindChartArt, chartBackdrop, chartStop } from './chart';
 import { copyPreset, installPreset, loadPreset } from './preset';
-import { openRoomCourse, roomPreviewKey } from './room-course';
+import { openRoomCourse, roomCourse, roomPreviewKey, type RoomCoursePreview } from './room-course';
 import { shareMapPanel } from './room-sharing';
 import { CampaignCloud } from '../campaigns/client';
 import { cloudPanel } from '../campaigns/panel';
@@ -35,6 +37,7 @@ let selected = '';
 let destinationListOpen = false;
 let plotted: string[] = [];
 let status = '';
+let inbox: RoomInbox | undefined;
 let preset: Campaign | undefined;
 let presetProblem = '';
 let presetRequest = 0;
@@ -148,8 +151,9 @@ function render() {
   prep.capture(root);
   const focus = viewState.capture(root);
   const c = campaign();
-  root.innerHTML = `<header><a href="./" class="brand">✦ <span>GALAXY GROWN</span></a><span class="tag">GALAXY MAP · PROTOTYPE</span></header>${surfaceNavigation('Galaxy Map')}<main class="galaxy-main"><div class="map-heading"><div><p class="eyebrow">CHART YOUR NEXT CHAPTER</p><h1 id="map-title" tabindex="-1">${escape(c.name)}</h1></div><button id="toggle-prep">${preparing?'Present to players':'GM preparation'}</button></div><p class="help">Browser-local saves · Abstract travel steps · GM-controlled encounters</p>${mapNavigation()}<p class="prompt map-description">${escape(activeMap(c).description)}</p><p id="map-status" role="status" aria-live="polite">${escape(status)}</p>${storageProblem?`<p class="storage-error" role="alert">${escape(storageProblem)}</p>`:''}<div class="map-layout"><section class="map-board"><div class="map-canvas">${mapSvg()}</div><p class="map-legend"><span>⌜ ⌟ Selected</span><span>○ Current location / travel position</span><span>◌ Reference only</span><span>━ Plotted course</span></p><p class="help map-pan-hint">Swipe the map sideways, or choose a stop from the destination list.</p><details id="destination-picker" ${destinationListOpen?'open':''}><summary>Destination list</summary><div class="destination-list">${activeMap(c).destinations.map(d=>`<button data-destination="${escape(d.id)}" aria-pressed="${d.id === selected}">${escape(d.name)}${d.id === activeMap(c).location ? ' · Here' : ''}${d.navigable === false ? ' · Reference' : ''}</button>`).join('') || '<p>No destinations yet. Open GM preparation to create one.</p>'}</div></details>${destinationPanel()}</section><aside data-focus-region="journey">${journeyPanel()}</aside></div>${preparing?prepPanel():''}</main><footer>One crew. A galaxy of possibilities.<span>Layouts are schematic. Travel risk and minigame scoring are provisional.</span></footer>`;
+  root.innerHTML = `<header><a href="./" class="brand">✦ <span>GALAXY GROWN</span></a><span class="tag">GALAXY MAP · PROTOTYPE</span></header>${surfaceNavigation('Galaxy Map')}<main class="galaxy-main"><div class="map-heading"><div><p class="eyebrow">CHART YOUR NEXT CHAPTER</p><h1 id="map-title" tabindex="-1">${escape(c.name)}</h1></div><button id="toggle-prep">${preparing?'Present to players':'GM preparation'}</button></div><p class="help">Browser-local saves · Abstract travel steps · GM-controlled encounters</p>${mapNavigation()}<p class="prompt map-description">${escape(activeMap(c).description)}</p><p id="map-status" role="status" aria-live="polite">${escape(status)}</p>${storageProblem?`<p class="storage-error" role="alert">${escape(storageProblem)}</p>`:''}<div class="map-layout"><section class="map-board"><div class="map-canvas">${mapSvg()}</div><p class="map-legend"><span>⌜ ⌟ Selected</span><span>○ Current location / travel position</span><span>◌ Reference only</span><span>━ Plotted course</span></p><p class="help map-pan-hint">Swipe the map sideways, or choose a stop from the destination list.</p><details id="destination-picker" ${destinationListOpen?'open':''}><summary>Destination list</summary><div class="destination-list">${activeMap(c).destinations.map(d=>`<button data-destination="${escape(d.id)}" aria-pressed="${d.id === selected}">${escape(d.name)}${d.id === activeMap(c).location ? ' · Here' : ''}${d.navigable === false ? ' · Reference' : ''}</button>`).join('') || '<p>No destinations yet. Open GM preparation to create one.</p>'}</div></details>${destinationPanel()}</section><aside data-focus-region="journey">${journeyPanel()}<div id="route-inbox-slot"></div></aside></div>${preparing?prepPanel():''}</main><footer>One crew. A galaxy of possibilities.<span>Layouts are schematic. Travel risk and minigame scoring are provisional.</span></footer>`;
   bind();
+  if (inbox) root.querySelector('#route-inbox-slot')!.append(inbox.element);
   const cloudHost = root.querySelector<HTMLElement>('#cloud-saves');
   if (cloudHost) cloudPanel(cloud, cloudHost, campaign, incoming => {
     const restored = importCampaigns(archive, incoming);
@@ -166,7 +170,7 @@ function render() {
         throw Error('The saved map changed. Reload Galaxy Map before sharing.');
       }
     }
-  });
+  }, () => void inbox?.refresh());
   viewState.restore(root, c.id, c.activeMap, focus);
 }
 function on(id: string, fn: () => void) { document.getElementById(id)?.addEventListener('click', fn); }
@@ -280,17 +284,38 @@ function bind() {
   submit('schedule',f=>change(c=>scheduleEncounter(c,Number(f.get('leg')),Number(f.get('step')),String(f.get('encounter')))));
   document.querySelectorAll<HTMLElement>('[data-remove-schedule]').forEach(el=>el.addEventListener('click',()=>change(c=>{activeMap(c).schedules=activeMap(c).schedules.filter(s=>s.id!==el.dataset.removeSchedule || s.consumed);} )));
 }
-if (isSitesBuild) {
-  try {
-    const pending = sessionStorage.getItem(roomPreviewKey);
-    if (pending) {
-      sessionStorage.removeItem(roomPreviewKey);
-      plotted = openRoomCourse(archive, JSON.parse(pending));
-      persist();
-      status = 'Room course loaded. Edit it or confirm when ready.';
+function prepareRoomPreview(preview: RoomCoursePreview) {
+  roomCourse(archive, preview);
+  const before = JSON.stringify([archive.selected, campaign().activeMap, plotted]);
+  const next = JSON.stringify([preview.source.campaignId, preview.source.mapId, preview.stops]);
+  if (plotted.length && before !== next && !confirm('Replace the unconfirmed course with this proposal?')) return;
+
+  return () => {
+    if (JSON.stringify([archive.selected, campaign().activeMap, plotted]) !== before) {
+      throw Error('The map or course changed while waiting. Select Open course preview to load the accepted proposal.');
     }
-  } catch (cause) {
-    status = message(cause);
-  }
+    roomCourse(archive, preview);
+    resetSelection();
+    plotted = openRoomCourse(archive, preview);
+    status = 'Room course loaded. Edit it or confirm when ready.';
+    render();
+  };
 }
-render();
+
+export function showGalaxyMap(initialRooms: RoomList | null) {
+  if (isSitesBuild) {
+    inbox = new RoomInbox(initialRooms, prepareRoomPreview);
+    try {
+      const pending = sessionStorage.getItem(roomPreviewKey);
+      if (pending) {
+        sessionStorage.removeItem(roomPreviewKey);
+        plotted = openRoomCourse(archive, JSON.parse(pending));
+        persist();
+        status = 'Room course loaded. Edit it or confirm when ready.';
+      }
+    } catch (cause) {
+      status = message(cause);
+    }
+  }
+  render();
+}
