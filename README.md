@@ -111,7 +111,7 @@ Each finished run now shows a provisional **0–100 rating** and GM advisory ban
 
 ### ChatGPT Sites and GitHub Pages
 
-ChatGPT Sites is the primary development and release target. GitHub holds the reviewed source. Build the Sites Worker and root-mounted client with `npm run build:sites`. The player link uses the public Sites release. GitHub Pages provides the standalone fallback. The release guide covers playtesting, verifying the Pages deployment after merge, and recovering standalone play. [Sites release guide and roadmap](docs/chatgpt-sites-pilot.md)
+ChatGPT Sites is the primary development and release target. GitHub holds the reviewed source. Build the Sites Worker and root-mounted client with `npm run build:sites`. The player link uses the public Sites release, which also hosts checked pre-merge playtest builds between play sessions. GitHub Pages provides the standalone fallback. The release guide covers playtesting, verifying the Pages deployment after merge, and recovering standalone play. [Sites release guide and roadmap](docs/chatgpt-sites-pilot.md)
 
 #### GitHub Pages fallback
 
@@ -136,7 +136,7 @@ There are eight playable prototypes. Space Battle Gunner adds turret defense to 
 
 Drake reviews and merges feature branches. A reviewed merge authorizes release of tested main to the designated Site with its existing audience and the automatic Pages deployment. See the [repository instructions](AGENTS.md), [campaign context](docs/campaign-context.md) and [ChatGPT project setup](docs/chatgpt-project-setup.md).
 
-For player-facing game changes, publish the checked PR head to the private Site for Drake’s playtest. After Drake merges, verify the changes deployed on Pages.
+For player-facing game changes, publish the checked PR head to the live Sites project for Drake’s playtest between play sessions. After Drake merges, verify the changes deployed on Pages.
 
 Completed engineering work can be ready for PR review with owner playtesting still pending. Drafts are for incomplete work or unresolved engineering blockers. Game-change PRs identify linked issues, engineering validation, remaining owner checks, and a short playtest checklist. Use `Closes #N` for issues completed by the PR; use `Refs #N` for broader issues only partially addressed. Record unfinished playtests or other work in a follow-up issue before merge.
 

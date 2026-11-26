@@ -46,17 +46,17 @@ Five-second polling adds 6 × 4 × 3 × 3,600 ÷ 5 = 51,840 requests. Storage co
 
 ## Owner smoke test
 
-Open the private test origin while signed in. Launch a Flight Deck round and check art, pause/resume, and manual reporting. Open Galaxy Map, save a fictional campaign, reload, export and import it. Open Hillside Tanks and complete a turn. Repeat relevant controls on physical iPhone/iPad Safari and record the accepted revision and device coverage.
+Open [the live player link](https://play.drakesfood.com/) while signed in. Launch a Flight Deck round and check art, pause/resume, and manual reporting. Open Galaxy Map, save a fictional campaign, reload, export and import it. Open Hillside Tanks and complete a turn. Repeat relevant controls on physical iPhone/iPad Safari and record the accepted revision and device coverage.
 
 ## Release and recovery
 
 GitHub holds the reviewed source. Use this sequence for a player-facing PR.
 
-1. Run the checks and open the PR with `Closes #N` for completed issues; use `Refs #N` for broader issues only partially addressed. Track any remaining checks in a follow-up issue. Build and publish the exact checked PR head to the designated test Site with its approved audience. Record the GitHub SHA, Sites version, deployment result, hosted smoke result and Site URL in the PR or linked playtest record.
+1. Run the checks and open the PR with `Closes #N` for completed issues; use `Refs #N` for broader issues only partially addressed. Track any remaining checks in a follow-up issue. Between play sessions, record the currently live Sites version for rollback and publish the exact checked PR head to the live Sites project with its existing audience. Defer publication while the player link is in use. Verify the new build through the player link and record the GitHub SHA, Sites version, deployment result, and hosted smoke result in the PR or linked playtest record.
 2. Drake can sign in and test the hosted revision; record actual acceptance and device/control coverage when available. If the build changes, publish the updated PR head and repeat the affected engineering checks before merge.
 3. Drake merges, and GitHub closes issues named by the closing references. Verify the automatic Pages deployment succeeded for the merge revision and contains the changes. If the merged build differs from a tested build, verify the affected behavior and record any remaining work in a follow-up.
 
-Drake approved the November 26, 2026 cutover to Sites v10. A signed-out browser verified the shortlink’s uncached 302, the Flight Deck landing page, and a Rooms deep link with repeated query parameters. [Cutover record](https://github.com/drakejrobert-sudo/drakesfood/issues/142). Use a designated private Site for pre-merge playtests. Keep [GitHub Pages](https://drakejrobert-sudo.github.io/galaxy-grown-games/) available for standalone rollback.
+Drake approved the November 26, 2026 cutover to Sites v10. A signed-out browser verified the shortlink’s uncached 302, the Flight Deck landing page, and a Rooms deep link with repeated query parameters. [Cutover record](https://github.com/drakejrobert-sudo/drakesfood/issues/142). Drake authorized the live Sites project for checked pre-merge playtests between play sessions. If a playtest build needs rollback, redeploy the last verified working Sites version and smoke-check the player link. Keep [GitHub Pages](https://drakejrobert-sudo.github.io/galaxy-grown-games/) available for standalone rollback.
 
 Before a future change to the player destination, exercise Flight Deck, Galaxy Map and Hillside Tanks on the hosted build, check player access from a signed-out browser, and complete physical iPhone/iPad Safari playtests. Rehearse recovery with a fictional campaign exported from Sites and imported into the Pages build. Record the working Pages destination. Drake approves audience changes and the independently managed redirect cutover separately.
 
