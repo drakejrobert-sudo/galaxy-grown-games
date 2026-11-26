@@ -1,4 +1,4 @@
-import { changeRoomMap, decideRouteProposal, roomMapAction, routePlanners, submitRouteProposal } from './map-api';
+import { changeRoomMap, decideRouteProposal, roomMapAction, roomMapArtwork, routePlanners, submitRouteProposal } from './map-api';
 import { encounters, readRoomReport, stations, type HostedRoom, type JoinedRoom, type RoomList, type Seat } from './types';
 
 interface DatabaseStatement {
@@ -255,12 +255,16 @@ export async function roomApi(
     const mapAction = url.pathname.match(roomMapAction);
     if (mapAction) {
       const [, roomId, target, proposalId] = mapAction;
+      if (target === 'map/artwork' && method === 'GET') {
+        return await roomMapArtwork(db, roomId, url.searchParams.get('revision') ?? '', now,
+          dmId ?? null, accountId ?? null, anonymousId) ?? error('Room artwork is unavailable.', 404);
+      }
       const share = target === 'map' && method === 'PUT';
       const decide = Boolean(proposalId) && method === 'PUT';
       const submit = target === 'proposals' && method === 'POST';
       if (!share && !decide && !submit) return error('Room action not found.', 404);
       if ((share || decide) && !dmId) return error('Only the signed-in DM can manage this room.', 403);
-      const fields = await readForm(request, share ? 131_072 : 8192);
+      const fields = await readForm(request, share ? 1_150_000 : 8192);
       const result = share ? await changeRoomMap(db, roomId, dmId!, now, fields)
         : decide ? await decideRouteProposal(db, roomId, dmId!, proposalId, now, fields)
           : await submitRouteProposal(db, roomId, accountId ?? null, anonymousId, now, fields);

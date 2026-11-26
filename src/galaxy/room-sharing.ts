@@ -1,5 +1,5 @@
 import { roomRequest } from '../rooms/client';
-import { readSharedMap, type SharedMap } from '../rooms/map-types';
+import { connected, readSharedMap, roomArtworkRevision, type SharedMap } from '../rooms/map-types';
 import type { RoomList } from '../rooms/types';
 import { activeMap, type Campaign, type SectorMap } from './model';
 
@@ -11,7 +11,7 @@ export function shareSchematic(sector: SectorMap, start: string, stops: Iterable
   const schematic = readSharedMap({
     start,
     stops: sector.destinations.filter(stop => stopIds.has(stop.id) && stop.navigable !== false)
-      .map(({ id, name, x, y }) => ({ id, name, x, y })),
+      .map(({ id, name, x, y, type }) => ({ id, name, x, y, type })),
     links: sector.routes.filter(route => routeIds.has(route.id) && stopIds.has(route.from) && stopIds.has(route.to))
       .map(({ from, to }) => [from, to]),
   });
@@ -39,7 +39,14 @@ export function shareMapPanel(panel: HTMLElement, campaign: Campaign, save: () =
       if (map.journey && !map.journey.arrived) throw Error('End this map’s journey before sharing a new course.');
       const { hosted, canHost } = await roomRequest<RoomList>();
       if (!canHost || !hosted.length) throw Error('Sign in as DM and create a room from Rooms first.');
+      const illustration = map.backgroundImage;
+      const artworkRevision = illustration ? await roomArtworkRevision(illustration) : undefined;
       if (!panel.isConnected) return;
+      const published = new Map<string, SharedMap & { artworkRevision?: string }>(hosted.flatMap(item => {
+        const planner = item.planner;
+        return planner?.source.campaignId === campaign.id && planner.source.mapId === map.id
+          ? [[item.id, planner.map] as const] : [];
+      }));
 
       const form = document.createElement('form');
       form.className = 'map-form room-map-share';
@@ -94,6 +101,31 @@ export function shareMapPanel(panel: HTMLElement, campaign: Campaign, save: () =
           if (input.disabled) input.checked = false;
         }
       }
+      const shareArt = document.createElement('input');
+      shareArt.type = 'checkbox';
+      const artwork = document.createElement('div');
+      if (illustration) {
+        const preview = document.createElement('img');
+        preview.src = illustration;
+        preview.alt = 'Background preview';
+        preview.className = 'room-share-preview';
+        const warning = document.createElement('p');
+        warning.className = 'help';
+        warning.textContent = 'Check the entire image for unrevealed details before sharing it.';
+        artwork.append(preview, label('Share background artwork', shareArt), warning);
+      }
+
+      function restoreChoices() {
+        const shared = published.get(room.value);
+        start.value = map.location ?? shared?.start ?? '';
+        for (const [id, input] of stopInputs) input.checked = shared?.stops.some(stop => stop.id === id) ?? false;
+        for (const { input, ends } of routeInputs.values()) {
+          input.checked = !!shared && connected(shared.links, ends[0], ends[1]);
+        }
+        shareArt.checked = !!artworkRevision && shared?.artworkRevision === artworkRevision;
+        updateChoices();
+      }
+      room.onchange = restoreChoices;
       start.onchange = updateChoices;
       stops.onchange = updateChoices;
       updateChoices();
@@ -101,7 +133,7 @@ export function shareMapPanel(panel: HTMLElement, campaign: Campaign, save: () =
       const publish = document.createElement('button');
       publish.className = 'primary';
       publish.textContent = 'Share selected map';
-      form.append(label('Room', room), label('Starting stop', start), stops, routes, publish);
+      form.append(label('Room', room), label('Starting stop', start), stops, routes, artwork, publish);
       form.onsubmit = async event => {
         event.preventDefault();
         publish.disabled = true;
@@ -110,7 +142,12 @@ export function shareMapPanel(panel: HTMLElement, campaign: Campaign, save: () =
             [...stopInputs].filter(([, input]) => input.checked).map(([id]) => id),
             [...routeInputs].filter(([, { input }]) => input.checked && !input.disabled).map(([id]) => id));
           save();
-          await roomRequest('/' + room.value + '/map', 'PUT', { campaignId: campaign.id, mapId: map.id, map: schematic });
+          const roomId = room.value;
+          const includeArtwork = shareArt.checked;
+          await roomRequest('/' + roomId + '/map', 'PUT', {
+            campaignId: campaign.id, mapId: map.id, map: schematic, artwork: includeArtwork ? illustration : null,
+          });
+          published.set(roomId, { ...schematic, artworkRevision: includeArtwork ? artworkRevision : undefined });
           feedback.textContent = 'Map shared. Review proposals in Rooms.';
         } catch (cause) {
           feedback.textContent = cause instanceof Error ? cause.message : 'Could not share this map.';
@@ -118,7 +155,7 @@ export function shareMapPanel(panel: HTMLElement, campaign: Campaign, save: () =
           publish.disabled = false;
         }
       };
-      feedback.textContent = 'A changed selection replaces the shared map and clears its previous proposals.';
+      feedback.textContent = 'Changing stops, connections, or the starting point starts a new proposal round.';
       load.replaceWith(form);
     } catch (cause) {
       feedback.textContent = cause instanceof Error ? cause.message : 'Could not load DM rooms.';

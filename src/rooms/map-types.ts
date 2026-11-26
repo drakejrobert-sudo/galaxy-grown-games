@@ -1,8 +1,12 @@
+export const stopTypes = ['planet', 'ship', 'station', 'point', 'system', 'star'] as const;
+export type StopType = typeof stopTypes[number];
+
 export interface SharedStop {
   id: string;
   name: string;
   x: number;
   y: number;
+  type?: StopType;
 }
 
 export interface SharedMap {
@@ -13,6 +17,7 @@ export interface SharedMap {
 
 export interface RoomMap extends SharedMap {
   revision: string;
+  artworkRevision?: string;
 }
 
 export interface MapSource {
@@ -60,7 +65,8 @@ export function readSharedMap(value: unknown): SharedMap | null {
       || !Number.isFinite(stop.x) || stop.x < 40 || stop.x > 860
       || !Number.isFinite(stop.y) || stop.y < 50 || stop.y > 450) return null;
     stopIds.add(stop.id);
-    safeStops.push({ id: stop.id, name: stop.name, x: stop.x, y: stop.y });
+    const type = stopTypes.find(option => option === stop.type);
+    safeStops.push({ id: stop.id, name: stop.name, x: stop.x, y: stop.y, ...(type ? { type } : {}) });
   }
   const safeLinks: SharedMap['links'] = [];
   for (const link of links) {
@@ -76,4 +82,9 @@ export function readSharedMap(value: unknown): SharedMap | null {
 export function validSharedCourse(map: SharedMap, stops: string[]): boolean {
   return stops.length >= 2 && stops.length <= maxCourseStops && stops[0] === map.start
     && stops.slice(1).every((stop, index) => connected(map.links, stops[index], stop));
+}
+
+export async function roomArtworkRevision(artwork: string): Promise<string> {
+  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(artwork));
+  return Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, '0')).join('');
 }

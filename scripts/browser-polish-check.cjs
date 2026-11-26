@@ -13,6 +13,10 @@ const map = (id, name) => ({ id, name, description: 'Synthetic engineering fixtu
   { id: 'ref', name: 'Reference', type: 'star', x: 460, y: 380, description: 'Not a stop', navigable: false },
 ], routes: [{ id: 'route', from: 'a', to: 'b', steps: 2, risk: 'Low', table: '' }], schedules: [], journey: null, location: null, log: [] });
 const fixture = { version: 2, selected: 'test', campaigns: [{ id: 'test', name: 'Polish fixture', activeMap: 'regional', maps: [map('regional', 'Regional'), map('detail', 'Detail')], encounters: [{ id: 'pause', title: 'Engineering encounter', type: 'minigame', situation: 'asteroid-field', prompt: 'Public prompt', notes: 'SECRET FIXTURE NOTE' }], tables: [] }] };
+async function openPrepSection(page, name) {
+  const panel = page.locator(`details[data-prep="${name}"]`);
+  if (!(await panel.evaluate(section => section.open))) await panel.locator('summary').click();
+}
 (async () => {
   const browser = await chromium.launch({ headless: true });
   const errors = [], measurements = [];
@@ -47,6 +51,7 @@ const fixture = { version: 2, selected: 'test', campaigns: [{ id: 'test', name: 
       await page.locator('#confirm-course').click();
       assert.equal(await page.evaluate(() => document.activeElement.textContent), 'Start → Finish');
       await page.locator('#toggle-prep').click();
+      await openPrepSection(page, 'encounters');
       await page.locator('#schedule [name=step]').fill('1'); await page.locator('#schedule button').click();
       await page.locator('#toggle-prep').click();
       assert.ok(!(await page.locator('body').innerText()).includes('SECRET FIXTURE NOTE'));
@@ -60,10 +65,12 @@ const fixture = { version: 2, selected: 'test', campaigns: [{ id: 'test', name: 
       await page.locator('#toggle-prep').click();
       // Upload a public synthetic raster; custom artwork suppresses bundled symbols/scenery.
       const png = await page.evaluate(() => { const c = document.createElement('canvas'); c.width = 90; c.height = 50; const g = c.getContext('2d'); g.fillStyle = '#173047'; g.fillRect(0, 0, 90, 50); return c.toDataURL(); });
+      await openPrepSection(page, 'maps');
       await page.locator('#background-upload').setInputFiles({ name: 'fixture.png', mimeType: 'image/png', buffer: Buffer.from(png.split(',')[1], 'base64') });
       await page.locator('#map-background').waitFor(); assert.equal(await page.locator('.destination-art,.map-scenery').count(), 0);
       await page.screenshot({ path: path.join(out, `uploaded-map-${width}.png`), fullPage: true });
       await page.locator('.map-canvas').evaluate((el, x) => el.scrollLeft = x, width < 600 ? 125 : 0);
+      await openPrepSection(page, 'campaigns');
       const download = page.waitForEvent('download'); await page.locator('#export').click();
       const exported = await download; const exportPath = path.join(out, `campaign-${width}.json`); await exported.saveAs(exportPath);
       await page.locator('#import').setInputFiles(exportPath);

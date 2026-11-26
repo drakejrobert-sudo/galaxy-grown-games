@@ -402,3 +402,62 @@ test('closing a room deletes its shared schematic and proposals', async (t) => {
   assert.deepEqual(database.prepare('SELECT room_id FROM room_maps').all(), []);
   assert.deepEqual(database.prepare('SELECT room_id FROM room_route_proposals').all(), []);
 });
+
+test('shared artwork is separately authorized and artwork updates retain course proposals', async t => {
+  const { call, create, list, clock, database } = fixture(t);
+  const room = await create();
+  const other = await create();
+  const guest = await call('', null);
+  const cookie = guest.headers.get('set-cookie')!.split(';')[0];
+  await call('/join', null, 'POST', { code: room.code, name: 'Mira' }, origin, { Cookie: cookie });
+  await call('/join', gunner, 'POST', { code: other.code, name: 'Zed' });
+  const path = '/' + room.id;
+  const map = {
+    start: 'a',
+    stops: [{ id: 'a', name: 'Alpha', x: 100, y: 100 }, { id: 'b', name: 'Beta', x: 450, y: 250 }],
+    links: [['a', 'b']],
+  };
+  const artwork = 'data:image/png;base64,iVBORw0KGgo=';
+  const share = { map, campaignId: 'private campaign', mapId: 'private map' };
+  assert.equal((await call(path + '/map', dm, 'PUT', share)).status, 204);
+  const { revision } = (await list(null, cookie)).joined[0].planner!.map;
+  const id = crypto.randomUUID();
+  assert.equal((await call(path + '/proposals', null, 'POST',
+    { id, revision, stops: ['a', 'b'] }, origin, { Cookie: cookie })).status, 200);
+
+  const withTypes = { ...map, stops: map.stops.map(stop => ({ ...stop, type: 'planet' })) };
+  assert.equal((await call(path + '/map', dm, 'PUT', { ...share, map: withTypes, artwork })).status, 204);
+  const planner = (await list(null, cookie)).joined[0].planner!;
+  const artRevision = planner.map.artworkRevision!;
+  assert.equal(planner.map.revision, revision);
+  assert.notEqual(artRevision, undefined);
+  assert.equal(planner.map.stops[0].type, 'planet');
+  assert.equal(planner.proposals[0].id, id);
+  assert.doesNotMatch(JSON.stringify(planner), /data:image|private campaign|private map/);
+  const artPath = path + '/map/artwork?revision=' + artRevision;
+  const allowed = await call(artPath, null, 'GET', undefined, origin, { Cookie: cookie });
+  assert.equal(allowed.status, 200);
+  assert.equal(allowed.headers.get('cache-control'), 'private, no-store');
+  assert.equal(allowed.headers.get('content-type'), 'image/png');
+  assert.equal(await allowed.arrayBuffer().then(buffer => Buffer.from(buffer).toString('base64')), 'iVBORw0KGgo=');
+  assert.equal((await call(artPath, dm)).status, 200);
+  assert.equal((await call(artPath, secondDmSession)).status, 404);
+  assert.equal((await call(artPath, gunner)).status, 404);
+  assert.equal((await call(artPath, null)).status, 404);
+  assert.equal((await call(artPath.replace(room.id, other.id), gunner)).status, 404);
+
+  assert.equal((await call(path + '/map', dm, 'PUT', { ...share, artwork: 'data:image/svg+xml;base64,AAAA' })).status, 400);
+  assert.equal((await call(artPath, dm)).status, 200);
+  assert.equal((await call(path + '/map', dm, 'PUT', { ...share, artwork: null })).status, 204);
+  assert.equal((await call(artPath, dm)).status, 404);
+  assert.equal((await list(null, cookie)).joined[0].planner!.proposals.length, 1);
+  assert.equal((await call(path + '/map', dm, 'PUT', { ...share, map: { ...map, start: 'b' }, artwork })).status, 204);
+  const changed = (await list(null, cookie)).joined[0].planner!;
+  assert.notEqual(changed.map.revision, revision);
+  assert.deepEqual(changed.proposals, []);
+  clock(room.expiresAt);
+  assert.equal((await call(artPath, dm)).status, 404);
+  assert.equal((await call(artPath, null, 'GET', undefined, origin, { Cookie: cookie })).status, 404);
+  assert.equal((await call(path + '/close', dm, 'POST')).status, 204);
+  assert.deepEqual(database.prepare('SELECT artwork FROM room_maps WHERE room_id = ?').all(room.id), []);
+});

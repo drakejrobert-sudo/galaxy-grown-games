@@ -2,7 +2,7 @@ import '../style.css';
 import './rooms.css';
 import { surfaceNavigation } from '../site-navigation';
 import { roomRequest as api } from './client';
-import { guestRoutePanel, hostRoutePanel, newRouteDraft } from './map-view';
+import { hostRoutePanel } from './map-view';
 import { encounters, stations, type HostedRoom, type JoinedRoom, type RoomList, type Seat } from './types';
 
 document.title = 'Galaxy Grown · Rooms';
@@ -65,7 +65,6 @@ let hasActiveRooms = false;
 let pollTimer: ReturnType<typeof setTimeout> | undefined;
 let refreshOnIdle = false;
 let lastRooms = '';
-const routeDrafts = new Map<string, ReturnType<typeof newRouteDraft>>();
 
 function stopPolling() {
   clearTimeout(pollTimer);
@@ -124,7 +123,7 @@ function seatStatus(seat: Seat, situation: HostedRoom['situation']) {
   return situation ? 'Ready' : 'Awaiting encounter';
 }
 
-function joinedCard({ id, expiresAt, situation, seat, planner }: JoinedRoom): HTMLElement {
+function joinedCard({ id, expiresAt, situation, seat }: JoinedRoom): HTMLElement {
   const card = element('article');
   const heading = element('h3', roomTitle(id));
   heading.id = 'joined-' + seat.id;
@@ -140,14 +139,11 @@ function joinedCard({ id, expiresAt, situation, seat, planner }: JoinedRoom): HT
     link.href = './?' + new URLSearchParams({ room: id, seat: seat.id }).toString();
     card.append(link);
   }
-  if (planner) {
-    let draft = routeDrafts.get(seat.id);
-    if (!draft || draft.revision !== planner.map.revision) {
-      draft = newRouteDraft(planner.map);
-      routeDrafts.set(seat.id, draft);
-    }
-    card.append(guestRoutePanel(id, seat.id, planner, draft, run, () => loadRooms('route-' + seat.id)));
-  }
+  const sharedMap = element('a', 'Open shared map');
+  sharedMap.className = 'room-flight-link';
+  sharedMap.id = 'shared-map-' + seat.id;
+  sharedMap.href = '#/map/room/' + id;
+  card.append(sharedMap);
   card.className = 'room-card';
   return card;
 }
@@ -277,8 +273,6 @@ async function loadRooms(focusId?: string): Promise<void> {
     .map(({ id, value }) => ({ id, value }));
   const openReports = Array.from(hostList.querySelectorAll<HTMLDetailsElement>('details[open]'), ({ id }) => id);
 
-  const activeDrafts = new Set(rooms.joined.filter(room => room.planner).map(room => room.seat.id));
-  for (const seatId of routeDrafts.keys()) if (!activeDrafts.has(seatId)) routeDrafts.delete(seatId);
   playerList.replaceChildren(...rooms.joined.map(joinedCard));
   if (rooms.joined.length) {
     if (seatPanel.previousElementSibling) joinForm.before(seatPanel);
@@ -307,7 +301,7 @@ async function run(action: () => Promise<string>, fallbackFocus?: HTMLElement): 
   stopPolling();
   busy = true;
   content.setAttribute('aria-busy', 'true');
-  const buttons = Array.from(root.querySelectorAll<HTMLButtonElement>('.crew-rooms button:enabled:not(.room-route-panel button)'));
+  const buttons = Array.from(root.querySelectorAll<HTMLButtonElement>('.crew-rooms button:enabled'));
   for (const button of buttons) button.disabled = true;
   alert.textContent = '';
   status.textContent = 'Working…';
