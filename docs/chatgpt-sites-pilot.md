@@ -52,9 +52,9 @@ Open the private test origin while signed in. Launch a Flight Deck round and che
 
 GitHub holds the reviewed source. Use this sequence for a player-facing PR.
 
-1. Run the checks and open the PR with `Refs #N`. Build and publish the exact checked PR head to the designated test Site with its approved audience. Record the GitHub SHA, Sites version, deployment result, hosted smoke result and Site URL in the PR or linked playtest record.
-2. Drake signs in, tests the hosted revision and records acceptance with the applicable device and control coverage. If the build changes, publish the updated PR head and repeat the affected checks before merge.
-3. Drake merges. Verify the automatic Pages deployment succeeded for the merge revision and contains the accepted changes. If the merged build differs from the accepted build, verify the affected behavior before closing the issue. Close after the deployment and all remaining issue criteria are recorded.
+1. Run the checks and open the PR with `Closes #N` for completed issues; use `Refs #N` for broader issues only partially addressed. Track any remaining checks in a follow-up issue. Build and publish the exact checked PR head to the designated test Site with its approved audience. Record the GitHub SHA, Sites version, deployment result, hosted smoke result and Site URL in the PR or linked playtest record.
+2. Drake can sign in and test the hosted revision; record actual acceptance and device/control coverage when available. If the build changes, publish the updated PR head and repeat the affected engineering checks before merge.
+3. Drake merges, and GitHub closes issues named by the closing references. Verify the automatic Pages deployment succeeded for the merge revision and contains the changes. If the merged build differs from a tested build, verify the affected behavior and record any remaining work in a follow-up.
 
 The stable player link currently uses Pages at https://drakejrobert-sudo.github.io/galaxy-grown-games/. Confirm it still reaches that build during the rehearsal. To reconcile an out-of-date test Site with Pages, identify the SHA from the latest successful Pages deployment and publish a root-mounted build of that source to the test Site.
 
