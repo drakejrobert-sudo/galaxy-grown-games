@@ -1,3 +1,5 @@
+import { shopLibrary, storefront } from '../shops/view';
+import type { ShopSummary } from '../shops/inventory';
 import '../style.css';
 import './rooms.css';
 import { surfaceNavigation } from '../site-navigation';
@@ -18,6 +20,7 @@ ${surfaceNavigation('Rooms')}
   <div class="room-grid" id="room-content" hidden>
     <section class="panel" id="host-rooms" aria-labelledby="host-heading" hidden>
       <div class="room-heading"><h2 id="host-heading">DM rooms</h2><button type="button" id="create-room">Create room</button></div>
+      <details class="shop-library" id="shop-library"></details>
       <div class="room-stack" id="hosted-rooms"></div>
     </section>
     <div class="room-stack" id="player-rooms">
@@ -57,6 +60,8 @@ const seatPanel = byId('joined-panel');
 const joinForm = byId<HTMLFormElement>('join-room');
 const refresh = byId<HTMLButtonElement>('refresh-rooms');
 const create = byId<HTMLButtonElement>('create-room');
+const updateLibrary = shopLibrary(byId('shop-library'), () => loadRooms());
+let shopChoices: ShopSummary[] = [];
 let busy = false;
 
 let roomsRequest: Promise<RoomList> | undefined;
@@ -123,7 +128,7 @@ function seatStatus(seat: Seat, situation: HostedRoom['situation']) {
   return situation ? 'Ready' : 'Awaiting encounter';
 }
 
-function joinedCard({ id, expiresAt, situation, seat }: JoinedRoom): HTMLElement {
+function joinedCard({ id, expiresAt, situation, seat, shop }: JoinedRoom): HTMLElement {
   const card = element('article');
   const heading = element('h3', roomTitle(id));
   heading.id = 'joined-' + seat.id;
@@ -144,11 +149,12 @@ function joinedCard({ id, expiresAt, situation, seat }: JoinedRoom): HTMLElement
   sharedMap.id = 'shared-map-' + seat.id;
   sharedMap.href = '#/map/room/' + id;
   card.append(sharedMap);
+  if (shop) card.append(storefront(shop));
   card.className = 'room-card';
   return card;
 }
 
-function choiceForm(id: string, name: string, placeholder: string, options: readonly string[],
+function choiceForm(id: string, name: string, placeholder: string, options: readonly (string | ShopSummary)[],
   current: string | null, buttonText: string, locked: boolean, onSave: (value: string) => Promise<string>): HTMLElement {
   if (locked) return element('p', name + ' · ' + current);
   const form = element('form');
@@ -159,7 +165,9 @@ function choiceForm(id: string, name: string, placeholder: string, options: read
   select.id = id;
   select.dataset.savedValue = current ?? '';
   select.add(new Option(placeholder, ''));
-  for (const option of options) select.add(new Option(option, option));
+  for (const option of options) {
+    select.add(typeof option === 'string' ? new Option(option, option) : new Option(option.name, option.id));
+  }
   select.value = current ?? '';
   const save = element('button', buttonText);
   save.id = 'save-' + id;
@@ -234,6 +242,13 @@ function hostCard(room: HostedRoom): HTMLElement {
     card.append(row);
   }
 
+  if (shopChoices.length) {
+    card.append(choiceForm('shop-' + room.id, 'Player storefront', 'Shop closed', shopChoices,
+      room.shopId ?? null, 'Apply to room', false, async (shopId) => {
+        await api('/' + room.id + '/shop', 'PUT', { shopId: shopId || null });
+        return shopId ? 'Shop open for players.' : 'Shop closed.';
+      }));
+  }
   card.append(hostRoutePanel(room.id, room.planner, run, () => loadRooms()));
   const close = element('button', 'Close room');
   close.type = 'button';
@@ -280,6 +295,8 @@ async function loadRooms(focusId?: string): Promise<void> {
     playerList.append(element('p', 'You have no active seats.'));
     if (seatPanel.nextElementSibling) joinForm.after(seatPanel);
   }
+  shopChoices = rooms.shops ?? [];
+  updateLibrary(shopChoices);
   hostList.replaceChildren(...rooms.hosted.map(hostCard));
   if (!rooms.hosted.length) hostList.append(element('p', 'You have no active rooms.'));
   hosted.hidden = !rooms.canHost;

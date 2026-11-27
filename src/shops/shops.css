@@ -1,0 +1,36 @@
+.shopfront {
+  --shop-accent: #93e5d8;
+  background: #121c2a;
+  border: 1px solid var(--edge);
+  border-radius: 12px;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+  margin-block: 12px;
+}
+.shopfront.theme-wizard { --shop-accent: #dfbaff; }
+.shopfront.theme-weapons { --shop-accent: #ffc88e; }
+.shop-banner { position: relative; isolation: isolate; padding: 76px 16px 12px; background: #253144; }
+.shop-banner img { position: absolute; z-index: -2; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.shop-banner::after { content: ''; position: absolute; z-index: -1; inset: 0; background: linear-gradient(transparent 22%, #0a101be8 90%); }
+.shop-banner span { color: var(--shop-accent); font-weight: 700; font-size: .8rem; }
+.shopfront .shop-banner h3 { margin: 2px 0; font: 600 1.65rem/1.1 Georgia, serif; color: white; }
+.shopfront ul { margin: 0; padding: 0 14px; list-style: none; }
+.shopfront li { display: grid; grid-template-columns: minmax(0, 1fr) minmax(5em, 32%); gap: 10px; padding: 14px 0; }
+.shopfront li + li { border-top: 1px solid var(--edge); }
+.shopfront li p, .shopfront small { color: #bdc8db; font-size: .88rem; }
+.shopfront > p { padding: 12px; }
+.shop-price { text-align: right; color: var(--shop-accent); }
+.shop-price small { display: block; margin-top: 4px; }
+.shop-library { margin-block: 14px; }
+.shop-library summary { cursor: pointer; padding-block: 8px; }
+.shop-library > button { margin: 6px 6px 0 0; }
+.shop-editor { width: min(620px, 95vw); max-height: 90dvh; overflow: auto; border: 1px solid var(--edge); border-radius: 14px; background: #1a2238; color: inherit; padding: clamp(14px, 4vw, 26px); }
+.shop-editor::backdrop { background: #080d19c9; }
+.shop-editor h2 { margin-bottom: 8px; }
+.shop-editor label { margin-block: 10px; }
+.shop-editor input { display: block; max-width: 100%; }
+.shop-editor input[type=number] { width: 100%; background: #10192d; border: 1px solid var(--edge); border-radius: 8px; color: inherit; padding: 12px; }
+.shop-editor fieldset { min-width: 0; margin: 16px 0; border: 1px solid var(--edge); border-radius: 8px; }
+.shop-editor legend { overflow-wrap: anywhere; }
+.shop-actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px; }
+.shop-editor [role=status], .shop-library [role=alert] { overflow-wrap: anywhere; color: #fee4b4; }

@@ -1,0 +1,15 @@
+{
+  "version": 1,
+  "name": "Lantern Dock Armory",
+  "theme": "armorer",
+  "items": [
+    {
+      "id": "boarding-shield",
+      "name": "Boarding shield",
+      "description": "A compact shield with a brass lantern boss.",
+      "price": 40,
+      "currency": "credits",
+      "quantity": 3
+    }
+  ]
+}

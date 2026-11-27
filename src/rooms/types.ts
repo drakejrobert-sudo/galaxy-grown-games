@@ -1,3 +1,4 @@
+import type { Inventory, ShopSummary } from '../shops/inventory';
 import type { GuestRoutePlanner, HostRoutePlanner } from './map-types';
 import type { Role, Situation } from '../game/rules';
 
@@ -45,6 +46,7 @@ export interface HostedRoom {
   expiresAt: number;
   situation: Situation | null;
   seats: Seat[];
+  shopId?: string;
   planner?: HostRoutePlanner;
 }
 
@@ -53,10 +55,12 @@ export interface JoinedRoom {
   expiresAt: number;
   situation: Situation | null;
   seat: Seat;
+  shop?: Inventory;
   planner?: GuestRoutePlanner;
 }
 
 export interface RoomList {
+  shops?: ShopSummary[];
   canHost: boolean;
   hosted: HostedRoom[];
   joined: JoinedRoom[];

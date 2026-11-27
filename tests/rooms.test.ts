@@ -461,3 +461,55 @@ test('shared artwork is separately authorized and artwork updates retain course 
   assert.equal((await call(path + '/close', dm, 'POST')).status, 204);
   assert.deepEqual(database.prepare('SELECT artwork FROM room_maps WHERE room_id = ?').all(room.id), []);
 });
+
+test('a DM library survives Rooms and only shares the selected inventory with active seats', async (t) => {
+  const { call, list, create, clock } = fixture(t);
+  const first = await create();
+  const second = await create();
+  const cookie = (await call('', null)).headers.get('set-cookie')!.split(';')[0];
+  const guest = { Cookie: cookie };
+  await call('/join', null, 'POST', { code: first.code, name: 'Reader' }, origin, guest);
+  await call('/join', pilot, 'POST', { code: second.code, name: 'Scout' });
+  const id = crypto.randomUUID(), copy = crypto.randomUUID();
+  const entry = { id: 'shield', name: 'Boarding shield', quantity: 3, price: 40, currency: 'credits' };
+  const inventory = { version: 1, theme: 'armorer', name: 'Dock armorer', items: [entry] };
+  const path = '/shops/' + id;
+  const save = (revision: number, data = inventory) => call(path, dm, 'PUT', { revision, inventory: data });
+  const choose = (room: HostedRoom, shopId: string | null) => call('/' + room.id + '/shop', dm, 'PUT', { shopId });
+  assert.equal((await save(0)).status, 200);
+  assert.equal((await list(null, cookie)).joined[0].shop, undefined);
+  assert.deepEqual((await list(dm)).shops, [{ id, name: inventory.name }]);
+  assert.equal((await list(pilot)).shops, undefined);
+  assert.equal((await call(path, secondDmSession)).status, 404);
+  assert.equal((await call(path, null, 'GET', undefined, origin, guest)).status, 403);
+  assert.equal((await call(path, pilot, 'PUT', { revision: 1, inventory })).status, 403);
+  assert.equal((await call('/' + first.id + '/shop', pilot, 'PUT', { shopId: id })).status, 403);
+  assert.equal((await choose(first, id)).status, 200);
+  assert.deepEqual((await list(null, cookie)).joined[0].shop, inventory);
+  assert.equal((await list(pilot)).joined[0].shop, undefined);
+  assert.equal((await choose(second, id)).status, 200);
+  const sold = { ...inventory, items: [{ ...entry, quantity: 0, price: 25 }] };
+  const parallel = await Promise.all([save(1, sold), save(1, sold)]);
+  assert.deepEqual(parallel.map(r => r.status).sort(), [200, 409]);
+  assert.deepEqual((await list(null, cookie)).joined[0].shop, sold);
+  assert.deepEqual((await list(pilot)).joined[0].shop, sold);
+  for (const invalid of [{ ...sold, version: 2 }, { ...sold, theme: 'missing' }, { ...sold, items: [entry, entry] },
+    { ...sold, items: [{ ...entry, quantity: 0.5 }] }, { ...sold, items: [{ ...entry, price: -1 }] }]) {
+    assert.equal((await save(2, invalid)).status, 400);
+  }
+  assert.deepEqual((await (await call(path, dm)).json()).inventory, sold);
+  const wizard = { ...inventory, name: 'Lantern tower', theme: 'wizard' };
+  await call('/shops/' + copy, dm, 'PUT', { revision: 0, inventory: wizard });
+  await choose(second, copy);
+  assert.deepEqual((await list(pilot)).joined[0].shop, wizard);
+  assert.deepEqual((await list(null, cookie)).joined[0].shop, sold);
+  assert.equal((await choose(first, null)).status, 200);
+  assert.equal((await list(null, cookie)).joined[0].shop, undefined);
+  assert.equal((await call('/' + first.id + '/shop', null, 'PUT', { shopId: id }, origin, guest)).status, 403);
+  const foreign = await create(secondDmSession);
+  assert.equal((await call('/' + foreign.id + '/shop', secondDmSession, 'PUT', { shopId: id })).status, 404);
+  clock(start + 12 * hour);
+  assert.deepEqual((await list(pilot)).joined, []);
+  assert.equal((await choose(second, id)).status, 404);
+  assert.equal((await (await call(path, dm)).json()).revision, 2);
+});
