@@ -2,6 +2,7 @@ import '../style.css';
 import './rooms.css';
 import { surfaceNavigation } from '../site-navigation';
 import { roomRequest as api } from './client';
+import { hostRoutePanel } from './map-view';
 import { encounters, stations, type HostedRoom, type JoinedRoom, type RoomList, type Seat } from './types';
 
 document.title = 'Galaxy Grown · Rooms';
@@ -138,6 +139,11 @@ function joinedCard({ id, expiresAt, situation, seat }: JoinedRoom): HTMLElement
     link.href = './?' + new URLSearchParams({ room: id, seat: seat.id }).toString();
     card.append(link);
   }
+  const sharedMap = element('a', 'Open shared map');
+  sharedMap.className = 'room-flight-link';
+  sharedMap.id = 'shared-map-' + seat.id;
+  sharedMap.href = '#/map/room/' + id;
+  card.append(sharedMap);
   card.className = 'room-card';
   return card;
 }
@@ -228,6 +234,7 @@ function hostCard(room: HostedRoom): HTMLElement {
     card.append(row);
   }
 
+  card.append(hostRoutePanel(room.id, room.planner, run, () => loadRooms()));
   const close = element('button', 'Close room');
   close.type = 'button';
   close.id = 'close-' + room.id;
@@ -294,7 +301,7 @@ async function run(action: () => Promise<string>, fallbackFocus?: HTMLElement): 
   stopPolling();
   busy = true;
   content.setAttribute('aria-busy', 'true');
-  const buttons = Array.from(root.querySelectorAll<HTMLButtonElement>('.crew-rooms button'));
+  const buttons = Array.from(root.querySelectorAll<HTMLButtonElement>('.crew-rooms button:enabled'));
   for (const button of buttons) button.disabled = true;
   alert.textContent = '';
   status.textContent = 'Working…';

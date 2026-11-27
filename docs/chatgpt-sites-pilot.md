@@ -29,9 +29,9 @@ Sites documents integrated database and file storage, hosted sign-in and WebSock
 
 The [issue #111 feasibility assessment](shared-flight-feasibility.md) records a **no-go as of November 24, 2026**: a supported Sites room-coordinator provisioning contract has not been established. WebSocket transport alone does not establish shared simulation authority across Worker instances. Shared flight remains unavailable; the assessment records the agreed asteroid-defense prototype and the evidence required to reopen implementation.
 
-## January 2027 hosting estimate
+## Hosting estimate
 
-Hosting is free through December 31, 2026. From January 1, Plus includes 125 hosting credits per month shared across Sites. The approximate rates used here are 15 credits per 100,000 requests, 25 per storage-enabled Site-month, 150 per GiB-month of database storage and 3.75 per GiB-month of uploaded files. The default Sites address avoids the custom-domain fee. Building and editing use separate Codex usage. [OpenAI hosting rates](https://learn.chatgpt.com/docs/sites/usage-and-cost)
+OpenAI plans to show usage starting January 1, 2027. Hosting is free through January 31, 2027, with overage billing planned for February 1. Plus includes 125 hosting credits per month shared across Sites. The approximate rates used here are 15 credits per 100,000 requests, 25 per storage-enabled Site-month, 150 per GiB-month of database storage and 3.75 per GiB-month of uploaded files. The default Sites address avoids the custom-domain fee. Building and editing use separate Codex usage. [OpenAI hosting rates](https://learn.chatgpt.com/docs/sites/usage-and-cost)
 
 Assume one DM and five players, four three-hour sessions per month, one 40-request visit per browser per session, and no other traffic. The storage scenarios assume 10 MiB of database records and 100 MiB of uploaded art for the full month.
 
@@ -39,24 +39,29 @@ Assume one DM and five players, four three-hour sessions per month, one 40-reque
 | --- | ---: | ---: |
 | Static pilot | 960 | 0.14 |
 | Shared saves, before extra reads and writes | 960 | 26.98 |
+| Five players polling every five seconds and the DM map polling every ten seconds | 48,480 | 34.10 |
 | Six clients also polling every five seconds while playing | 52,800 | 34.75 |
 | Six clients instead polling every second while playing | 260,160 | 65.86 |
 
-Five-second polling adds 6 × 4 × 3 × 3,600 ÷ 5 = 51,840 requests. Storage contributes about 26.83 credits per month. Cache behavior, other visits, writes, retention and traffic from other Sites change available headroom. The rate card does not establish a per-message WebSocket rate. Measure usage for a representative hosted session before budgeting real-time play.
+The DM map checks all active shared rooms in one request. At ten seconds per check, twelve hours of active foreground use adds up to 4,320 requests, or about 0.65 credits of traffic. If the DM map replaces a single five-second Rooms tab for that time, its polling traffic is halved. Storage contributes about 26.83 credits per month. Cache behavior, other visits, writes, retention and traffic from other Sites change available headroom. The rate card does not establish a per-message WebSocket rate. Measure usage for a representative hosted session before budgeting real-time play.
+
+The earlier hosted Rooms test observed 174 DM room-list requests and 688 guest room-list requests across four guest browsers in 15 minutes. Metered credits were unavailable. [Hosted Rooms workload](https://github.com/drakejrobert-sudo/galaxy-grown-games/issues/116#issuecomment-7195354225)
+
+In a local production Worker browser test, one DM map request retrieved both active rooms, and the next automatic request arrived 10.004 seconds later. A simulated hidden tab made zero requests in 10.5 seconds and one immediately on return. After the last shared room closed, there were zero requests in the next 10.5 seconds. These are request counts from the local test.
 
 ## Owner smoke test
 
-Open the private test origin while signed in. Launch a Flight Deck round and check art, pause/resume, and manual reporting. Open Galaxy Map, save a fictional campaign, reload, export and import it. Open Hillside Tanks and complete a turn. Repeat relevant controls on physical iPhone/iPad Safari and record the accepted revision and device coverage.
+Open [the live player link](https://play.drakesfood.com/) while signed in. Launch a Flight Deck round and check art, pause/resume, and manual reporting. Open Galaxy Map, save a fictional campaign, reload, export and import it. Open Hillside Tanks and complete a turn. Repeat relevant controls on physical iPhone/iPad Safari and record the accepted revision and device coverage.
 
 ## Release and recovery
 
 GitHub holds the reviewed source. Use this sequence for a player-facing PR.
 
-1. Run the checks and open the PR with `Closes #N` for completed issues; use `Refs #N` for broader issues only partially addressed. Track any remaining checks in a follow-up issue. Build and publish the exact checked PR head to the designated test Site with its approved audience. Record the GitHub SHA, Sites version, deployment result, hosted smoke result and Site URL in the PR or linked playtest record.
+1. Run the checks and open the PR with `Closes #N` for completed issues; use `Refs #N` for broader issues only partially addressed. Track any remaining checks in a follow-up issue. Between play sessions, record the currently live Sites version for rollback and publish the exact checked PR head to the live Sites project with its existing audience. Defer publication while the player link is in use. Verify the new build through the player link and record the GitHub SHA, Sites version, deployment result, and hosted smoke result in the PR or linked playtest record.
 2. Drake can sign in and test the hosted revision; record actual acceptance and device/control coverage when available. If the build changes, publish the updated PR head and repeat the affected engineering checks before merge.
 3. Drake merges, and GitHub closes issues named by the closing references. Verify the automatic Pages deployment succeeded for the merge revision and contains the changes. If the merged build differs from a tested build, verify the affected behavior and record any remaining work in a follow-up.
 
-Drake approved the November 26, 2026 cutover to Sites v10. A signed-out browser verified the shortlink’s uncached 302, the Flight Deck landing page, and a Rooms deep link with repeated query parameters. [Cutover record](https://github.com/drakejrobert-sudo/drakesfood/issues/142). Use a designated private Site for pre-merge playtests. Keep [GitHub Pages](https://drakejrobert-sudo.github.io/galaxy-grown-games/) available for standalone rollback.
+Drake approved the November 26, 2026 cutover to Sites v10. A signed-out browser verified the shortlink’s uncached 302, the Flight Deck landing page, and a Rooms deep link with repeated query parameters. [Cutover record](https://github.com/drakejrobert-sudo/drakesfood/issues/142). Drake authorized the live Sites project for checked pre-merge playtests between play sessions. If a playtest build needs rollback, redeploy the last verified working Sites version and smoke-check the player link. Keep [GitHub Pages](https://drakejrobert-sudo.github.io/galaxy-grown-games/) available for standalone rollback.
 
 Before a future change to the player destination, exercise Flight Deck, Galaxy Map and Hillside Tanks on the hosted build, check player access from a signed-out browser, and complete physical iPhone/iPad Safari playtests. Rehearse recovery with a fictional campaign exported from Sites and imported into the Pages build. Record the working Pages destination. Drake approves audience changes and the independently managed redirect cutover separately.
 

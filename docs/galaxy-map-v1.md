@@ -57,6 +57,18 @@ Changes autosave in this browser, on this origin, under `galaxy-grown-map-v1`. T
 
 Storage and quota errors display a warning. The current in-memory campaign remains exportable. If an existing save cannot be read, its bytes are preserved and autosaving is suspended; import a backup or explicitly replace the unreadable browser save from preparation. A failed import leaves existing campaigns intact. Delete campaign requires confirmation; deleting the last campaign creates a blank replacement.
 
+## Private campaign preset and room proposals
+
+To reuse a campaign starter, open **GM preparation → Install private campaign preset** and select its JSON archive. Choose the illustrated starter to keep its embedded artwork, or the schematic starter for a smaller file. Then use **Start from → Private campaign preset** and create a named campaign for each crew. Each campaign has independent maps and travel, with a fresh location, course, schedule, and log. The installed source is local to this browser and origin. Back up working campaigns through the existing export or private cloud save controls.
+
+The GM preparation sections are collapsible. On Sites, **Share a map with a room** starts open. Section choices are remembered in this browser.
+
+On Sites, sign in as DM and create a room. In Galaxy Map, open the intended working campaign and map, then use **GM preparation → Share a map with a room**. Select an active room, starting stop, and the stops and connections to reveal. The form recalls a room’s published selections for this map. You can preview and explicitly share the current background artwork. Review the whole image for unrevealed details before sharing it.
+
+Joined players can choose **Open shared map** in Rooms or select **Galaxy Map** from the site navigation. They see the published chart and can tap connected stops or use the stop buttons, then choose **Send proposal**. The DM can decline or choose **Accept and preview** in **Route proposals** beside their Galaxy Map or in Rooms. The DM map refreshes proposals every ten seconds while visible and a shared room is active. The preview is editable. Select **Confirm course** to commit it and **Advance one step** when ready.
+
+Players see their own proposal status while the shared map and room are active. Changing the shared stops, connections, or starting point starts a new proposal round. Changing or removing only the background keeps current proposals. Players outside the room cannot fetch the shared artwork.
+
 ## Engineering validation and owner checklist
 
 Work items: Refs #60, Refs #61, Refs #62, Refs #63, Refs #64. PR merge does not close them. No campaign canon, actual coordinates, GM secrets or party discoveries ship with the demo. No fuel, ship capability calculations, automatic rewards/damage, moving destinations, cloud saves, multiplayer state or Maps API integration is included.
