@@ -29,6 +29,8 @@ if (hash === '#/map' || (sites && hash.startsWith('#/map/room/'))) {
   openMap().catch(showLoadError);
 } else if (hash === '#/tanks') {
   import('./tanks/view').catch(showLoadError);
+} else if (sites && (hash === '#/shop' || hash.startsWith('#/shop/room/'))) {
+  import('./shops/player').then(module => module.openShop(hash.slice('#/shop/room/'.length))).catch(showLoadError);
 } else if (sites && hash === '#/rooms') {
   import('./rooms/view').catch(showLoadError);
 } else {

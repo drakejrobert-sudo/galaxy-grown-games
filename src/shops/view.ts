@@ -101,7 +101,19 @@ export function shopLibrary(panel: HTMLElement, afterSave: () => Promise<void>) 
   select.onchange = () => { edit.disabled = !select.value; };
   const create = button('New shop', () => open({ id: crypto.randomUUID(), revision: 0,
     inventory: { version: 1, name: '', theme: 'armorer', items: [] } }));
-  panel.append(el('summary', 'Shop library'), labeled('Saved shops', select), edit, create, error, dialog);
+  const demoStatus = el('p');
+  demoStatus.setAttribute('role', 'status');
+  const demos = button('Load demo shops', async () => {
+    demos.disabled = true;
+    error.textContent = '';
+    try {
+      const { added } = await roomRequest<{ added: number }>('/shops/demos', 'POST');
+      await afterSave();
+      demoStatus.textContent = added ? 'Demo shops added to your library.' : 'Demo shops are already in your library.';
+    } catch (cause) { error.textContent = String(cause); }
+    finally { demos.disabled = false; }
+  });
+  panel.append(el('summary', 'Shop library'), labeled('Saved shops', select), edit, create, demos, demoStatus, error, dialog);
 
   function open(saved: SavedShop) {
     let draft = structuredClone(saved.inventory);

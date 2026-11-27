@@ -12,6 +12,7 @@ export function roomsDatabase(includeDashboard = true) {
   database.exec(readFileSync(new URL('../../drizzle/0003_room_route_proposals.sql', import.meta.url), 'utf8'));
   database.exec(readFileSync(new URL('../../drizzle/0004_room_map_artwork.sql', import.meta.url), 'utf8'));
   database.exec(readFileSync(new URL('../../drizzle/0005_room_shopfronts.sql', import.meta.url), 'utf8'));
+  database.exec(readFileSync(new URL('../../drizzle/0006_demo_shops.sql', import.meta.url), 'utf8'));
   return {
     database,
     binding: {

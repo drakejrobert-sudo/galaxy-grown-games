@@ -1,3 +1,4 @@
+import { loadDemoShops } from '../shops/demos';
 import { shopAction } from '../shops/api';
 import { maxShopBytes, type ShopSummary } from '../shops/inventory';
 import { changeRoomMap, decideRouteProposal, roomMapAction, roomMapArtwork, routePlanners, submitRouteProposal } from './map-api';
@@ -258,6 +259,10 @@ export async function roomApi(
       return json(toJoinedRoom(joined), 200, accountId ? undefined : guestToken);
     }
 
+    if (url.pathname === '/api/rooms/shops/demos' && method === 'POST') {
+      if (!dmId) return error('Only the signed-in DM can load demo shops.', 403);
+      return json({ added: await loadDemoShops(db, dmId) });
+    }
     const libraryShop = url.pathname.match(/^\/api\/rooms\/shops\/([a-f0-9-]{36})$/);
     const roomShop = url.pathname.match(/^\/api\/rooms\/([a-f0-9-]{36})\/shop$/);
     if (libraryShop || roomShop) {

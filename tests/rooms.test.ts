@@ -513,3 +513,23 @@ test('a DM library survives Rooms and only shares the selected inventory with ac
   assert.equal((await choose(second, id)).status, 404);
   assert.equal((await (await call(path, dm)).json()).revision, 2);
 });
+
+test('loading demo stock is DM-only, atomic and preserves edited inventories', async (t) => {
+  const { call, list } = fixture(t);
+  const load = (user: typeof dm | null) => call('/shops/demos', user, 'POST');
+  assert.equal((await load(null)).status, 403);
+  const requests = await Promise.all([load(dm), load(dm)]);
+  assert.deepEqual((await Promise.all(requests.map(async response => (await response.json()).added))).sort(), [0, 3]);
+  const shops = (await list(dm)).shops!;
+  assert.deepEqual(shops.map(shop => shop.name), ['Comet’s Edge', 'Lantern Dock Armory', 'The Violet Orbit']);
+  const path = '/shops/' + shops[0].id;
+  const { inventory, revision } = await (await call(path, dm)).json();
+  assert.deepEqual(inventory.items.map((item: { price: number }) => item.price), [2, 1, 10, 50]);
+  inventory.items[0].quantity = 0;
+  inventory.name = 'Private copy';
+  await call(path, dm, 'PUT', { inventory, revision });
+  assert.equal((await (await load(dm)).json()).added, 0);
+  assert.deepEqual((await (await call(path, dm)).json()).inventory, inventory);
+  assert.equal((await (await load(secondDmSession)).json()).added, 3);
+  assert.equal((await call(path, secondDmSession)).status, 404);
+});

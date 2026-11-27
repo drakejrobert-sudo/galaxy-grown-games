@@ -1,4 +1,4 @@
-import { shopLibrary, storefront } from '../shops/view';
+import { shopLibrary } from '../shops/view';
 import type { ShopSummary } from '../shops/inventory';
 import '../style.css';
 import './rooms.css';
@@ -149,7 +149,13 @@ function joinedCard({ id, expiresAt, situation, seat, shop }: JoinedRoom): HTMLE
   sharedMap.id = 'shared-map-' + seat.id;
   sharedMap.href = '#/map/room/' + id;
   card.append(sharedMap);
-  if (shop) card.append(storefront(shop));
+  if (shop) {
+    const link = element('a', 'Open shop');
+    link.href = '#/shop/room/' + id;
+    link.id = 'open-shop-' + seat.id;
+    link.className = 'room-flight-link';
+    card.append(link);
+  }
   card.className = 'room-card';
   return card;
 }
