@@ -1,3 +1,6 @@
+import { loadDemoShops } from '../shops/demos';
+import { shopAction } from '../shops/api';
+import { maxShopBytes, type ShopSummary } from '../shops/inventory';
 import { changeRoomMap, decideRouteProposal, roomMapAction, roomMapArtwork, routePlanners, submitRouteProposal } from './map-api';
 import { encounters, readRoomReport, stations, type HostedRoom, type JoinedRoom, type RoomList, type Seat } from './types';
 
@@ -105,7 +108,7 @@ async function readForm(request: Request, maximumBytes = 1024): Promise<Record<s
 }
 
 type SeatRow = Omit<Seat, 'report'> & { report: string | null };
-type JoinedRow = SeatRow & { hasMap?: number; roomId: string; expiresAt: number; situation: JoinedRoom['situation'] };
+type JoinedRow = SeatRow & { inventory?: string; hasMap?: number; roomId: string; expiresAt: number; situation: JoinedRoom['situation'] };
 
 function toSeat({ id, name, station, startedAt, report }: SeatRow): Seat {
   return { id, name, station, startedAt, report: report === null ? null : JSON.parse(report) };
@@ -142,32 +145,35 @@ export async function roomApi(
         const token = hex(crypto.getRandomValues(new Uint8Array(32)));
         return json({ canHost: false, hosted: [], joined: [] } satisfies RoomList, 200, token);
       }
-      const [joinedRows, hostedRows] = await Promise.all([
+      const [joinedRows, hostedRows, shopList] = await Promise.all([
         db.prepare(`
           SELECT r.id AS roomId, r.expires_at AS expiresAt, r.situation,
-            rm.revision IS NOT NULL AS hasMap, m.id, m.name, m.station, m.started_at AS startedAt, m.report
+            s.inventory, rm.revision IS NOT NULL AS hasMap, m.id, m.name, m.station, m.started_at AS startedAt, m.report
           FROM room_members m JOIN rooms r ON r.id = m.room_id
           LEFT JOIN room_maps rm ON rm.room_id = r.id
+          LEFT JOIN shops s ON s.id = r.shop_id AND s.owner_id = r.owner_id
           WHERE m.user_id IN (?, ?) AND r.closed_at IS NULL AND r.expires_at > ?
           ORDER BY r.expires_at DESC
         `).bind(accountId ?? null, anonymousId, now).all<JoinedRow>(),
         dmId
           ? db.prepare(`
               SELECT r.id, r.code, r.expires_at AS expiresAt, r.situation,
-                rm.revision IS NOT NULL AS hasMap, m.id AS seatId, m.name, m.station, m.started_at AS startedAt, m.report
+                r.shop_id AS shopId, rm.revision IS NOT NULL AS hasMap, m.id AS seatId, m.name, m.station, m.started_at AS startedAt, m.report
               FROM rooms r LEFT JOIN room_members m ON m.room_id = r.id
               LEFT JOIN room_maps rm ON rm.room_id = r.id
               WHERE r.owner_id = ? AND r.closed_at IS NULL AND r.expires_at > ?
               ORDER BY r.expires_at DESC, m.name COLLATE NOCASE, m.id
             `).bind(dmId, now).all<Omit<HostedRoom, 'seats'> & Omit<SeatRow, 'id'> & { seatId: string | null; hasMap: number }>()
           : { results: [] },
+        dmId ? db.prepare("SELECT id, json_extract(inventory, '$.name') AS name FROM shops WHERE owner_id = ? ORDER BY name COLLATE NOCASE, id").bind(dmId).all<ShopSummary>() : { results: [] },
       ]);
       const hosted = new Map<string, HostedRoom>();
       const planners: Promise<void>[] = [];
-      for (const { id, code, expiresAt, situation, seatId, hasMap, ...seat } of hostedRows.results) {
+      for (const { id, code, expiresAt, situation, seatId, hasMap, shopId, ...seat } of hostedRows.results) {
         let room = hosted.get(id);
         if (!room) {
           room = { id, code, expiresAt, situation, seats: [] };
+          if (shopId) room.shopId = shopId;
           hosted.set(id, room);
           if (hasMap) {
             const hostRoom = room;
@@ -178,11 +184,12 @@ export async function roomApi(
       }
       const joined = joinedRows.results.map(row => {
         const room = toJoinedRoom(row);
+        if (row.inventory) room.shop = JSON.parse(row.inventory);
         if (row.hasMap) planners.push(routePlanners(db, room.id, room.seat.id).then(planner => { room.planner = planner; }));
         return room;
       });
       await Promise.all(planners);
-      return json({ canHost: Boolean(dmId), hosted: [...hosted.values()], joined } satisfies RoomList);
+      return json({ canHost: Boolean(dmId), hosted: [...hosted.values()], joined, ...(shopList.results.length ? { shops: shopList.results } : {}) } satisfies RoomList);
     }
 
     if (url.pathname === '/api/rooms' && method === 'POST') {
@@ -250,6 +257,18 @@ export async function roomApi(
       `).bind(memberId, reservation.window_start).first();
       if (!joined) return error('This room is full.', 409);
       return json(toJoinedRoom(joined), 200, accountId ? undefined : guestToken);
+    }
+
+    if (url.pathname === '/api/rooms/shops/demos' && method === 'POST') {
+      if (!dmId) return error('Only the signed-in DM can load demo shops.', 403);
+      return json({ added: await loadDemoShops(db, dmId) });
+    }
+    const libraryShop = url.pathname.match(/^\/api\/rooms\/shops\/([a-f0-9-]{36})$/);
+    const roomShop = url.pathname.match(/^\/api\/rooms\/([a-f0-9-]{36})\/shop$/);
+    if (libraryShop || roomShop) {
+      if (!dmId) return error('Only the signed-in DM can manage shops.', 403);
+      const body = method === 'PUT' ? await readForm(request, libraryShop ? maxShopBytes + 128 : 1024) : null;
+      return await shopAction(db, dmId, roomShop?.[1], libraryShop?.[1], method, body, now);
     }
 
     const mapAction = url.pathname.match(roomMapAction);
