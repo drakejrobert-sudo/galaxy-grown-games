@@ -9,7 +9,11 @@ Player link: [play.drakesfood.com](https://play.drakesfood.com/). The player lin
 
 ## Games
 
-Open **Games** in the main navigation to find **Ship Encounters** (Flight Deck), **Tanks** (Hillside Tanks), and the upcoming **Casino Games**. Use `#/flight` to link directly to Flight Deck. Shared encounter links, assigned Room seat links, and Hillside Tanks bookmarks still open their game.
+Open **Games** in the main navigation to find **Ship Encounters** (Flight Deck), **Tanks** (Hillside Tanks), and **Casino Games**. Use `#/flight` to link directly to Flight Deck. Shared encounter links, assigned Room seat links, and Hillside Tanks bookmarks still open their game.
+
+### Casino Coolio
+
+Open **Games → Casino Games → Casino Coolio** with at least 5 gp in campaign gold. Choose an affordable wager from 1–5 gp and spin the reels. **Cash out** settles after the current spin, and running out of gold opens the same settlement report. Share starting gold, final gold, and net winnings or losses with the GM. The current session and report recover after refresh or navigation in the same tab.
 
 ## Hillside Tanks
 

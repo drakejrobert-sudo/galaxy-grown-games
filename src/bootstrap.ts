@@ -33,6 +33,9 @@ switch (siteRoute(hash, window.location.search, sites)) {
   case 'games':
     import('./games/view').catch(showLoadError);
     break;
+  case 'casino-coolio':
+    import('./slots/view').catch(showLoadError);
+    break;
   case 'tanks':
     import('./tanks/view').catch(showLoadError);
     break;

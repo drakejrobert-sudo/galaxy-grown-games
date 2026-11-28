@@ -26,7 +26,14 @@ export const gameCatalog: readonly GameCategory[] = [
   },
   {
     title: 'Casino Games',
-    games: [{ title: 'Casino Corrupt' }, { title: 'Casino Coolio' }],
+    games: [
+      { title: 'Casino Corrupt' },
+      {
+        title: 'Casino Coolio',
+        href: './#/games/casino-coolio',
+        description: 'Spin the frozen reels with campaign gold and share your result with the GM.',
+      },
+    ],
   },
 ];
 
