@@ -27,6 +27,8 @@ async function openMap() {
 
 if (hash === '#/map' || (sites && hash.startsWith('#/map/room/'))) {
   openMap().catch(showLoadError);
+} else if (hash === '#/games') {
+  import('./games/view').catch(showLoadError);
 } else if (hash === '#/tanks') {
   import('./tanks/view').catch(showLoadError);
 } else if (sites && (hash === '#/shop' || hash.startsWith('#/shop/room/'))) {

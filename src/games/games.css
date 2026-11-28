@@ -1,0 +1,53 @@
+.games-directory h1 {
+  margin-top: 0;
+}
+
+.game-categories {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1rem;
+}
+
+.game-categories h2 {
+  margin: 0 0 1rem;
+}
+
+.game-categories ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.game-categories li {
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--edge);
+}
+
+.game-categories li + li {
+  margin-top: 0.75rem;
+}
+
+.game-title {
+  display: flex;
+  align-items: center;
+  min-height: 44px;
+  font-size: 1.125rem;
+  font-weight: 600;
+}
+
+a.game-title {
+  color: var(--mint);
+  text-underline-offset: 0.2em;
+}
+
+.game-categories li p {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+@media (max-width: 740px) {
+  .game-categories {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
