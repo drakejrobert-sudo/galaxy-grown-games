@@ -18,6 +18,7 @@ import {
   rateScore, DURATION, WIDTH, HEIGHT, SPACE_BATTLE_STARTING_FUEL, type FlightConfig, type Role, type Situation, type ScoreMode,
 } from './game/rules';
 
+document.title = 'Galaxy Grown · Flight Deck';
 const app = document.querySelector<HTMLDivElement>('#app')!;
 app.innerHTML = `
 <header><a href="./" class="brand">✦ <span>GALAXY GROWN</span></a><span class="tag">FLIGHT DECK · PROTOTYPE</span></header>

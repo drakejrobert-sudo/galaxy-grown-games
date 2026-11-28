@@ -5,11 +5,11 @@ A repository for hosting mini games for the galaxy grown campaign.
 
 Asteroid Field / Pilot, Gunner, Bomber, and Life Support, Space Battle / Pilot, Gunner, Bomber, and Life Support, plus Boarding Party / Pilot, Gunner, Bomber, and Life Support, are implemented as **prototypes awaiting score calibration**. All twelve station combinations are now available. Players enter their GM-requested final skill-check total and a separate Natural 1 flag, play independently, and manually share their rating or score. Flight Deck has no live multiplayer service. The Galaxy Map prototype stores GM-authored campaigns locally in the browser.
 
-Player link: [play.drakesfood.com](https://play.drakesfood.com/). This HTTPS shortlink opens the player release on ChatGPT Sites.
+Player link: [play.drakesfood.com](https://play.drakesfood.com/). The player link opens **Home** on ChatGPT Sites. Choose **Join a Room**, **Browse Games**, or **Open Galaxy Map**. The standalone build opens Home with Games and Galaxy Map.
 
 ## Games
 
-Open **Games** in the main navigation to find **Ship Encounters** (Flight Deck), **Tanks** (Hillside Tanks), and the upcoming **Casino Games**. Existing direct links still open their game.
+Open **Games** in the main navigation to find **Ship Encounters** (Flight Deck), **Tanks** (Hillside Tanks), and the upcoming **Casino Games**. Use `#/flight` to link directly to Flight Deck. Shared encounter links, assigned Room seat links, and Hillside Tanks bookmarks still open their game.
 
 ## Hillside Tanks
 
@@ -17,7 +17,7 @@ Open **Games → Hillside Tanks** for a shared-screen match with 2–8 named pla
 
 ## Galaxy Map V1
 
-Open **Galaxy Map** beside Flight Deck to plot connected courses, advance travel under GM control, and pause for random or deliberate encounters. Encounter cards can provide Asteroid Field / Space Battle / Boarding Party player links or pause for your already-open Maps VTT. The fictional demo includes planets, a ship, a station and a point of interest.
+Open **Galaxy Map** from Home or the main navigation to plot connected courses, advance travel under GM control, and pause for random or deliberate encounters. Encounter cards can provide Asteroid Field / Space Battle / Boarding Party player links or pause for your already-open Maps VTT. The fictional demo includes planets, a ship, a station and a point of interest.
 
 **GM preparation** offers linked map/library editors, optional locally uploaded background images, system and star markers, reference-only landmarks, weighted tables, scheduled encounters and independent named campaign saves. Browse regional and detail maps without advancing travel; each map retains its own journey. Version 2 exports include every map and accept migrated version 1 saves. Private campaign maps are imported locally and are not bundled with the public app. Saves stay in this browser; export JSON backups to keep or move them. Preparation is hidden from presentation, without authentication. Travel steps and Low 10% / Medium 25% / High 50% risk are provisional. The GM decides all outcomes.
 

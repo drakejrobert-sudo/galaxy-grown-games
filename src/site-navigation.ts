@@ -1,9 +1,9 @@
-type Surface = 'Games' | 'Flight Deck' | 'Galaxy Map' | 'Tanks' | 'Rooms' | 'Shop';
+type Surface = 'Home' | 'Games' | 'Flight Deck' | 'Galaxy Map' | 'Tanks' | 'Rooms' | 'Shop';
 
 export const isSitesBuild = import.meta.env?.MODE === 'sites';
 
 export function surfaceNavigation(current: Surface, sites = isSitesBuild): string {
-  const links: [Surface, string][] = [['Games', './#/games'], ['Galaxy Map', '#/map']];
+  const links: [Surface, string][] = [['Home', './'], ['Games', './#/games'], ['Galaxy Map', '#/map']];
   if (sites) links.push(['Rooms', '#/rooms'], ['Shop', '#/shop']);
 
   const inGame = current === 'Flight Deck' || current === 'Tanks';

@@ -12,7 +12,7 @@ export const gameCatalog: readonly GameCategory[] = [
     title: 'Ship Encounters',
     games: [{
       title: 'Flight Deck',
-      href: './',
+      href: './#/flight',
       description: 'Take a crew station and play a solo challenge. Share your score with the GM.',
     }],
   },
