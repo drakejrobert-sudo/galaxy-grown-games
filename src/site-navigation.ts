@@ -1,4 +1,4 @@
-type Surface = 'Home' | 'Games' | 'Flight Deck' | 'Galaxy Map' | 'Tanks' | 'Rooms' | 'Shop';
+type Surface = 'Home' | 'Games' | 'Flight Deck' | 'Galaxy Map' | 'Tanks' | 'Casino Coolio' | 'Rooms' | 'Shop';
 
 export const isSitesBuild = import.meta.env?.MODE === 'sites';
 
@@ -6,7 +6,7 @@ export function surfaceNavigation(current: Surface, sites = isSitesBuild): strin
   const links: [Surface, string][] = [['Home', './'], ['Games', './#/games'], ['Galaxy Map', '#/map']];
   if (sites) links.push(['Rooms', '#/rooms'], ['Shop', '#/shop']);
 
-  const inGame = current === 'Flight Deck' || current === 'Tanks';
+  const inGame = current === 'Flight Deck' || current === 'Tanks' || current === 'Casino Coolio';
 
   return `<nav class="surface-nav" aria-label="App sections">${links.map(([name, href]) =>
     `<a href="${href}"${name === current ? ' aria-current="page"' : name === 'Games' && inGame ? ' aria-current="true"' : ''}>${name}</a>`).join('')}</nav>`;
