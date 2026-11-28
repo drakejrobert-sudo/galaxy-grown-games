@@ -50,7 +50,7 @@
   #play[data-role="Gunner"][data-situation="Space Battle"] { max-width: 480px; }
 }
 
-.surface-nav{max-width:1160px;margin:auto;padding:15px 32px;display:flex;gap:24px}.surface-nav a{color:var(--muted);text-decoration:none;padding:8px 0}.surface-nav a:hover,.surface-nav a[aria-current="page"]{color:var(--mint)}
+.surface-nav{max-width:1160px;margin:auto;padding:15px 32px;display:flex;gap:24px}.surface-nav a{color:var(--muted);text-decoration:none;padding:8px 0}.surface-nav a:hover,.surface-nav a[aria-current]{color:var(--mint)}
 @media (max-width: 420px) { .surface-nav { padding-inline: 16px; gap: 4px 12px; flex-wrap: wrap; } }
 
 /* During a run the station bar replaces the site chrome. */

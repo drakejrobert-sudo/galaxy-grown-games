@@ -1,11 +1,16 @@
 import { roomRequest } from './client';
 import { readRoomReport, roomIdPattern, type JoinedRoom, type RoomReport } from './types';
 
-export function assignedFlight(search: string) {
-  const params = new URLSearchParams(search);
+export function flightSeat(params: URLSearchParams) {
   const room = params.get('room') ?? '';
   const seat = params.get('seat') ?? '';
-  if (!roomIdPattern.test(room) || !roomIdPattern.test(seat)) return null;
+  return roomIdPattern.test(room) && roomIdPattern.test(seat) ? { room, seat } : null;
+}
+
+export function assignedFlight(search: string) {
+  const assignment = flightSeat(new URLSearchParams(search));
+  if (!assignment) return null;
+  const { room, seat } = assignment;
   const path = `/${room}/seats/${seat}`;
   const key = 'galaxy-grown-room-report:' + path;
 
