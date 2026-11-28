@@ -85,14 +85,16 @@ ${surfaceNavigation('Casino Coolio')}
         <textarea id="slots-report" rows="4" readonly hidden></textarea>
       </section>
     </div>
-    <div class="slots-band slots-paytable">
-      <h2>Rules &amp; paytable</h2>
-      <table>
-        <thead><tr><th scope="col">Matching symbols</th><th scope="col">Payout</th></tr></thead>
-        <tbody>${symbols.map(symbol => `<tr><th scope="row"><span aria-hidden="true">${symbol.glyph}</span> 3 ${symbol.name}s</th><td>${symbol.triple}×</td></tr>`).join('')}
-        <tr><th scope="row"><span aria-hidden="true">⬡</span> 2 Frost Chips on the left</th><td>1×</td></tr></tbody>
-      </table>
-      <p>Only the center line pays. Payouts include any returned wager.</p>
+    <div class="slots-paytable">
+      <div class="slots-band slots-paytable-content">
+        <h2>Rules &amp; paytable</h2>
+        <table>
+          <thead><tr><th scope="col">Matching symbols</th><th scope="col">Payout</th></tr></thead>
+          <tbody>${symbols.map(symbol => `<tr><th scope="row"><span aria-hidden="true">${symbol.glyph}</span> 3 ${symbol.name}s</th><td>${symbol.triple}×</td></tr>`).join('')}
+          <tr><th scope="row"><span aria-hidden="true">⬡</span> 2 Frost Chips on the left</th><td>1×</td></tr></tbody>
+        </table>
+        <p>Only the center line pays. Payouts include any returned wager.</p>
+      </div>
     </div>
     <div class="slots-band slots-base" aria-hidden="true"></div>
   </section>

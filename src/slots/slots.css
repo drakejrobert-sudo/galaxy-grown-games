@@ -1,4 +1,5 @@
 .slots {
+  --cabinet-art: url('/art/casino-coolio-cabinet.webp');
   --ice: #a7f0ff;
   --ice-muted: #bacbde;
   --ice-edge: #4a6886;
@@ -15,7 +16,7 @@
 
 /* Each band samples its part of the same cabinet so the live panels can grow with their content. */
 .slots-band {
-  background-image: url('/art/casino-coolio-cabinet.webp');
+  background-image: var(--cabinet-art);
   background-repeat: no-repeat;
   background-size: 100% var(--band-size);
   background-position: center var(--band-position);
@@ -234,11 +235,29 @@
 .slots-wager-buttons input:disabled { cursor: default; }
 .slots-wager-buttons input:disabled + span { opacity: .55; }
 
-.slots-paytable {
-  --band-size: 442.478%;
-  --band-position: 85.788%;
-  padding: 6% 17% 5%;
+/* The corner trim occupies its own rows, so wrapping and text zoom never put copy on the metal rim. */
+.slots-paytable::before, .slots-paytable::after {
+  content: '';
+  display: block;
+  background-image: var(--cabinet-art);
+  background-repeat: no-repeat;
+}
+.slots-paytable::before {
+  height: clamp(24px, 6.8vw, 46px);
+  background-size: 100% 1724.138%;
+  background-position: center 70.488%;
+}
+.slots-paytable-content {
+  --band-size: 800%;
+  --band-position: 82.514%;
+  padding: .45rem 18% .55rem;
   color: #edf7ff;
+  overflow-wrap: anywhere;
+}
+.slots-paytable::after {
+  height: clamp(18px, 4.5vw, 31px);
+  background-size: 100% 2325.581%;
+  background-position: center 88.506%;
 }
 .slots-base {
   --band-size: 909.091%;
@@ -247,7 +266,7 @@
 }
 .slots-paytable table { width: 100%; border-collapse: collapse; text-align: left; font-variant-numeric: tabular-nums; }
 .slots-paytable :is(th, td) { padding: 4px 0; border-bottom: 1px solid #3b536a; font-size: clamp(.75rem, 2.6vw, .9375rem); }
-.slots-paytable :is(th, td):last-child { padding-left: 4px; text-align: right; }
+.slots-paytable :is(th, td):last-child { width: 1%; padding-left: 8px; text-align: right; white-space: nowrap; }
 .slots-paytable tbody th { font-weight: 500; }
 .slots-paytable tbody span { display: inline-block; width: 1.2em; color: var(--ice); }
 .slots-paytable p { margin: 7px 0 0; font-size: .8125rem; color: var(--ice-muted); }
