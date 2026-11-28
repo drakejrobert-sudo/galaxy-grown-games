@@ -1,0 +1,45 @@
+.blackjack { max-width: 740px; }
+.blackjack h1 { margin-top: 0; }
+.blackjack-table {
+  background: #172b32;
+  border: 1px solid #3b5e60;
+  border-radius: 16px;
+  padding: clamp(16px, 4vw, 30px);
+}
+.blackjack-table h2 { margin: 0 0 8px; }
+.blackjack-table h2 span { color: var(--mint); margin-inline-start: 4px; }
+.blackjack-table section + section { margin-top: 20px; }
+.blackjack-table label { display: block; margin: 0 0 6px; }
+.blackjack-table input { display: block; width: min(100%, 15rem); min-height: 46px; }
+.blackjack-table :is(p, dd) { overflow-wrap: anywhere; }
+.blackjack-table p:empty { display: none; }
+.blackjack-cards {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 0;
+  margin: 0;
+  list-style: none;
+}
+.blackjack-cards li {
+  display: grid;
+  place-items: center;
+  width: clamp(38px, 12vw, 62px);
+  aspect-ratio: 3 / 4;
+  border-radius: 7px;
+  border: 1px solid #c7d2cf;
+  background: #f5faf7;
+  color: #161d24;
+  font-size: clamp(16px, 4vw, 24px);
+  font-weight: 700;
+}
+.blackjack-cards .red-suit { color: #9b2e45; }
+.blackjack-cards .face-down { background: #29404d; color: #e0ebeb; border-color: #557582; }
+.blackjack-status { color: var(--mint); font-weight: 600; }
+.blackjack-controls { display: flex; flex-wrap: wrap; align-items: end; gap: 8px; }
+.blackjack-controls + .blackjack-controls { margin-top: 8px; }
+.blackjack-totals { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.blackjack-totals dt, .blackjack-help, #bj-cash-help, #bj-minimum { color: var(--muted); }
+.blackjack-totals dd { margin: 5px 0 0; font-weight: 600; }
+#bj-wager { max-width: 10rem; }
+#bj-report { width: 100%; min-height: 0; }

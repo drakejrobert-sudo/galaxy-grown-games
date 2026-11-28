@@ -27,7 +27,11 @@ export const gameCatalog: readonly GameCategory[] = [
   {
     title: 'Casino Games',
     games: [
-      { title: 'Casino Corrupt' },
+      {
+        title: 'Casino Corrupt — Blackjack',
+        href: './#/games/casino-corrupt-blackjack',
+        description: 'Play blackjack with campaign gold and share your settlement with the GM.',
+      },
       {
         title: 'Casino Coolio',
         href: './#/games/casino-coolio',
