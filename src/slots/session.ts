@@ -1,5 +1,7 @@
 import { affordableWagers, maximumWager, minimumOpening, type SlotSession, symbols } from './rules';
 
+import { roomIdPattern } from '../rooms/types';
+
 export const sessionKey = 'galaxy-grown-casino-coolio';
 type SessionStorage = Pick<Storage, 'getItem' | 'setItem' | 'removeItem'>;
 
@@ -14,11 +16,17 @@ function spin(value: unknown): boolean {
     value.reels.every(symbol => Number.isInteger(symbol) && symbol >= 0 && symbol < symbols.length);
 }
 
+function validDelivery(value: unknown): boolean {
+  return value === undefined || (record(value) &&
+    [value.roomId, value.seatId, value.sessionId].every(id => typeof id === 'string' && roomIdPattern.test(id)) &&
+    (value.sent === undefined || typeof value.sent === 'boolean'));
+}
+
 function validSession(value: unknown): value is SlotSession {
   if (!record(value) || typeof value.startingGold !== 'number' || typeof value.balance !== 'number' ||
       !Number.isSafeInteger(value.startingGold) || value.startingGold < minimumOpening ||
       !Number.isSafeInteger(value.balance) || value.balance < 0 ||
-      (value.lastSpin !== null && !spin(value.lastSpin))) return false;
+      (value.lastSpin !== null && !spin(value.lastSpin)) || !validDelivery(value.delivery)) return false;
   if (value.phase === 'ready') return value.balance > 0;
   if (value.phase === 'finished') return true;
   if (value.phase !== 'spinning' || typeof value.cashOut !== 'boolean' ||

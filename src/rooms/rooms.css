@@ -42,3 +42,9 @@
 .room-route-panel { border-top: 1px solid var(--edge); margin-top: 1rem; padding-top: .75rem; overflow-wrap: anywhere; }
 .room-route-proposal { margin-block: .75rem; }
 .room-route-proposal button { margin-inline-end: .5rem; }
+
+.casino-reports { margin-block: 12px; padding: 12px; border: 1px solid var(--edge); border-radius: 10px; }
+.casino-reports summary { cursor: pointer; font-weight: 600; }
+.casino-reports ul { list-style: none; margin: 0; padding: 0; overflow-wrap: anywhere; }
+.casino-reports li p { margin-block: 4px; }
+.casino-reports :is(p, ul):empty { display: none; }

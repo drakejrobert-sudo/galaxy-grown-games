@@ -533,3 +533,58 @@ test('loading demo stock is DM-only, atomic and preserves edited inventories', a
   assert.equal((await (await load(secondDmSession)).json()).added, 3);
   assert.equal((await call(path, secondDmSession)).status, 404);
 });
+
+test('casino settlements are guest-seat scoped, immutable on retry, and visible to the room owner only', async (t) => {
+  const { call, create, database, clock } = fixture(t);
+  const room = await create();
+  const otherRoom = await create(secondDmSession);
+  const cookie = (await call('', null)).headers.get('set-cookie')!.split(';')[0];
+  const guest = { Cookie: cookie };
+  const joined: JoinedRoom = await (await call('/join', null, 'POST',
+    { code: room.code, name: 'Frost' }, origin, guest)).json();
+  const endpoint = `/${room.id}/seats/${joined.seat.id}/casino-reports`;
+  const inbox = '/casino-reports';
+  const settlement = { sessionId: crypto.randomUUID(), game: 'casino-coolio', startingGold: 5, finalGold: 0 };
+
+  assert.equal((await call(inbox, null, 'GET', undefined, origin, guest)).status, 403);
+  assert.equal((await call(endpoint, null, 'POST', settlement)).status, 403);
+  assert.equal((await call(endpoint, pilot, 'POST', settlement)).status, 404);
+  assert.equal((await call(endpoint.replace(room.id, otherRoom.id), null, 'POST', settlement, origin, guest)).status, 404);
+  assert.equal((await call(endpoint, null, 'POST', settlement, 'https://elsewhere.test', guest)).status, 403);
+  for (const invalid of [{ startingGold: 4 }, { finalGold: -1 }, { finalGold: 1.5 }, { game: '__proto__' }, { sessionId: 'x' }]) {
+    assert.equal((await call(endpoint, null, 'POST', { ...settlement, ...invalid }, origin, guest)).status, 400);
+  }
+
+  for (const response of await Promise.all(Array.from({ length: 3 }, () =>
+    call(endpoint, null, 'POST', settlement, origin, guest)))) {
+    assert.equal(response.status, 200);
+    assert.deepEqual(await response.json(), settlement);
+  }
+  assert.equal((await call(endpoint, null, 'POST', { ...settlement, finalGold: 6 }, origin, guest)).status, 409);
+  assert.deepEqual(await (await call(inbox, secondDmSession)).json(), []);
+  const response = await call(inbox, dm);
+  assert.equal(response.headers.get('cache-control'), 'private, no-store');
+  assert.deepEqual(await response.json(), [{ ...settlement, player: 'Frost', roomCode: room.code, submittedAt: start }]);
+
+  assert.equal((await call('/' + room.id + '/close', dm, 'POST')).status, 204);
+  assert.equal((await call(endpoint, null, 'POST', settlement, origin, guest)).status, 404);
+  assert.equal((await (await call(inbox, dm)).json()).length, 1);
+  clock(start + 7 * 24 * hour);
+  assert.deepEqual(await (await call(inbox, dm)).json(), []);
+  assert.equal(database.prepare('SELECT COUNT(*) AS total FROM casino_reports').get()!.total, 0);
+});
+
+test('casino report storage per seat is capped while accepted sessions can still be retried', async (t) => {
+  const { call, create } = fixture(t);
+  const room = await create();
+  const joined: JoinedRoom = await (await call('/join', pilot, 'POST', { code: room.code, name: 'Frost' })).json();
+  const endpoint = `/${room.id}/seats/${joined.seat.id}/casino-reports`;
+  const session = () => ({ sessionId: crypto.randomUUID(), game: 'casino-coolio', startingGold: 5, finalGold: 9 });
+  const reports = Array.from({ length: 21 }, session);
+  const results = await Promise.all(reports.map(report => call(endpoint, pilot, 'POST', report)));
+  assert.equal(results.filter(response => response.status === 200).length, 20);
+  assert.equal(results.filter(response => response.status === 404).length, 1);
+  const accepted = reports[results.findIndex(response => response.status === 200)];
+  assert.equal((await call(endpoint, pilot, 'POST', accepted)).status, 200);
+  assert.equal((await (await call('/casino-reports', dm)).json()).length, 20);
+});

@@ -2,6 +2,7 @@ import { loadDemoShops } from '../shops/demos';
 import { shopAction } from '../shops/api';
 import { maxShopBytes, type ShopSummary } from '../shops/inventory';
 import { changeRoomMap, decideRouteProposal, roomMapAction, roomMapArtwork, routePlanners, submitRouteProposal } from './map-api';
+import { readCasinoSettlement, type CasinoReport, type CasinoSettlement } from './casino';
 import { encounters, readRoomReport, stations, type HostedRoom, type JoinedRoom, type RoomList, type Seat } from './types';
 
 interface DatabaseStatement {
@@ -26,6 +27,9 @@ const guestTokenPattern = /^[a-f0-9]{64}$/;
 const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 const codePattern = /^[A-HJ-NP-Z2-9]{8}$/;
 const roomAction = /^\/api\/rooms\/([a-f0-9-]{36})\/(close|encounter|seats\/([a-f0-9-]{36})(?:\/(start|report))?)$/;
+const casinoSubmission = /^\/api\/rooms\/([a-f0-9-]{36})\/seats\/([a-f0-9-]{36})\/casino-reports$/;
+const casinoRetention = 7 * 24 * 60 * 60 * 1000;
+const maxCasinoReportsPerSeat = 20;
 const unavailable = 'This room code is invalid, expired, or closed.';
 const noStore = { 'Cache-Control': 'private, no-store' };
 
@@ -140,6 +144,51 @@ export async function roomApi(
 
   try {
     const anonymousId = guestToken ? await guestMemberId(guestToken) : null;
+    if (url.pathname === '/api/rooms/casino-reports' && method === 'GET') {
+      if (!dmId) return error('Only the signed-in DM can read casino reports.', 403);
+      const cutoff = now - casinoRetention;
+      await db.prepare(`
+        DELETE FROM casino_reports WHERE submitted_at <= ? AND seat_id IN (
+          SELECT m.id FROM room_members m JOIN rooms r ON r.id = m.room_id WHERE r.owner_id = ?
+        )
+      `).bind(cutoff, dmId).all();
+      const { results } = await db.prepare(`
+        SELECT c.session_id AS sessionId, c.game, c.starting_gold AS startingGold, c.final_gold AS finalGold,
+          c.submitted_at AS submittedAt, m.name AS player, r.code AS roomCode
+        FROM casino_reports c JOIN room_members m ON m.id = c.seat_id JOIN rooms r ON r.id = m.room_id
+        WHERE r.owner_id = ? AND c.submitted_at > ?
+        ORDER BY c.submitted_at DESC, c.seat_id, c.game, c.session_id LIMIT 100
+      `).bind(dmId, cutoff).all<CasinoReport>();
+      return json(results);
+    }
+
+    const casinoSeat = method === 'POST' ? casinoSubmission.exec(url.pathname) : null;
+    if (casinoSeat) {
+      if (!accountId && !anonymousId) return error('Join this room before sending a casino report.', 403);
+      const settlement = readCasinoSettlement(await readForm(request));
+      if (!settlement) return error('Could not read this casino settlement.', 400);
+      const [, roomId, seatId] = casinoSeat;
+      const { sessionId, game, startingGold, finalGold } = settlement;
+      const saved = await db.prepare(`
+        INSERT INTO casino_reports (seat_id, session_id, game, starting_gold, final_gold, submitted_at)
+        SELECT m.id, ?, ?, ?, ?, ?
+        FROM room_members m JOIN rooms r ON r.id = m.room_id
+        WHERE r.id = ? AND m.id = ? AND m.user_id IN (?, ?) AND r.closed_at IS NULL AND r.expires_at > ?
+          AND (
+            EXISTS (SELECT 1 FROM casino_reports WHERE seat_id = m.id AND game = ? AND session_id = ?)
+            OR (SELECT COUNT(*) FROM casino_reports WHERE seat_id = m.id) < ?
+          )
+        ON CONFLICT (seat_id, game, session_id) DO UPDATE SET session_id = excluded.session_id
+        RETURNING session_id AS sessionId, game, starting_gold AS startingGold, final_gold AS finalGold
+      `).bind(sessionId, game, startingGold, finalGold, now, roomId, seatId, accountId ?? null, anonymousId,
+        now, game, sessionId, maxCasinoReportsPerSeat).first<CasinoSettlement>();
+      if (!saved) return error('This seat is unavailable or has reached its casino report limit. You can still copy the report.', 404);
+      if (saved.startingGold !== startingGold || saved.finalGold !== finalGold) {
+        return error('A different settlement was already sent for this session.', 409);
+      }
+      return json(saved);
+    }
+
     if (url.pathname === '/api/rooms' && method === 'GET') {
       if (!accountId && !anonymousId) {
         const token = hex(crypto.getRandomValues(new Uint8Array(32)));

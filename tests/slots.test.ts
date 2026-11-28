@@ -130,3 +130,22 @@ test('the persisted committed spin and report survive interruption without a sec
   assert.throws(() => readSession(storage), /Invalid Casino Coolio session/);
   assert.ok(data.has(sessionKey));
 });
+
+test('room delivery stays attached to the settled casino session without affecting standalone reports', () => {
+  const data = new Map<string, string>();
+  const storage = {
+    getItem: (key: string) => data.get(key) ?? null,
+    setItem: (key: string, value: string) => { data.set(key, value); },
+    removeItem: (key: string) => { data.delete(key); },
+  };
+  const delivery = { roomId: crypto.randomUUID(), seatId: crypto.randomUUID(), sessionId: crypto.randomUUID() };
+  const ready = openSession(5, delivery)!;
+  const pending = requestCashOut(beginSpin(ready, 5, () => 0));
+  const finished = settleSpin(pending);
+  assert.equal(finished.phase, 'finished');
+  assert.deepEqual(finished.delivery, delivery);
+  writeSession(storage, { ...finished, delivery: { ...delivery, sent: true } });
+  assert.deepEqual(readSession(storage)?.delivery, { ...delivery, sent: true });
+  assert.match(settlementReport(readSession(storage)!), /Final gold: 20 gp/);
+  assert.equal(settleSpin(beginSpin(openSession(5)!, 1)).delivery, undefined);
+});
