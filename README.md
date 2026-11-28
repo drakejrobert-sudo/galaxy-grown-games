@@ -11,6 +11,10 @@ Player link: [play.drakesfood.com](https://play.drakesfood.com/). The player lin
 
 Open **Games** in the main navigation to find **Ship Encounters** (Flight Deck), **Tanks** (Hillside Tanks), and **Casino Games**. Use `#/flight` to link directly to Flight Deck. Shared encounter links, assigned Room seat links, and Hillside Tanks bookmarks still open their game.
 
+### Casino Corrupt Blackjack
+
+Open **Games → Casino Games → Casino Corrupt — Blackjack** with at least 10 gp in campaign gold. Enter a whole-gp wager, deal, then hit or stand. **Cash out** resolves an active hand by standing and shows starting gold, final gold, and net winnings or losses for manual GM settlement. Refresh or return to the game in the same tab to resume the hand or retrieve the report.
+
 ### Casino Coolio
 
 Open **Games → Casino Games → Casino Coolio** with at least 5 gp in campaign gold. Choose an affordable wager from 1–5 gp and pull or activate the lever to spin the reels. **Cash out** settles after the current spin, and running out of gold opens the same settlement report. Share starting gold, final gold, and net winnings or losses with the GM. The current session and report recover after refresh or navigation in the same tab. On Sites, players who start Casino Coolio from their joined Room seat can also select **Send to DM** after cashing out. The DM opens **Casino reports** in Rooms and refreshes it as needed. The dashboard shows the latest 100 reports from the past seven days. Play still runs in the browser, and gold is settled manually.

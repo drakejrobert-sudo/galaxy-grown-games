@@ -18,6 +18,7 @@ test('explicit section links take precedence over old query parameters', () => {
   for (const sites of [false, true]) {
     assert.equal(siteRoute('#/flight', '', sites), 'flight');
     assert.equal(siteRoute('#/games', assignment, sites), 'games');
+    assert.equal(siteRoute('#/games/casino-corrupt-blackjack', assignment, sites), 'blackjack');
     assert.equal(siteRoute('#/games/casino-coolio', assignment, sites), 'casino-coolio');
     assert.equal(siteRoute('#/tanks', '?situation=space-battle', sites), 'tanks');
     assert.equal(siteRoute('#/map', '', sites), 'map');
