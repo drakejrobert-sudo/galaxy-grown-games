@@ -272,7 +272,7 @@
 .slots-paytable p { margin: 7px 0 0; font-size: .8125rem; color: var(--ice-muted); }
 .slots-error { margin: 4px 8px 12px; padding: 12px; background: #422b37; border: 1px solid #aa7980; border-radius: 10px; }
 .slots-error p { margin: 0 0 8px; }
-#slots-copy-status:empty { display: none; }
+#slots-copy-status:empty, #slots-send-status:empty { display: none; }
 #slots-report { min-height: 7em; font-size: .875rem; }
 
 @media (max-width: 440px) {
@@ -286,3 +286,5 @@
   .slots-reel.is-spinning .slots-strip, .slots-lever.is-spinning .slots-lever-arm { animation: none; }
   .slots-lever-arm { transition: none; }
 }
+
+.slots-report-help { color: var(--ice-muted); font-size: .875rem; }

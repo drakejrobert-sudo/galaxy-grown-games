@@ -4,6 +4,7 @@ import '../style.css';
 import './rooms.css';
 import { surfaceNavigation } from '../site-navigation';
 import { roomRequest as api } from './client';
+import { casinoGames, casinoReportPath, type CasinoReport } from './casino';
 import { hostRoutePanel } from './map-view';
 import { encounters, stations, type HostedRoom, type JoinedRoom, type RoomList, type Seat } from './types';
 
@@ -21,6 +22,13 @@ ${surfaceNavigation('Rooms')}
     <section class="panel" id="host-rooms" aria-labelledby="host-heading" hidden>
       <div class="room-heading"><h2 id="host-heading">DM rooms</h2><button type="button" id="create-room">Create room</button></div>
       <details class="shop-library" id="shop-library"></details>
+      <details class="casino-reports" id="casino-reports">
+        <summary>Casino reports</summary>
+        <p class="room-help">Latest 100 reports from the past 7 days. Settle gold manually.</p>
+        <button type="button" id="refresh-casino-reports">Refresh casino reports</button>
+        <p id="casino-report-status" role="status"></p>
+        <ul class="room-stack" id="casino-report-list"></ul>
+      </details>
       <div class="room-stack" id="hosted-rooms"></div>
     </section>
     <div class="room-stack" id="player-rooms">
@@ -144,6 +152,11 @@ function joinedCard({ id, expiresAt, situation, seat, shop }: JoinedRoom): HTMLE
     link.href = './?' + new URLSearchParams({ room: id, seat: seat.id }).toString();
     card.append(link);
   }
+  const casino = element('a', 'Play Casino Coolio');
+  casino.className = 'room-flight-link';
+  casino.id = 'casino-' + seat.id;
+  casino.href = './?' + new URLSearchParams({ room: id, seat: seat.id }).toString() + '#/games/casino-coolio';
+  card.append(casino);
   const sharedMap = element('a', 'Open shared map');
   sharedMap.className = 'room-flight-link';
   sharedMap.id = 'shared-map-' + seat.id;
@@ -381,6 +394,39 @@ window.addEventListener('pageshow', (event) => {
   suspended = false;
   void refreshInBackground();
 });
+
+const casinoReports = byId<HTMLDetailsElement>('casino-reports');
+const refreshCasino = byId<HTMLButtonElement>('refresh-casino-reports');
+const casinoStatus = byId('casino-report-status');
+const casinoReportList = byId('casino-report-list');
+
+async function loadCasinoReports() {
+  if (refreshCasino.disabled || !casinoReports.open) return;
+  refreshCasino.disabled = true;
+  casinoStatus.textContent = 'Loading casino reports…';
+  try {
+    const reports = await api<CasinoReport[]>(casinoReportPath);
+    casinoReportList.replaceChildren(...reports.map(report => {
+      const item = element('li');
+      item.className = 'room-seat';
+      const net = report.finalGold - report.startingGold;
+      const date = element('time', new Date(report.submittedAt).toLocaleString());
+      date.dateTime = new Date(report.submittedAt).toISOString();
+      item.append(element('strong', report.player + ' · ' + casinoGames[report.game]),
+        element('p', 'Room ' + report.roomCode),
+        element('p', `Started ${report.startingGold} gp · Final ${report.finalGold} gp · Net ${net > 0 ? '+' : ''}${net} gp`), date);
+      return item;
+    }));
+    casinoStatus.textContent = reports.length ? '' : 'No recent casino reports.';
+  } catch (cause) {
+    casinoStatus.textContent = cause instanceof Error ? cause.message : 'Could not load casino reports.';
+  } finally {
+    refreshCasino.disabled = false;
+  }
+}
+
+casinoReports.addEventListener('toggle', () => void loadCasinoReports());
+refreshCasino.onclick = () => void loadCasinoReports();
 
 void run(async () => {
   await loadRooms();

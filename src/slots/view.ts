@@ -1,4 +1,6 @@
-import { surfaceNavigation } from '../site-navigation';
+import { isSitesBuild, surfaceNavigation } from '../site-navigation';
+import { casinoAssignment, casinoRoomPath, type CasinoSettlement } from '../rooms/casino';
+import { roomRequest } from '../rooms/client';
 import '../style.css';
 import './slots.css';
 import {
@@ -77,9 +79,12 @@ ${surfaceNavigation('Casino Coolio')}
           <div><dt>Net</dt><dd id="slots-net"></dd></div>
         </dl>
         <div class="slots-controls">
+          <button class="slots-action" id="slots-send" type="button" hidden>Send to DM</button>
           <button class="slots-action" id="slots-copy" type="button">Copy report</button>
           <button id="slots-new" type="button">New session</button>
         </div>
+        <p class="slots-report-help" id="slots-report-help" hidden>To send a future report, open Casino Coolio from your seat in Rooms before starting.</p>
+        <p id="slots-send-status" role="status"></p>
         <p id="slots-copy-status" role="status"></p>
         <label id="slots-report-label" for="slots-report" hidden>Settlement report</label>
         <textarea id="slots-report" rows="4" readonly hidden></textarea>
@@ -112,6 +117,9 @@ const wagers = Array.from(document.querySelectorAll<HTMLInputElement>('.slots-wa
 const spin = element<HTMLButtonElement>('slots-spin');
 const cash = element<HTMLButtonElement>('slots-cash');
 const settlement = element('slots-settlement');
+const send = element<HTMLButtonElement>('slots-send');
+const sendStatus = element('slots-send-status');
+const assignedRoom = isSitesBuild ? casinoAssignment(window.location.search) : null;
 const report = element<HTMLTextAreaElement>('slots-report');
 const copyStatus = element('slots-copy-status');
 const saveError = element('slots-save-error');
@@ -121,6 +129,7 @@ const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
 let session: SlotSession | null = null;
 let retrySave: (() => void) | null = null;
 let revealTimer: number | undefined;
+let sending = false;
 
 function render() {
   const spinning = session?.phase === 'spinning';
@@ -128,6 +137,12 @@ function render() {
   const result = session?.lastSpin;
   const payout = result && result.wager * multiplier(result.reels);
   const available = session ? affordableWagers(session.balance) : 0;
+  const delivery = session?.delivery;
+  const canSend = finished && delivery && delivery.roomId === assignedRoom?.roomId && delivery.seatId === assignedRoom.seatId;
+  send.hidden = !canSend;
+  element('slots-report-help').hidden = !isSitesBuild || !finished || Boolean(canSend);
+  send.disabled = retrySave !== null || sending || Boolean(delivery?.sent);
+  send.textContent = delivery?.sent ? 'Sent to DM' : 'Send to DM';
   const waitingToExit = session?.phase === 'spinning' && session.cashOut;
   spin.hidden = !session || finished;
   opening.hidden = session !== null;
@@ -153,9 +168,10 @@ function render() {
     result ? `${reelNames}. ${payout} gp payout.` : '';
   if (status.textContent !== message) status.textContent = message;
 
-  for (const control of [gold, ...Array.from(opening.querySelectorAll('button')), element<HTMLButtonElement>('slots-new')]) {
+  for (const control of [gold, ...Array.from(opening.querySelectorAll('button'))]) {
     control.disabled = retrySave !== null;
   }
+  element<HTMLButtonElement>('slots-new').disabled = retrySave !== null || sending;
   if (!spinning && wagers.some(wager => wager.checked && Number(wager.value) > available)) {
     wagers[0].checked = true;
   }
@@ -234,7 +250,8 @@ opening.addEventListener('submit', event => {
   event.preventDefault();
   if (retrySave || session) return;
   const input = gold.value.trim();
-  const next = /^\d+$/.test(input) ? openSession(Number(input)) : null;
+  const next = /^\d+$/.test(input) ? openSession(Number(input), assignedRoom
+    ? { ...assignedRoom, sessionId: crypto.randomUUID() } : undefined) : null;
   gold.setAttribute('aria-invalid', String(!next));
   openingError.textContent = next ? '' : `Enter a whole number of gp, at least ${minimumOpening}.`;
   if (next) commit(next, () => (affordableWagers(next.balance) ? spin : cash).focus());
@@ -268,8 +285,31 @@ element('slots-new').addEventListener('click', () => {
     report.hidden = true;
     element('slots-report-label').hidden = true;
     copyStatus.textContent = '';
+    sendStatus.textContent = '';
     gold.focus();
   });
+});
+
+send.addEventListener('click', async () => {
+  const delivery = session?.delivery;
+  if (send.hidden || send.disabled || !delivery || session?.phase !== 'finished') return;
+  const finished = session;
+  sending = true;
+  sendStatus.textContent = 'Sending report…';
+  render();
+  try {
+    const { sessionId } = delivery;
+    await roomRequest<CasinoSettlement>(casinoRoomPath(delivery), 'POST', {
+      sessionId, game: 'casino-coolio', startingGold: finished.startingGold, finalGold: finished.balance,
+    } satisfies CasinoSettlement);
+    commit({ ...finished, delivery: { ...delivery, sent: true } });
+    sendStatus.textContent = 'Report sent to your DM for settlement.';
+  } catch (cause) {
+    sendStatus.textContent = cause instanceof Error ? cause.message : 'Could not send. Try again or copy the report.';
+  } finally {
+    sending = false;
+    render();
+  }
 });
 
 element('slots-copy').addEventListener('click', async () => {

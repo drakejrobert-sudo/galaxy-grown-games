@@ -1,3 +1,5 @@
+import type { CasinoAssignment } from '../rooms/casino';
+
 export const symbols = [
   { name: 'Frost Chip', glyph: '⬡', stops: 16, triple: 4 },
   { name: 'Snowflake', glyph: '❄', stops: 8, triple: 13 },
@@ -14,7 +16,12 @@ const stopCount = symbols.reduce((total, symbol) => total + symbol.stops, 0);
 type SymbolIndex = 0 | 1 | 2 | 3 | 4;
 type Reels = readonly [SymbolIndex, SymbolIndex, SymbolIndex];
 type Spin = { reels: Reels; wager: number };
-type Session = { startingGold: number; balance: number; lastSpin: Spin | null };
+type Session = {
+  startingGold: number;
+  balance: number;
+  lastSpin: Spin | null;
+  delivery?: CasinoAssignment & { sessionId: string; sent?: boolean };
+};
 export type SlotSession = Session & (
   { phase: 'ready' | 'finished' } |
   { phase: 'spinning'; pending: Spin; cashOut: boolean }
@@ -39,9 +46,9 @@ export function drawReels(random = Math.random): Reels {
   return [draw(), draw(), draw()];
 }
 
-export function openSession(startingGold: number): SlotSession | null {
+export function openSession(startingGold: number, delivery?: Session['delivery']): SlotSession | null {
   if (!Number.isSafeInteger(startingGold) || startingGold < minimumOpening) return null;
-  return { phase: 'ready', startingGold, balance: startingGold, lastSpin: null };
+  return { phase: 'ready', startingGold, balance: startingGold, lastSpin: null, ...(delivery && { delivery }) };
 }
 
 export function affordableWagers(balance: number): number {
@@ -67,11 +74,11 @@ export function requestCashOut(session: SlotSession): SlotSession {
 
 export function settleSpin(session: SlotSession): SlotSession {
   if (session.phase !== 'spinning') return session;
-  const { startingGold, balance, pending, cashOut } = session;
+  const { startingGold, balance, pending, cashOut, delivery } = session;
   const finalBalance = balance + pending.wager * multiplier(pending.reels);
   return {
     phase: cashOut || finalBalance === 0 ? 'finished' : 'ready',
-    balance: finalBalance, startingGold, lastSpin: pending,
+    balance: finalBalance, startingGold, lastSpin: pending, ...(delivery && { delivery }),
   };
 }
 
