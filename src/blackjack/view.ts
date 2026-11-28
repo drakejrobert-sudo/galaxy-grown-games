@@ -13,66 +13,73 @@ document.querySelector('#app')!.innerHTML = `
 ${surfaceNavigation('Casino Corrupt')}
 <main class="blackjack">
   <h1>Casino Corrupt Blackjack</h1>
-  <section class="blackjack-table">
-    <form id="bj-opening" hidden novalidate>
-      <label for="bj-gold">Opening balance (gp)</label>
-      <input id="bj-gold" inputmode="numeric" autocomplete="off" aria-describedby="bj-minimum bj-input-error">
-      <p id="bj-minimum">At least ${minimumOpening} gp in campaign gold.</p>
-      <p id="bj-input-error" class="error" role="alert"></p>
-      <button type="submit">Start session</button>
-    </form>
-
-    <div id="bj-hands" hidden>
-      <section>
-        <h2>Dealer <span id="bj-dealer-total"></span></h2>
-        <ul class="blackjack-cards" id="bj-dealer" aria-label="Dealer cards"></ul>
-      </section>
-      <section>
-        <h2>Your hand <span id="bj-player-total"></span></h2>
-        <ul class="blackjack-cards" id="bj-player" aria-label="Your cards"></ul>
-      </section>
+  <section class="blackjack-table" aria-label="Blackjack table">
+    <div class="blackjack-scene" aria-hidden="true">
+      <img src="${import.meta.env.BASE_URL}art/casino-corrupt-dealer.webp" width="1280" height="720" alt="" decoding="async">
     </div>
-    <p id="bj-status" class="blackjack-status" role="status"></p>
-
-    <div id="bj-playing" hidden>
-      <p id="bj-balance"></p>
-      <p id="bj-stake" hidden></p>
-      <form id="bj-wager-form" class="blackjack-controls" hidden novalidate>
-        <div>
-          <label for="bj-wager">Wager (gp)</label>
-          <input id="bj-wager" inputmode="numeric" autocomplete="off" value="1" aria-describedby="bj-wager-error">
-        </div>
-        <button type="submit">Deal</button>
+    <div class="blackjack-felt">
+      <form id="bj-opening" hidden novalidate>
+        <label for="bj-gold">Opening balance (gp)</label>
+        <input id="bj-gold" inputmode="numeric" autocomplete="off" aria-describedby="bj-minimum bj-input-error">
+        <p id="bj-minimum">At least ${minimumOpening} gp in campaign gold.</p>
+        <p id="bj-input-error" class="error" role="alert"></p>
+        <button type="submit">Start session</button>
       </form>
-      <p id="bj-wager-error" class="error" role="alert"></p>
-      <div class="blackjack-controls">
-        <button id="bj-hit" type="button" hidden>Hit</button>
-        <button id="bj-stand" type="button" hidden>Stand</button>
-        <button id="bj-cash" type="button" aria-describedby="bj-cash-help">Cash out</button>
-      </div>
-      <p id="bj-cash-help" hidden>Cashing out stands on this hand and settles the wager.</p>
-    </div>
 
-    <section id="bj-settlement" aria-labelledby="bj-settlement-title" hidden>
-      <h2 id="bj-settlement-title" tabindex="-1">GM settlement</h2>
-      <dl class="blackjack-totals">
-        <div><dt>Starting gold</dt><dd id="bj-start"></dd></div>
-        <div><dt>Final gold</dt><dd id="bj-final"></dd></div>
-        <div><dt>Net</dt><dd id="bj-net"></dd></div>
-      </dl>
-      <div class="blackjack-controls">
-        <button id="bj-copy" type="button">Copy report</button>
-        <button id="bj-new" type="button">New session</button>
+      <div id="bj-hands" hidden>
+        <section>
+          <h2>Dealer <span id="bj-dealer-total"></span></h2>
+          <ul class="blackjack-cards" id="bj-dealer" aria-label="Dealer cards"></ul>
+        </section>
+        <section>
+          <h2>Your hand <span id="bj-player-total"></span></h2>
+          <ul class="blackjack-cards" id="bj-player" aria-label="Your cards"></ul>
+        </section>
       </div>
-      <p id="bj-copy-status" role="status"></p>
-      <label for="bj-report" id="bj-report-label" hidden>Settlement report</label>
-      <textarea id="bj-report" rows="4" readonly hidden></textarea>
-    </section>
+      <p id="bj-status" class="blackjack-status" role="status"></p>
 
-    <div id="bj-save-error" hidden>
-      <p id="bj-save-message" role="alert"></p>
-      <button id="bj-retry" type="button">Retry</button>
-      <button id="bj-clear" type="button" hidden>Discard unreadable session</button>
+      <div id="bj-playing" hidden>
+        <div class="blackjack-bankroll">
+          <p id="bj-balance"></p>
+          <p id="bj-stake" hidden></p>
+        </div>
+        <form id="bj-wager-form" class="blackjack-controls" hidden novalidate>
+          <div>
+            <label for="bj-wager">Wager (gp)</label>
+            <input id="bj-wager" inputmode="numeric" autocomplete="off" value="1" aria-describedby="bj-wager-error">
+          </div>
+          <button type="submit">Deal</button>
+        </form>
+        <p id="bj-wager-error" class="error" role="alert"></p>
+        <div class="blackjack-controls">
+          <button id="bj-hit" type="button" hidden>Hit</button>
+          <button id="bj-stand" type="button" hidden>Stand</button>
+          <button id="bj-cash" type="button" aria-describedby="bj-cash-help">Cash out</button>
+        </div>
+        <p id="bj-cash-help" hidden>Cashing out stands on this hand and settles the wager.</p>
+      </div>
+
+      <section id="bj-settlement" aria-labelledby="bj-settlement-title" hidden>
+        <h2 id="bj-settlement-title" tabindex="-1">GM settlement</h2>
+        <dl class="blackjack-totals">
+          <div><dt>Starting gold</dt><dd id="bj-start"></dd></div>
+          <div><dt>Final gold</dt><dd id="bj-final"></dd></div>
+          <div><dt>Net</dt><dd id="bj-net"></dd></div>
+        </dl>
+        <div class="blackjack-controls">
+          <button id="bj-copy" type="button">Copy report</button>
+          <button id="bj-new" type="button">New session</button>
+        </div>
+        <p id="bj-copy-status" role="status"></p>
+        <label for="bj-report" id="bj-report-label" hidden>Settlement report</label>
+        <textarea id="bj-report" rows="4" readonly hidden></textarea>
+      </section>
+
+      <div id="bj-save-error" hidden>
+        <p id="bj-save-message" role="alert"></p>
+        <button id="bj-retry" type="button">Retry</button>
+        <button id="bj-clear" type="button" hidden>Discard unreadable session</button>
+      </div>
     </div>
   </section>
   <p class="blackjack-help">Get closer to 21 than the dealer. Going over 21 loses the wager. A win pays 1:1,
@@ -116,7 +123,11 @@ function renderCards(list: HTMLElement, cards: number[], hideLast = false) {
     }
     const rank = cardRank(card);
     const suit = cardSuit(card);
-    item.textContent = `${rank}${suit}`;
+    const rankLabel = document.createElement('span');
+    rankLabel.textContent = rank;
+    const suitLabel = document.createElement('span');
+    suitLabel.textContent = suit;
+    item.append(rankLabel, suitLabel);
     item.setAttribute('aria-label', `${rank} of ${suitNames[suit]}`);
     item.classList.toggle('red-suit', suit === '♥' || suit === '♦');
     return item;
