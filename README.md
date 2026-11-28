@@ -13,7 +13,7 @@ Open **Games** in the main navigation to find **Ship Encounters** (Flight Deck),
 
 ### Casino Coolio
 
-Open **Games → Casino Games → Casino Coolio** with at least 5 gp in campaign gold. Choose an affordable wager from 1–5 gp and spin the reels. **Cash out** settles after the current spin, and running out of gold opens the same settlement report. Share starting gold, final gold, and net winnings or losses with the GM. The current session and report recover after refresh or navigation in the same tab.
+Open **Games → Casino Games → Casino Coolio** with at least 5 gp in campaign gold. Choose an affordable wager from 1–5 gp and pull or activate the lever to spin the reels. **Cash out** settles after the current spin, and running out of gold opens the same settlement report. Share starting gold, final gold, and net winnings or losses with the GM. The current session and report recover after refresh or navigation in the same tab.
 
 ## Hillside Tanks
 

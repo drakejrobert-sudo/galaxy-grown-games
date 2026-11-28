@@ -53,3 +53,7 @@ Four original illustrations were generated with OpenAI's built-in image generati
 | `boarding-turret-shuttle.webp` | 160×72 | 6,114 |
 
 The canopy is fitted below the live target area, and craft sprites are cropped to their silhouettes. Browser-canvas WebP encoding preserves alpha. The four assets add 77,556 bytes to game-runtime preload and no setup requests. The top-down sprites remain in use elsewhere. Screen-space hit geometry is owned by the rules; canopy reflections and the viewport frame do not intercept aim. Full-resolution generations stay outside the repository.
+
+## Casino Coolio cabinet
+
+The built-in OpenAI image generation tool used Drake’s cabinet sketch as a composition reference for the front-facing frosted metal cabinet and icicle trim. The shipping asset is `public/art/casino-coolio-cabinet.webp` at 840 × 1260 with transparency. The sketch photo and full-size generation stay outside the shipped assets. The game draws the marquee, reels, lever, buttons and paytable over the art with HTML and CSS.

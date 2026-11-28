@@ -5,6 +5,7 @@ import {
   affordableWagers, beginSpin, maximumWager, minimumOpening, multiplier, openSession,
   requestCashOut, settlementReport, settleSpin, signedGold, symbols, type SlotSession,
 } from './rules';
+import { connectLever } from './lever';
 import { readSession, writeSession } from './session';
 
 document.title = 'Casino Coolio · Galaxy Grown';
@@ -12,19 +13,35 @@ document.querySelector('#app')!.innerHTML = `
 <header><a href="./" class="brand">✦ <span>GALAXY GROWN</span></a></header>
 ${surfaceNavigation('Casino Coolio')}
 <main class="slots">
-  <div class="slots-heading">
-    <h1>Casino Coolio</h1>
-    <p>Slot Machine</p>
-  </div>
   <div class="slots-error" id="slots-save-error" hidden>
     <p role="alert" id="slots-save-message"></p>
     <button type="button" id="slots-retry">Retry save</button>
   </div>
-  <div class="slots-layout">
-    <section class="slots-cabinet" aria-label="Slot machine">
-      <div class="slots-reels" aria-label="Reels">
-        ${[1, 2, 3].map(() => '<div class="slots-reel"><span aria-hidden="true">✦</span><small>—</small></div>').join('')}
+  <section class="slots-cabinet" aria-label="Slot machine">
+    <div class="slots-band slots-marquee">
+      <h1>Casino Coolio</h1>
+    </div>
+    <div class="slots-band slots-machine">
+      <div class="slots-reels" aria-label="Center payline">
+        ${[0, 1, 2].map(index => `
+        <div class="slots-reel">
+          <div class="slots-reel-result">
+            <span aria-hidden="true">✦</span><small>—</small>
+          </div>
+          <div class="slots-strip" aria-hidden="true">
+            ${[0, 1, 2, 3].map(turn => symbols.map((_, step) =>
+              `<span>${symbols[(index + step + turn) % symbols.length].glyph}</span>`).join('')).join('')}
+            <span class="slots-strip-end"></span>
+          </div>
+        </div>`).join('')}
       </div>
+      <button class="slots-lever" id="slots-spin" type="button" aria-label="Spin" hidden>
+        <span class="slots-lever-pivot" aria-hidden="true"></span>
+        <span class="slots-lever-arm" aria-hidden="true"></span>
+        <span class="slots-lever-label" aria-hidden="true">Spin</span>
+      </button>
+    </div>
+    <div class="slots-band slots-deck">
       <p class="slots-status" id="slots-status" role="status"></p>
       <form class="slots-controls" id="slots-opening" hidden novalidate>
         <div>
@@ -40,14 +57,15 @@ ${surfaceNavigation('Casino Coolio')}
           <div><dt>Current balance</dt><dd id="slots-balance"></dd></div>
           <div><dt>Last payout</dt><dd id="slots-payout"></dd></div>
         </dl>
-        <div class="slots-controls">
-          <div>
-            <label for="slots-wager">Wager</label>
-            <select id="slots-wager">
-              ${Array.from({ length: maximumWager }, (_, i) => `<option value="${i + 1}">${i + 1} gp</option>`).join('')}
-            </select>
-          </div>
-          <button class="slots-action" id="slots-spin" type="button">Spin</button>
+        <div class="slots-betting">
+          <fieldset class="slots-wagers">
+            <legend>Wager</legend>
+            <div class="slots-wager-buttons">
+              ${Array.from({ length: maximumWager }, (_, i) => `
+                <label><input type="radio" name="slots-wager" value="${i + 1}" ${i === 0 ? 'checked' : ''}>
+                  <span>${i + 1}<small> gp</small></span></label>`).join('')}
+            </div>
+          </fieldset>
           <button id="slots-cash" type="button">Cash out</button>
         </div>
       </div>
@@ -66,17 +84,20 @@ ${surfaceNavigation('Casino Coolio')}
         <label id="slots-report-label" for="slots-report" hidden>Settlement report</label>
         <textarea id="slots-report" rows="4" readonly hidden></textarea>
       </section>
-    </section>
-    <aside class="slots-paytable">
-      <h2>Paytable</h2>
-      <table>
-        <thead><tr><th scope="col">Matching symbols</th><th scope="col">Payout</th></tr></thead>
-        <tbody>${symbols.map(symbol => `<tr><th scope="row"><span aria-hidden="true">${symbol.glyph}</span> 3 ${symbol.name}s</th><td>${symbol.triple}×</td></tr>`).join('')}
-        <tr><th scope="row"><span aria-hidden="true">⬡</span> 2 Frost Chips on the left</th><td>1×</td></tr></tbody>
-      </table>
-      <p>Payouts include any returned wager. Other results pay 0.</p>
-    </aside>
-  </div>
+    </div>
+    <div class="slots-paytable">
+      <div class="slots-band slots-paytable-content">
+        <h2>Rules &amp; paytable</h2>
+        <table>
+          <thead><tr><th scope="col">Matching symbols</th><th scope="col">Payout</th></tr></thead>
+          <tbody>${symbols.map(symbol => `<tr><th scope="row"><span aria-hidden="true">${symbol.glyph}</span> 3 ${symbol.name}s</th><td>${symbol.triple}×</td></tr>`).join('')}
+          <tr><th scope="row"><span aria-hidden="true">⬡</span> 2 Frost Chips on the left</th><td>1×</td></tr></tbody>
+        </table>
+        <p>Only the center line pays. Payouts include any returned wager.</p>
+      </div>
+    </div>
+    <div class="slots-band slots-base" aria-hidden="true"></div>
+  </section>
 </main>`;
 
 function element<T extends HTMLElement = HTMLElement>(id: string): T {
@@ -87,7 +108,7 @@ const opening = element<HTMLFormElement>('slots-opening');
 const gold = element<HTMLInputElement>('slots-gold');
 const openingError = element('slots-opening-error');
 const playing = element('slots-playing');
-const wager = element<HTMLSelectElement>('slots-wager');
+const wagers = Array.from(document.querySelectorAll<HTMLInputElement>('.slots-wagers input'));
 const spin = element<HTMLButtonElement>('slots-spin');
 const cash = element<HTMLButtonElement>('slots-cash');
 const settlement = element('slots-settlement');
@@ -108,16 +129,22 @@ function render() {
   const payout = result && result.wager * multiplier(result.reels);
   const available = session ? affordableWagers(session.balance) : 0;
   const waitingToExit = session?.phase === 'spinning' && session.cashOut;
+  spin.hidden = !session || finished;
   opening.hidden = session !== null;
   playing.hidden = session === null || finished;
   settlement.hidden = !finished;
   saveError.hidden = retrySave === null;
 
+  const rolling = spinning && !reducedMotion.matches && !retrySave;
+  spin.classList.toggle('is-spinning', rolling);
   reels.forEach((reel, index) => {
     const symbol = result ? symbols[result.reels[index]] : undefined;
-    reel.classList.toggle('is-spinning', spinning && !retrySave);
-    reel.querySelector('span')!.textContent = spinning ? '✧' : symbol?.glyph ?? '✦';
-    reel.querySelector('small')!.textContent = spinning ? '—' : symbol?.name ?? '—';
+    if (session?.phase === 'spinning') {
+      reel.querySelector('.slots-strip-end')!.textContent = symbols[session.pending.reels[index]].glyph;
+    }
+    reel.classList.toggle('is-spinning', rolling);
+    reel.querySelector('.slots-reel-result span')!.textContent = symbol?.glyph ?? '✦';
+    reel.querySelector('small')!.textContent = symbol?.name ?? '—';
   });
 
   const reelNames = result?.reels.map(index => symbols[index].name).join(', ');
@@ -129,10 +156,11 @@ function render() {
   for (const control of [gold, ...Array.from(opening.querySelectorAll('button')), element<HTMLButtonElement>('slots-new')]) {
     control.disabled = retrySave !== null;
   }
-  wager.disabled = spinning || available < 1 || retrySave !== null;
-  if (!spinning) {
-    for (const option of Array.from(wager.options)) option.disabled = Number(option.value) > available;
-    if (Number(wager.value) > available) wager.value = '1';
+  if (!spinning && wagers.some(wager => wager.checked && Number(wager.value) > available)) {
+    wagers[0].checked = true;
+  }
+  for (const wager of wagers) {
+    wager.disabled = spinning || Number(wager.value) > available || retrySave !== null;
   }
   spin.setAttribute('aria-disabled', String(spinning || available < 1 || retrySave !== null));
   cash.setAttribute('aria-disabled', String(waitingToExit || retrySave !== null));
@@ -213,9 +241,10 @@ opening.addEventListener('submit', event => {
   else gold.focus();
 });
 
-spin.addEventListener('click', () => {
+connectLever(spin, () => {
   if (!session || retrySave) return;
-  const pending = beginSpin(session, Number(wager.value));
+  const wager = wagers.find(option => option.checked);
+  const pending = beginSpin(session, Number(wager?.value));
   if (pending !== session) commit(pending, scheduleReveal);
 });
 
@@ -235,7 +264,7 @@ element('slots-new').addEventListener('click', () => {
     gold.value = '';
     gold.removeAttribute('aria-invalid');
     openingError.textContent = '';
-    wager.value = '1';
+    wagers[0].checked = true;
     report.hidden = true;
     element('slots-report-label').hidden = true;
     copyStatus.textContent = '';
@@ -257,6 +286,12 @@ element('slots-copy').addEventListener('click', async () => {
     report.select();
     copyStatus.textContent = 'Select and copy the report to share it.';
   }
+});
+
+reducedMotion.addEventListener('change', event => {
+  if (!event.matches) return;
+  window.clearTimeout(revealTimer);
+  settle();
 });
 
 restore();
